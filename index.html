@@ -1,0 +1,3157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="googlebot-news" content="noindex, nofollow, nosnippet">
+    <meta name="ai-training" content="disallow">
+    <meta name="CCBot" content="nofollow">
+    <meta name="GPTBot" content="nofollow">
+    <meta name="anthropic-index" content="disallow">
+    <meta name="cohere-index" content="disallow">
+    <title>Payroll Checker / Verificador de Nómina</title>
+    <script src="../lib/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #007bff;
+            --primary-dark: #0056b3;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #17a2b8;
+            --bg: #f5f5f5;
+            --card-bg: white;
+            --text: #333;
+            --text-muted: #666;
+            --border: #ddd;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--bg);
+            color: var(--text);
+        }
+        h1 { color: var(--text); margin-bottom: 5px; }
+        .subtitle { color: var(--text-muted); margin-bottom: 10px; }
+        .attribution { font-size: 12px; color: var(--text-muted); margin-bottom: 20px; }
+        .attribution a { color: var(--primary); }
+        .back-link { display: inline-block; margin-bottom: 20px; color: var(--primary); text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+
+        .privacy-note {
+            background: #e7f3ff;
+            border-left: 4px solid var(--primary);
+            padding: 12px 15px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        .lang-switcher {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        .lang-btn {
+            padding: 8px 16px;
+            border: 2px solid var(--primary);
+            background: white;
+            color: var(--primary);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .lang-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        .lang-btn:hover:not(.active) {
+            background: #e7f3ff;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: var(--info);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-box h3::before {
+            content: 'ℹ️';
+        }
+        .info-box p {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 14px;
+            color: var(--text-muted);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab:hover { color: var(--primary); }
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            font-weight: 500;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary);
+            background: #f0f7ff;
+        }
+        .drop-zone input { display: none; }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .form-group textarea {
+            min-height: 150px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.secondary { background: #6c757d; }
+        button.success { background: var(--success); }
+        button.small { padding: 6px 12px; font-size: 12px; }
+
+        .file-list { margin: 20px 0; }
+        .file-item {
+            display: flex;
+            align-items: center;
+            background: var(--bg);
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .file-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-item .status { font-size: 12px; padding: 2px 8px; border-radius: 10px; margin-left: 10px; }
+        .file-item .status.pending { background: #fff3cd; color: #856404; }
+        .file-item .status.success { background: #d4edda; color: #155724; }
+        .file-item .status.error { background: #f8d7da; color: #721c24; }
+        .file-item .remove-btn {
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 5px;
+            margin: 0;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg); font-weight: 500; position: sticky; top: 0; }
+        tr:hover { background: #f9f9f9; }
+        .text-right { text-align: right; }
+        .text-success { color: var(--success); }
+        .text-danger { color: var(--danger); }
+        .text-warning { color: #b8860b; }
+        .text-muted { color: var(--text-muted); }
+
+        .amount { font-family: 'SF Mono', Monaco, monospace; }
+        .amount-positive { color: var(--success); }
+        .amount-negative { color: var(--danger); }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+
+        .info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 600;
+            font-style: italic;
+            font-family: Georgia, serif;
+            cursor: help;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        .info-icon:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .summary-item {
+            text-align: center;
+            padding: 20px 15px;
+            background: var(--bg);
+            border-radius: 8px;
+        }
+        .summary-item .value { font-size: 24px; font-weight: 600; color: var(--primary); }
+        .summary-item .label { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+
+        .alert { padding: 12px 15px; border-radius: 4px; margin: 15px 0; }
+        .alert-info { background: #e7f3ff; color: #0c5460; }
+        .alert-success { background: #d4edda; color: #155724; }
+        .alert-warning { background: #fff3cd; color: #856404; }
+        .alert-danger { background: #f8d7da; color: #721c24; }
+
+        .expandable-row summary { list-style: none; }
+        .expandable-row summary::-webkit-details-marker { display: none; }
+        .expand-icon {
+            display: inline-block;
+            font-size: 10px;
+            margin-right: 5px;
+            transition: transform 0.2s;
+        }
+        .expandable-row[open] .expand-icon { transform: rotate(90deg); }
+
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            background: var(--info);
+            color: white;
+            border-radius: 50%;
+            font-size: 10px;
+            cursor: help;
+            margin-left: 4px;
+        }
+
+        .concept-row { display: flex; align-items: center; gap: 5px; }
+
+        .payslip-section {
+            margin: 20px 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .payslip-header {
+            background: var(--primary);
+            color: white;
+            padding: 12px 15px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .payslip-header:hover { background: var(--primary-dark); }
+        .payslip-body { padding: 15px; display: none; }
+        .payslip-body.show { display: block; }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .two-col { grid-template-columns: 1fr; }
+        }
+
+        .explanation-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .explanation-panel h3 {
+            margin-top: 0;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .explanation-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+        .explanation-item:last-child { border-bottom: none; }
+        .explanation-item .term {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 3px;
+        }
+        .explanation-item .term-es {
+            font-weight: normal;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .explanation-item .definition {
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text);
+        }
+        /* Disclaimer Modal */
+        .disclaimer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .disclaimer-modal {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 550px;
+            margin: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .disclaimer-modal h2 {
+            margin-top: 0;
+            color: #dc3545;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .disclaimer-modal ul {
+            line-height: 1.8;
+        }
+        .disclaimer-modal .btn-accept {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .disclaimer-modal .btn-accept:hover {
+            background: var(--primary-dark);
+        }
+        .disclaimer-modal .recommend {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Disclaimer Modal -->
+    <div id="disclaimerModal" class="disclaimer-overlay" style="display:none;">
+        <div class="disclaimer-modal">
+            <h2>&#9888; Disclaimer</h2>
+            <p><strong>Use this tool at your own risk.</strong></p>
+            <ul>
+                <li>This tool is provided "as is" without any warranties</li>
+                <li>No guarantee of accuracy or reliability of calculations</li>
+                <li>The author is not liable for any damages or issues</li>
+                <li>All processing happens locally in your browser</li>
+                <li>Always verify results against official documents</li>
+            </ul>
+            <div class="recommend">
+                <strong>Recommendation:</strong> For sensitive payroll data, download this page (Ctrl/Cmd+S) and run it locally on your computer for maximum privacy and offline use.
+            </div>
+            <button class="btn-accept" onclick="acceptDisclaimer()">I Understand &amp; Accept</button>
+        </div>
+    </div>
+    <script>
+        (function() {
+            if (!localStorage.getItem('payrollCheckerDisclaimerAccepted')) {
+                document.getElementById('disclaimerModal').style.display = 'flex';
+            }
+        })();
+        function acceptDisclaimer() {
+            localStorage.setItem('payrollCheckerDisclaimerAccepted', 'true');
+            document.getElementById('disclaimerModal').style.display = 'none';
+        }
+    </script>
+
+    <a href="../" class="back-link">&larr; <span data-i18n="back">Back to Tools</span></a>
+    <h1 data-i18n="title">Payroll Checker</h1>
+    <p class="subtitle" data-i18n="subtitle">Parse and validate Spanish payslips (nóminas)</p>
+    <p class="attribution">
+        <span data-i18n="inspiredBy">Inspired by</span> <a href="https://github.com/friscoMad/atpc" target="_blank">ATPC</a>
+        <span data-i18n="by">by</span> <a href="https://github.com/friscoMad" target="_blank">Ramiro Aparicio (friscoMad)</a>.
+    </p>
+
+    <div class="lang-switcher">
+        <button class="lang-btn active" data-lang="en">English</button>
+        <button class="lang-btn" data-lang="es">Español</button>
+        <button class="lang-btn" data-lang="both">Both / Ambos</button>
+    </div>
+
+    <div class="privacy-note">
+        <strong data-i18n="privacyTitle">100% Private:</strong>
+        <span data-i18n="privacyText">All processing happens locally in your browser. Your payslips never leave your device.</span>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" data-tab="upload" data-i18n="tabUpload">Upload Payslips</button>
+        <button class="tab" data-tab="results" data-i18n="tabResults">Results</button>
+        <button class="tab" data-tab="config" data-i18n="tabConfig">Configuration</button>
+        <button class="tab" data-tab="saves" data-i18n="tabSaves">Save Slots</button>
+        <button class="tab" data-tab="guide" data-i18n="tabGuide">Payslip Guide</button>
+    </div>
+
+    <!-- Save Slots Tab -->
+    <div id="saves" class="tab-content">
+        <div class="card">
+            <h2>Save Slots</h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+                Save your current session (payslips + configuration) to a slot. Each slot is independent.
+                Data is stored locally without PII (no names, no DNI, no filenames).
+            </p>
+
+            <div class="info-box" style="margin-bottom: 20px;">
+                <h3 style="margin:0 0 10px 0;">Current Session</h3>
+                <div id="currentSessionInfo">
+                    <p>No payslips loaded.</p>
+                </div>
+                <div style="margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                    <input type="text" id="saveSlotName" placeholder="Save name (e.g., 2026 Payslips)" style="width: 250px; padding: 8px;">
+                    <button onclick="saveToSlot()" id="saveToSlotBtn" disabled>Save Current Session</button>
+                    <button class="secondary" onclick="clearCurrentSession()">New Session</button>
+                </div>
+            </div>
+
+            <h3 style="font-size: 16px; margin-bottom: 15px;">Saved Slots</h3>
+            <div id="saveSlotsList">
+                <p style="color: var(--text-muted);">No saved slots yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="upload" class="tab-content active">
+        <div class="card">
+            <h2 data-i18n="uploadTitle">Upload Payslip PDFs</h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;" data-i18n="uploadDesc">
+                Upload your Spanish payslip PDFs. If password-protected, enter the password below (usually your DNI/NIE).
+            </p>
+
+            <div class="form-group" style="max-width: 300px;">
+                <label data-i18n="passwordLabel">PDF Password (if encrypted)</label>
+                <input type="password" id="pdfPassword" placeholder="e.g., your DNI/NIE">
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+                <p data-i18n="dropzoneText">Drag & drop payslip PDFs here<br>or click to select</p>
+                <input type="file" id="fileInput" multiple accept=".pdf,application/pdf">
+            </div>
+
+            <div class="file-list" id="fileList"></div>
+
+            <div style="margin-top: 20px;">
+                <button id="parseBtn" onclick="parsePayslips()" disabled data-i18n="parseBtn">Parse Payslips</button>
+                <button class="secondary" onclick="clearFiles()" data-i18n="clearBtn">Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Tab -->
+    <div id="results" class="tab-content">
+        <div id="resultsContent">
+            <div class="alert alert-info" data-i18n="noResults">
+                Upload and parse payslips to see results here.
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Tab -->
+    <div id="config" class="tab-content">
+        <div class="card">
+            <h2 data-i18n="configTitle">Expected Salary Configuration</h2>
+
+            <div class="info-box" style="margin-bottom: 20px;">
+                <h3 style="margin:0 0 10px 0;">How it works</h3>
+                <p>Enter your <strong>annual gross salary</strong> from your employment contract. The tool will calculate your expected monthly gross (÷12, since prorrata is included). Variable items like Wallet and Awardco are excluded from validation since they change monthly.</p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><strong>Annual Gross Salary (from contract)</strong></label>
+                    <input type="number" id="annualGross" placeholder="e.g., 90000" step="100" onchange="calculateExpected()">
+                </div>
+                <div class="form-group">
+                    <label>Expected Monthly Gross (auto-calculated)</label>
+                    <input type="number" id="expectedMonthlyGross" placeholder="Auto-calculated" step="0.01" readonly style="background: #f5f5f5;">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Expected Wallet / month (€)</label>
+                    <input type="number" id="expectedWallet" placeholder="e.g., 330" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Tolerance % for validation</label>
+                    <input type="number" id="tolerance" placeholder="e.g., 2" step="0.1" value="2">
+                </div>
+            </div>
+
+            <details style="margin-top: 20px; padding: 15px; background: var(--bg); border-radius: 6px;" open>
+                <summary style="cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    Additional Compensation Categories
+                </summary>
+                <p style="color: var(--text-muted); font-size: 13px; margin: 10px 0;">
+                    Mark items that are <strong>not part of your base contract salary</strong> but appear on your payslip.
+                    These will be separated in the annual projection. You can set expected monthly amounts for each.
+                </p>
+                <div id="compensationCategories" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="wallet" checked> Wallet Benefits
+                        <input type="number" data-category-amount="wallet" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="awardco" checked> Awardco
+                        <input type="number" data-category-amount="awardco" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="exemptInsurance"> Exempt Insurance
+                        <input type="number" data-category-amount="exemptInsurance" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="taxableInsurance"> Taxable Insurance
+                        <input type="number" data-category-amount="taxableInsurance" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="rsu"> RSUs / Stock Awards
+                        <input type="number" data-category-amount="rsu" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="espp"> ESPP
+                        <input type="number" data-category-amount="espp" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="bonus"> Bonuses
+                        <input type="number" data-category-amount="bonus" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="other"> Other Benefits
+                        <input type="number" data-category-amount="other" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                </div>
+
+                <details style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <summary style="cursor: pointer; font-size: 13px; color: var(--text-muted);">
+                        Advanced: Benefit Start Dates
+                    </summary>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 10px 0;">
+                        If a benefit started mid-year, set its start month so calculations account for fewer expected months.
+                    </p>
+                    <div id="benefitStartDates" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                            <span style="min-width: 120px;">Exempt Insurance:</span>
+                            <select data-start-month="exemptInsurance" style="padding: 4px;">
+                                <option value="">From start</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                            <span style="min-width: 120px;">Taxable Insurance:</span>
+                            <select data-start-month="taxableInsurance" style="padding: 4px;">
+                                <option value="">From start</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                            <span style="min-width: 120px;">RSUs / Stock:</span>
+                            <select data-start-month="rsu" style="padding: 4px;">
+                                <option value="">From start</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                            <span style="min-width: 120px;">ESPP:</span>
+                            <select data-start-month="espp" style="padding: 4px;">
+                                <option value="">From start</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </label>
+                    </div>
+                </details>
+
+                <details style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <summary style="cursor: pointer; font-size: 13px; color: var(--text-muted);">
+                        Advanced: Display & Currency
+                    </summary>
+                    <p style="color: var(--text-muted); font-size: 12px; margin: 10px 0;">
+                        Configure how amounts are displayed. Useful if you want to see values in USD or prefer US number formatting.
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px;">
+                            <span>Display Currency:</span>
+                            <select id="displayCurrency" style="padding: 6px;">
+                                <option value="EUR">EUR (€)</option>
+                                <option value="USD">USD ($)</option>
+                            </select>
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px;">
+                            <span>EUR to USD Rate:</span>
+                            <div style="display: flex; gap: 4px;">
+                                <input type="number" id="eurToUsdRate" placeholder="e.g., 1.08" step="0.01" value="1.08" style="padding: 6px; flex: 1;">
+                                <button type="button" onclick="fetchExchangeRate()" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" title="Fetch current rate">↻</button>
+                            </div>
+                            <span id="rateStatus" style="font-size: 11px; color: var(--text-muted);"></span>
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px;">
+                            <span>Number Format:</span>
+                            <select id="numberFormat" style="padding: 6px;">
+                                <option value="es-ES">European (1.234,56)</option>
+                                <option value="en-US">US (1,234.56)</option>
+                            </select>
+                        </label>
+                    </div>
+                </details>
+            </details>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <h3 style="font-size: 14px; margin-bottom: 15px;">Or: Use a parsed payslip as baseline</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 10px;">
+                    After parsing payslips, click below to use the first one as your expected baseline. Future payslips will be compared against it.
+                </p>
+                <button class="secondary" onclick="useFirstPayslipAsBaseline()" id="baselineBtn" disabled>
+                    Use First Payslip as Baseline
+                </button>
+                <span id="baselineStatus" style="margin-left: 10px; font-size: 13px; color: var(--text-muted);"></span>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <button onclick="saveConfig()">Save Configuration</button>
+                <button class="secondary" onclick="exportConfig()">Export Config</button>
+                <label style="display: inline-block;">
+                    <input type="file" id="importConfigInput" accept=".json" style="display: none;" onchange="importConfig(event)">
+                    <span class="secondary" style="background: #6c757d; color: white; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px;">Import Config</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Baseline details (shown when baseline is set) -->
+        <div class="card" id="baselineDetails" style="display: none;">
+            <h2>Baseline Payslip Details</h2>
+            <div id="baselineContent"></div>
+        </div>
+
+    </div>
+
+    <!-- Guide Tab -->
+    <div id="guide" class="tab-content">
+        <div class="card">
+            <h2 data-i18n="guideTitle">Understanding Your Spanish Payslip</h2>
+
+            <div class="explanation-panel">
+                <h3 data-i18n="guideEarnings">Earnings (Devengos)</h3>
+
+                <div class="explanation-item">
+                    <div class="term">Base Salary <span class="term-es">/ Salario Base</span></div>
+                    <div class="definition" data-i18n="explainBaseSalary">
+                        Your fixed monthly salary as per your employment contract. This is the foundation of your compensation and is subject to social security contributions and income tax.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Plus Convenio <span class="term-es">/ Plus Convenio</span></div>
+                    <div class="definition" data-i18n="explainPlusConvenio">
+                        Additional payment established by the collective bargaining agreement (convenio colectivo) applicable to your sector. This ensures minimum compensation standards across the industry.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Absorbable Improvement <span class="term-es">/ Mejora Absorbible</span></div>
+                    <div class="definition" data-i18n="explainMejora">
+                        A salary supplement that can be absorbed by future legally-mandated salary increases. This is often used to bring your total compensation above the minimum required by the collective agreement.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Non-Compete Agreement <span class="term-es">/ Pacto No Competencia</span></div>
+                    <div class="definition" data-i18n="explainPacto">
+                        Compensation for agreeing not to work for competitors during or after your employment. This is taxable income.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Wallet / Benefits <span class="term-es">/ Wallet</span></div>
+                    <div class="definition" data-i18n="explainWallet">
+                        Flexible benefits allowance (like Forma/Cobee) that you can use for various expenses. May include portions that are tax-exempt up to legal limits.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Extra Pay Prorate <span class="term-es">/ Prorrata Pagas</span></div>
+                    <div class="definition" data-i18n="explainProrrata">
+                        In Spain, employees receive 14 payments per year (12 monthly + 2 extra "pagas"). This line shows the monthly proration of those extra payments, included in your regular paycheck rather than as separate payments in June and December.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Exempt Insurance <span class="term-es">/ Seguros Exentos</span></div>
+                    <div class="definition" data-i18n="explainSegurosExentos">
+                        Company-paid insurance premiums (health, life, etc.) that are exempt from income tax up to legal limits. This is a tax-free benefit.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Taxable Insurance <span class="term-es">/ Seguros Sujetos</span></div>
+                    <div class="definition" data-i18n="explainSegurosSujetos">
+                        Company-paid insurance premiums that exceed the tax-exempt limit and are therefore subject to income tax.
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-panel">
+                <h3 data-i18n="guideDeductions">Deductions (Deducciones)</h3>
+
+                <div class="explanation-item">
+                    <div class="term">Common Contingencies <span class="term-es">/ Cotización Contingencias Comunes (4.70%)</span></div>
+                    <div class="definition" data-i18n="explainCC">
+                        Social security contribution covering healthcare, maternity/paternity leave, and retirement pension. The 4.70% is the employee portion; your employer pays an additional 23.60%.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Intergenerational Equity <span class="term-es">/ Mecanismo Equidad Intergeneracional (0.15%)</span></div>
+                    <div class="definition" data-i18n="explainMEI">
+                        A contribution to ensure pension sustainability across generations, introduced in 2023. This funds the reserve for future pension obligations.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Solidarity Contribution <span class="term-es">/ Cotización Adicional Solidaridad</span></div>
+                    <div class="definition" data-i18n="explainSolidaridad">
+                        Additional contribution for high earners (income above the maximum contribution base) to support the pension system. Introduced in 2024.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Professional Training <span class="term-es">/ Cotización Formación Profesional (0.10%)</span></div>
+                    <div class="definition" data-i18n="explainFP">
+                        Contribution to fund professional training and continuous education programs for workers.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Unemployment Insurance <span class="term-es">/ Cotización Desempleo (1.55%)</span></div>
+                    <div class="definition" data-i18n="explainDesempleo">
+                        Contribution to the unemployment benefit system. If you lose your job, this funds your unemployment payments. Your employer pays an additional 5.50%.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Income Tax Withholding <span class="term-es">/ Tributación IRPF</span></div>
+                    <div class="definition" data-i18n="explainIRPF">
+                        Personal income tax (Impuesto sobre la Renta de las Personas Físicas) withheld at source. The percentage varies based on your salary, personal situation, and regional tax rates. This is a prepayment of your annual tax; you'll reconcile it when filing your tax return (Declaración de la Renta).
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">In-Kind Deduction <span class="term-es">/ Descuento Conceptos en Especie</span></div>
+                    <div class="definition" data-i18n="explainEspecie">
+                        Deduction for benefits received "in kind" (like insurance premiums paid by the company). These are added to your taxable income but then deducted since you don't receive them as cash.
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-panel">
+                <h3 data-i18n="guideBases">Contribution Bases (Bases de Cotización)</h3>
+
+                <div class="explanation-item">
+                    <div class="term">Total Remuneration <span class="term-es">/ REM. TOTAL</span></div>
+                    <div class="definition" data-i18n="explainRemTotal">
+                        The total gross amount of all salary concepts before any deductions.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Common Contingencies Base <span class="term-es">/ BASE C.C.</span></div>
+                    <div class="definition" data-i18n="explainBaseCC">
+                        The amount used to calculate social security contributions. This has minimum and maximum limits set annually by the government. In 2024, the maximum is €4,720.50/month.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">IRPF Base <span class="term-es">/ BASE I.R.P.F.</span></div>
+                    <div class="definition" data-i18n="explainBaseIRPF">
+                        The amount subject to income tax withholding. This may differ from total remuneration due to tax-exempt items like certain insurance premiums.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Net Pay <span class="term-es">/ Líquido a Percibir</span></div>
+                    <div class="definition" data-i18n="explainLiquido">
+                        The final amount deposited into your bank account after all deductions. This is your "take-home pay."
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '../lib/pdf.worker.min.js';
+
+        // Translations
+        const translations = {
+            en: {
+                back: 'Back to Tools',
+                title: 'Payroll Checker',
+                subtitle: 'Parse and validate Spanish payslips (nóminas)',
+                inspiredBy: 'Inspired by',
+                by: 'by',
+                privacyTitle: '100% Private:',
+                privacyText: 'All processing happens locally in your browser. Your payslips never leave your device.',
+                tabUpload: 'Upload Payslips',
+                tabResults: 'Results',
+                tabConfig: 'Configuration',
+                tabGuide: 'Payslip Guide',
+                uploadTitle: 'Upload Payslip PDFs',
+                uploadDesc: 'Upload your Spanish payslip PDFs. If password-protected, enter the password below (usually your DNI/NIE).',
+                passwordLabel: 'PDF Password (if encrypted)',
+                dropzoneText: 'Drag & drop payslip PDFs here<br>or click to select',
+                parseBtn: 'Parse Payslips',
+                clearBtn: 'Clear All',
+                noResults: 'Upload and parse payslips to see results here.',
+                configTitle: 'Expected Salary Configuration',
+                configDesc: 'Configure your expected salary components to validate against your payslips.',
+                configBaseSalary: 'Base Salary (Salario Base)',
+                configPlusConvenio: 'Plus Convenio',
+                configMejora: 'Mejora Absorbible',
+                configPacto: 'Pacto No Competencia',
+                configProrrata: 'Prorrata Pagas (monthly extra pay)',
+                configTolerance: 'Tolerance % for validation',
+                saveConfig: 'Save Configuration',
+                exportConfig: 'Export Config',
+                importConfig: 'Import Config',
+                guideTitle: 'Understanding Your Spanish Payslip',
+                guideEarnings: 'Earnings (Devengos)',
+                guideDeductions: 'Deductions (Deducciones)',
+                guideBases: 'Contribution Bases (Bases de Cotización)',
+                period: 'Period',
+                earnings: 'Earnings',
+                deductions: 'Deductions',
+                netPay: 'Net Pay',
+                concept: 'Concept',
+                amount: 'Amount',
+                expected: 'Expected',
+                difference: 'Diff',
+                status: 'Status',
+                summary: 'Summary',
+                payslipsParsed: 'Payslips Parsed',
+                totalGross: 'Total Gross',
+                totalDeductions: 'Total Deductions',
+                totalNet: 'Total Net',
+                validation: 'Validation Results',
+                monthlyBreakdown: 'Monthly Breakdown',
+                exportResults: 'Export Results',
+                ok: 'OK',
+                check: 'Check'
+            },
+            es: {
+                back: 'Volver a Herramientas',
+                title: 'Verificador de Nómina',
+                subtitle: 'Analiza y valida nóminas españolas',
+                inspiredBy: 'Inspirado por',
+                by: 'de',
+                privacyTitle: '100% Privado:',
+                privacyText: 'Todo el procesamiento ocurre localmente en tu navegador. Tus nóminas nunca salen de tu dispositivo.',
+                tabUpload: 'Subir Nóminas',
+                tabResults: 'Resultados',
+                tabConfig: 'Configuración',
+                tabGuide: 'Guía de Nómina',
+                uploadTitle: 'Subir PDFs de Nómina',
+                uploadDesc: 'Sube tus PDFs de nómina. Si están protegidos con contraseña, introdúcela abajo (normalmente tu DNI/NIE).',
+                passwordLabel: 'Contraseña del PDF (si está cifrado)',
+                dropzoneText: 'Arrastra y suelta PDFs aquí<br>o haz clic para seleccionar',
+                parseBtn: 'Analizar Nóminas',
+                clearBtn: 'Limpiar Todo',
+                noResults: 'Sube y analiza nóminas para ver los resultados aquí.',
+                configTitle: 'Configuración de Salario Esperado',
+                configDesc: 'Configura los componentes salariales esperados para validar contra tus nóminas.',
+                configBaseSalary: 'Salario Base',
+                configPlusConvenio: 'Plus Convenio',
+                configMejora: 'Mejora Absorbible',
+                configPacto: 'Pacto No Competencia',
+                configProrrata: 'Prorrata Pagas (paga extra mensual)',
+                configTolerance: 'Tolerancia % para validación',
+                saveConfig: 'Guardar Configuración',
+                exportConfig: 'Exportar Config',
+                importConfig: 'Importar Config',
+                guideTitle: 'Entendiendo Tu Nómina Española',
+                guideEarnings: 'Devengos',
+                guideDeductions: 'Deducciones',
+                guideBases: 'Bases de Cotización',
+                period: 'Período',
+                earnings: 'Devengos',
+                deductions: 'Deducciones',
+                netPay: 'Líquido',
+                concept: 'Concepto',
+                amount: 'Importe',
+                expected: 'Esperado',
+                difference: 'Dif',
+                status: 'Estado',
+                summary: 'Resumen',
+                payslipsParsed: 'Nóminas Analizadas',
+                totalGross: 'Total Bruto',
+                totalDeductions: 'Total Deducciones',
+                totalNet: 'Total Neto',
+                validation: 'Resultados de Validación',
+                monthlyBreakdown: 'Desglose Mensual',
+                exportResults: 'Exportar Resultados',
+                ok: 'OK',
+                check: 'Revisar'
+            }
+        };
+
+        let currentLang = 'en';
+        let pdfFiles = [];
+        let parsedPayslips = [];
+        let config = {};
+
+        // Map earnings nameEn to compensation category
+        const earningToCategory = {
+            'Wallet Benefits': 'wallet',
+            'Awardco': 'awardco',
+            'Exempt Insurance': 'exemptInsurance',
+            'Taxable Insurance': 'taxableInsurance',
+            // RSU, ESPP, Bonus patterns would be added if they appear in payslips
+        };
+
+        // Explanations for payslip items (used in info tooltips)
+        const itemExplanations = {
+            // Earnings
+            'Base Salary': 'Your fixed monthly salary as per your employment contract. This is the foundation of your compensation and is subject to social security contributions and income tax.',
+            'Collective Agreement Bonus': 'Additional payment established by the collective bargaining agreement (convenio colectivo) applicable to your sector.',
+            'Absorbable Improvement': 'A salary supplement that can be absorbed by future legally-mandated salary increases.',
+            'Non-Compete Agreement': 'Compensation for agreeing not to work for competitors during or after your employment. This is taxable income.',
+            'Wallet Benefits': 'Flexible benefits allowance (like Forma/Cobee) that you can use for various expenses. May include portions that are tax-exempt.',
+            'Awardco': 'Employee recognition/rewards platform benefit. Typically taxable income.',
+            'Extra Pay Prorate': 'Monthly proration of the 2 extra "pagas" (14 payments/year in Spain), included in your regular paycheck.',
+            'Exempt Insurance': 'Company-paid insurance premiums (health, life, etc.) that are exempt from income tax up to legal limits.',
+            'Taxable Insurance': 'Company-paid insurance premiums that exceed the tax-exempt limit and are subject to income tax.',
+            // Deductions
+            'Common Contingencies': 'Social security contribution (4.70%) covering healthcare, maternity/paternity leave, and retirement pension.',
+            'Intergenerational Equity': 'Contribution (0.15%) to ensure pension sustainability across generations, introduced in 2023.',
+            'Solidarity Contribution': 'Additional contribution for high earners to support the pension system. Introduced in 2024.',
+            'Professional Training': 'Contribution (0.10%) to fund professional training and continuous education programs.',
+            'Unemployment Insurance': 'Contribution (1.55%) to the unemployment benefit system.',
+            'Income Tax (IRPF)': 'Personal income tax withheld at source. The percentage varies based on salary, personal situation, and regional rates.',
+            'Passed-on Income Tax': 'Income tax on benefits "passed on" to you (like taxable insurance). Calculated separately from main IRPF.',
+            'In-Kind Deduction': 'Deduction for benefits received "in kind" - added to taxable income but deducted since not received as cash.'
+        };
+
+        // Language switching
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentLang = btn.dataset.lang;
+                applyTranslations();
+                if (parsedPayslips.length > 0) {
+                    displayResults();
+                }
+            });
+        });
+
+        function applyTranslations() {
+            const lang = currentLang === 'both' ? 'en' : currentLang;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.dataset.i18n;
+                if (currentLang === 'both' && translations.es[key]) {
+                    el.innerHTML = `${translations.en[key]} / ${translations.es[key]}`;
+                } else if (translations[lang] && translations[lang][key]) {
+                    el.innerHTML = translations[lang][key];
+                }
+            });
+        }
+
+        function t(key) {
+            if (currentLang === 'both') {
+                return `${translations.en[key] || key} / ${translations.es[key] || key}`;
+            }
+            return translations[currentLang]?.[key] || translations.en[key] || key;
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Drop zone events
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = '';
+        });
+
+        function handleFiles(files) {
+            for (const file of files) {
+                if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                    pdfFiles.push({ file, name: file.name, status: 'pending', error: null });
+                }
+            }
+            renderFileList();
+            updateParseButton();
+        }
+
+        function renderFileList() {
+            const list = document.getElementById('fileList');
+            list.innerHTML = pdfFiles.map((f, i) => `
+                <div class="file-item">
+                    <span class="name">${escapeHtml(f.name)}</span>
+                    <span class="status ${f.status}">${f.status === 'error' ? f.error : f.status}</span>
+                    <button class="remove-btn" onclick="removeFile(${i})">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            pdfFiles.splice(index, 1);
+            renderFileList();
+            updateParseButton();
+        }
+
+        function clearFiles() {
+            pdfFiles = [];
+            parsedPayslips = [];
+            renderFileList();
+            updateParseButton();
+        }
+
+        function updateParseButton() {
+            document.getElementById('parseBtn').disabled = pdfFiles.length === 0;
+        }
+
+        // PDF Parsing
+        async function parsePayslips() {
+            const password = document.getElementById('pdfPassword').value;
+            parsedPayslips = [];
+
+            for (const pf of pdfFiles) {
+                try {
+                    pf.status = 'parsing...';
+                    renderFileList();
+
+                    const arrayBuffer = await pf.file.arrayBuffer();
+                    const loadingTask = pdfjsLib.getDocument({
+                        data: arrayBuffer,
+                        password: password || undefined
+                    });
+
+                    const pdf = await loadingTask.promise;
+                    const payslip = await parsePayslipPDF(pdf, pf.name);
+
+                    if (payslip) {
+                        parsedPayslips.push(payslip);
+                        pf.status = 'success';
+                    } else {
+                        pf.status = 'error';
+                        pf.error = 'Parse failed';
+                    }
+                } catch (err) {
+                    pf.status = 'error';
+                    pf.error = err.message.includes('password') ? 'Wrong password' : err.message.substring(0, 20);
+                    console.error('Error parsing', pf.name, err);
+                }
+                renderFileList();
+            }
+
+            // Sort by period
+            parsedPayslips.sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month - b.month;
+            });
+
+            displayResults();
+            autoSavePayslips();
+            updateBaselineButton();
+            updateCurrentSessionInfo();
+            document.querySelector('[data-tab="results"]').click();
+        }
+
+        async function parsePayslipPDF(pdf, filename) {
+            // Extract all text from PDF with positions
+            let allItems = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                allItems = allItems.concat(content.items.map(item => ({
+                    str: item.str.trim(),
+                    x: Math.round(item.transform[4]),
+                    y: Math.round(item.transform[5]),
+                    width: item.width
+                })).filter(item => item.str.length > 0));
+            }
+
+            // Debug: log raw items
+            console.log('Raw PDF items:', allItems);
+
+            // Group items into rows by Y coordinate (within 3px tolerance)
+            const rows = groupIntoRows(allItems);
+            console.log('Grouped rows:', rows);
+
+            // Parse payslip data
+            const payslip = {
+                filename,
+                period: '',
+                month: 0,
+                year: 0,
+                employee: '',
+                position: '',
+                earnings: [],
+                deductions: [],
+                totals: {
+                    grossTotal: 0,
+                    deductionsTotal: 0,
+                    netPay: 0,
+                    baseCC: 0,
+                    baseIRPF: 0,
+                    tDevengado: 0,  // T. DEVENGADO from PDF
+                    tDeducir: 0     // T. A DEDUCIR from PDF
+                }
+            };
+
+            // Build full text for each row for searching
+            const rowTexts = rows.map(row => ({
+                items: row,
+                text: row.map(i => i.str).join(' ')
+            }));
+
+            // Find period (look for month names followed by year)
+            const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            for (const row of rowTexts) {
+                for (let mi = 0; mi < monthNames.length; mi++) {
+                    const monthName = monthNames[mi];
+                    if (row.text.includes(monthName)) {
+                        // Look for year right after month name (e.g., "Enero 2026")
+                        const monthYearMatch = row.text.match(new RegExp(monthName + '\\s+(20\\d{2})', 'i'));
+                        if (monthYearMatch) {
+                            payslip.month = mi + 1;
+                            payslip.year = parseInt(monthYearMatch[1]);
+                            payslip.period = row.text;
+                            break;
+                        }
+                    }
+                }
+                if (payslip.month > 0) break;
+            }
+
+            // Fallback: extract date from filename (format: ...YYYYMMDD...)
+            if (payslip.year === 0) {
+                const filenameMatch = filename.match(/(20\d{2})(\d{2})(\d{2})/);
+                if (filenameMatch) {
+                    payslip.year = parseInt(filenameMatch[1]);
+                    payslip.month = parseInt(filenameMatch[2]);
+                    payslip.period = `${monthNames[payslip.month - 1]} ${payslip.year}`;
+                }
+            }
+
+            // Define concept patterns - using flexible matching on joined row text
+            // DEVENGOS column is typically around x=470-520, DEDUCCIONES around x=520-570
+            const conceptDefs = [
+                { pattern: /Salario\s*Base/i, type: 'earning', nameEn: 'Base Salary', nameEs: 'Salario Base' },
+                { pattern: /Plus\s*Convenio/i, type: 'earning', nameEn: 'Collective Agreement Bonus', nameEs: 'Plus Convenio' },
+                { pattern: /Mejora\s*Absorbible/i, type: 'earning', nameEn: 'Absorbable Improvement', nameEs: 'Mejora Absorbible' },
+                { pattern: /Pacto\s*No\s*Competencia/i, type: 'earning', nameEn: 'Non-Compete Agreement', nameEs: 'Pacto No Competencia' },
+                { pattern: /\bWallet\b/i, type: 'earning', nameEn: 'Wallet Benefits', nameEs: 'Wallet' },
+                { pattern: /\bAwardco\b/i, type: 'earning', nameEn: 'Awardco', nameEs: 'Awardco' },
+                { pattern: /Prorrata\s*Pagas/i, type: 'earning', nameEn: 'Extra Pay Prorate', nameEs: 'Prorrata Pagas' },
+                { pattern: /Seguros?\s*Exentos?/i, type: 'earning', nameEn: 'Exempt Insurance', nameEs: 'Seguros Exentos' },
+                { pattern: /Seguros?\s*Sujetos?/i, type: 'earning', nameEn: 'Taxable Insurance', nameEs: 'Seguros Sujetos' },
+                { pattern: /Descuento\s*Conceptos?\s*en\s*Especie/i, type: 'deduction', nameEn: 'In-Kind Deduction', nameEs: 'Descuento Conceptos en Especie' },
+                { pattern: /Cotizaci[oó]n\s*Contingencias\s*Comunes/i, type: 'deduction', nameEn: 'Common Contingencies', nameEs: 'Cotización Contingencias Comunes' },
+                { pattern: /Cotizaci[oó]n\s*Mecanismo\s*Equidad/i, type: 'deduction', nameEn: 'Intergenerational Equity', nameEs: 'Mecanismo Equidad Intergeneracional' },
+                { pattern: /Cotizaci[oó]n\s*Adicional\s*Solidaridad/i, type: 'deduction', nameEn: 'Solidarity Contribution', nameEs: 'Cotización Adicional Solidaridad' },
+                { pattern: /Cotizaci[oó]n\s*Formaci[oó]n\s*Profesional/i, type: 'deduction', nameEn: 'Professional Training', nameEs: 'Cotización Formación Profesional' },
+                { pattern: /Cotizaci[oó]n\s*Desempleo/i, type: 'deduction', nameEn: 'Unemployment Insurance', nameEs: 'Cotización Desempleo' },
+                { pattern: /Tributaci[oó]n.*IRPF|IRPF.*Tributaci[oó]n|\bIRPF\b/i, type: 'deduction', nameEn: 'Income Tax (IRPF)', nameEs: 'Tributación IRPF' },
+                { pattern: /Imp\.?\s*Ingr\.?\s*Cta\.?\s*Repercutidos/i, type: 'deduction', nameEn: 'Passed-on Income Tax', nameEs: 'Imp. Ingr. Cta. Repercutidos' }
+            ];
+
+            // Process each row to find concepts and amounts
+            for (const row of rows) {
+                // Sort items by x position
+                const sortedItems = [...row].sort((a, b) => a.x - b.x);
+                const rowText = sortedItems.map(i => i.str).join(' ');
+
+                // Find concept in this row - check joined row text
+                for (const def of conceptDefs) {
+                    if (def.pattern.test(rowText)) {
+                        // Find all Spanish-format numbers in the row
+                        const allNumbers = sortedItems.filter(item =>
+                            /^-?\d+(?:\.\d{3})*,\d{2}$/.test(item.str)
+                        );
+
+                        // Payslip columns based on actual PDF structure:
+                        // Cuantía (x~72) | Precio (x~124-131) | Concepto (x~190) | DEVENGOS (x~460-485) | DEDUCCIONES (x~541-555)
+
+                        // DEVENGOS column: x between 430 and 510
+                        const devengosAmounts = allNumbers.filter(item => item.x >= 430 && item.x < 510);
+                        // DEDUCCIONES column: x >= 510
+                        const deduccionesAmounts = allNumbers.filter(item => item.x >= 510);
+
+                        // Select based on type
+                        const columnAmounts = def.type === 'earning' ? devengosAmounts : deduccionesAmounts;
+
+                        let amount = 0;
+                        let selectedItem = null;
+                        if (columnAmounts.length > 0) {
+                            // For earnings, take from DEVENGOS column (first of the right columns)
+                            // For deductions, take from DEDUCCIONES column (last/rightmost)
+                            selectedItem = def.type === 'earning' ? columnAmounts[0] : columnAmounts[columnAmounts.length - 1];
+                            amount = parseSpanishNumber(selectedItem.str);
+                        } else if (allNumbers.length > 0) {
+                            // Fallback: if no amounts in expected columns, take rightmost number
+                            selectedItem = allNumbers[allNumbers.length - 1];
+                            amount = parseSpanishNumber(selectedItem.str);
+                        }
+
+                        // For earnings, extract cuantía and precio (numbers before the concepto column)
+                        // Based on actual PDF: Cuantía at x~72, Precio at x~124-131
+                        const preColumnNumbers = allNumbers.filter(item => item.x < 180);
+                        let cuantia = null;
+                        let precio = null;
+                        if (preColumnNumbers.length >= 2) {
+                            cuantia = parseSpanishNumber(preColumnNumbers[0].str);
+                            precio = parseSpanishNumber(preColumnNumbers[1].str);
+                        } else if (preColumnNumbers.length === 1) {
+                            cuantia = parseSpanishNumber(preColumnNumbers[0].str);
+                        }
+
+                        if (amount > 0) {
+
+                            // Extract percentage if present
+                            const percentMatch = rowText.match(/\((\d+,?\d*)\s*%\)/);
+                            const percent = percentMatch ? percentMatch[1].replace(',', '.') : null;
+
+                            // Check if this concept was already added (avoid duplicates)
+                            const existing = def.type === 'earning'
+                                ? payslip.earnings.find(e => e.nameEn === def.nameEn)
+                                : payslip.deductions.find(d => d.nameEn === def.nameEn);
+
+                            if (!existing) {
+                                const entry = {
+                                    nameEn: def.nameEn,
+                                    nameEs: def.nameEs,
+                                    amount: amount,
+                                    percent: percent,
+                                    cuantia: cuantia,
+                                    precio: precio
+                                };
+
+                                // Validate cuantía × precio = amount (if both present)
+                                if (def.type === 'earning' && cuantia && precio) {
+                                    const calculated = cuantia * precio;
+                                    entry.calculatedAmount = calculated;
+                                    entry.calcDiff = calculated - amount;
+                                    // Use percentage-based tolerance from config
+                                    const tolerance = config.tolerance || 2;
+                                    const percentDiff = Math.abs((calculated - amount) / amount * 100);
+                                    entry.calcPercentDiff = percentDiff;
+                                    entry.calcValid = percentDiff <= tolerance;
+                                }
+
+                                if (def.type === 'earning') {
+                                    payslip.earnings.push(entry);
+                                } else {
+                                    payslip.deductions.push(entry);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                // Look for totals row - it's a row with many numbers at specific x positions
+                // Values row has: REM.TOTAL@64, BASE.CC@207, BASE.AT@284, BASE.IRPF@361, T.DEVENGADO@437, T.ADEDUCIR@518
+                const numbers = sortedItems.filter(item => /^\d+(?:\.\d{3})*,\d{2}$/.test(item.str));
+
+                // Check if this looks like the totals values row (has numbers at x~437 and x~518)
+                const hasTDevengadoPos = numbers.some(item => item.x >= 420 && item.x < 500);
+                const hasTDeducirPos = numbers.some(item => item.x >= 500 && item.x < 560);
+                const hasMultipleNumbers = numbers.length >= 4;
+                const noConceptText = !rowText.match(/Salario|Mejora|Cotizaci|Tributaci|Wallet|Seguros/i);
+
+                if (hasTDevengadoPos && hasTDeducirPos && hasMultipleNumbers && noConceptText) {
+                    const tDevengadoItem = numbers.find(item => item.x >= 420 && item.x < 500);
+                    const tDeducirItem = numbers.find(item => item.x >= 500 && item.x < 560);
+
+                    if (tDevengadoItem && payslip.totals.tDevengado === 0) {
+                        payslip.totals.tDevengado = parseSpanishNumber(tDevengadoItem.str);
+                        payslip.totals.grossTotal = payslip.totals.tDevengado;
+                    }
+                    if (tDeducirItem && payslip.totals.tDeducir === 0) {
+                        payslip.totals.tDeducir = parseSpanishNumber(tDeducirItem.str);
+                        payslip.totals.deductionsTotal = payslip.totals.tDeducir;
+                    }
+
+                    // Also capture BASE I.R.P.F. (around x=361)
+                    const baseIrpfItem = numbers.find(item => item.x >= 350 && item.x < 400);
+                    if (baseIrpfItem) {
+                        payslip.totals.baseIRPF = parseSpanishNumber(baseIrpfItem.str);
+                    }
+
+                    // BASE C.C. (around x=207)
+                    const baseCCItem = numbers.find(item => item.x >= 190 && item.x < 280);
+                    if (baseCCItem) {
+                        payslip.totals.baseCC = parseSpanishNumber(baseCCItem.str);
+                    }
+                }
+
+                // Líquido a Percibir
+                if (rowText.includes('Líquido') || rowText.includes('Liquido')) {
+                    const numbers = sortedItems.filter(item => /^\d+(?:\.\d{3})*,\d{2}$/.test(item.str));
+                    if (numbers.length > 0) {
+                        payslip.totals.netPay = parseSpanishNumber(numbers[numbers.length - 1].str);
+                    }
+                }
+
+                // BASE C.C.
+                if (rowText.includes('BASE C.C.')) {
+                    const numbers = sortedItems.filter(item => /^\d+(?:\.\d{3})*,\d{2}$/.test(item.str));
+                    if (numbers.length > 0) {
+                        payslip.totals.baseCC = parseSpanishNumber(numbers[0].str);
+                    }
+                }
+
+                // BASE I.R.P.F.
+                if (rowText.includes('BASE I.R.P.F.')) {
+                    const numbers = sortedItems.filter(item => /^\d+(?:\.\d{3})*,\d{2}$/.test(item.str));
+                    if (numbers.length > 0) {
+                        payslip.totals.baseIRPF = parseSpanishNumber(numbers[0].str);
+                    }
+                }
+            }
+
+            // If net pay not found directly, look for standalone large number
+            if (payslip.totals.netPay === 0) {
+                for (const row of rows) {
+                    if (row.length === 1) {
+                        const val = parseSpanishNumber(row[0].str);
+                        if (val > 3000 && val < 15000) {
+                            payslip.totals.netPay = val;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Calculate totals if not found
+            if (payslip.totals.grossTotal === 0) {
+                payslip.totals.grossTotal = payslip.earnings.reduce((sum, e) => sum + e.amount, 0);
+            }
+            if (payslip.totals.deductionsTotal === 0) {
+                payslip.totals.deductionsTotal = payslip.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+            }
+            if (payslip.totals.netPay === 0) {
+                payslip.totals.netPay = payslip.totals.grossTotal - payslip.totals.deductionsTotal;
+            }
+
+            // Summary log
+            const earningsSum = payslip.earnings.reduce((s, e) => s + e.amount, 0);
+            const deductionsSum = payslip.deductions.reduce((s, d) => s + Math.abs(d.amount), 0);
+            console.log(`PARSED ${payslip.period}: ${payslip.earnings.length} earnings (sum: ${earningsSum.toFixed(2)}, T.DEV: ${payslip.totals.tDevengado}) | ${payslip.deductions.length} deductions (sum: ${deductionsSum.toFixed(2)}, T.DED: ${payslip.totals.tDeducir}) | Net: ${payslip.totals.netPay}`);
+
+            return payslip;
+        }
+
+        function groupIntoRows(items) {
+            // Sort by Y descending (PDF coordinates have Y increasing upward)
+            const sorted = [...items].sort((a, b) => b.y - a.y);
+
+            const rows = [];
+            let currentRow = [];
+            let lastY = null;
+
+            for (const item of sorted) {
+                if (lastY !== null && Math.abs(item.y - lastY) > 3) {
+                    if (currentRow.length > 0) {
+                        rows.push(currentRow);
+                    }
+                    currentRow = [];
+                }
+                currentRow.push(item);
+                lastY = item.y;
+            }
+            if (currentRow.length > 0) {
+                rows.push(currentRow);
+            }
+
+            return rows;
+        }
+
+        function parseSpanishNumber(str) {
+            if (!str) return 0;
+            // Handle negative numbers (with minus sign)
+            const isNegative = str.includes('-');
+            // Spanish format: 1.234,56 -> 1234.56
+            const cleaned = str.replace(/-/g, '').trim().replace(/\./g, '').replace(',', '.');
+            const num = parseFloat(cleaned) || 0;
+            return isNegative ? -num : num;
+        }
+
+        // Display results
+        function displayResults() {
+            const container = document.getElementById('resultsContent');
+
+            if (parsedPayslips.length === 0) {
+                container.innerHTML = `<div class="alert alert-warning">${t('noResults')}</div>`;
+                return;
+            }
+
+            loadConfig();
+
+            let html = '';
+
+            // Summary
+            const totalGross = parsedPayslips.reduce((sum, p) => sum + p.totals.grossTotal, 0);
+            const totalDeductions = parsedPayslips.reduce((sum, p) => sum + p.totals.deductionsTotal, 0);
+            const totalNet = parsedPayslips.reduce((sum, p) => sum + p.totals.netPay, 0);
+
+            // Sort payslips by date to find first and last
+            const sortedPayslips = [...parsedPayslips].sort((a, b) => {
+                if (a.year !== b.year) return a.year - b.year;
+                return a.month - b.month;
+            });
+            const firstPayslip = sortedPayslips[0];
+            const lastPayslip = sortedPayslips[sortedPayslips.length - 1];
+
+            // Calculate months in year from first payslip (assuming employment starts month 1 of first payslip)
+            const startMonth = firstPayslip.month; // e.g., 1 for January
+            const monthsInYear = 13 - startMonth; // e.g., Jan start = 12 months, Feb start = 11 months
+
+            // Separate base salary from additional compensation
+            let totalBaseSalary = 0;
+            let totalAdditionalComp = 0;
+            const additionalCompBreakdown = {};
+
+            for (const ps of parsedPayslips) {
+                for (const e of ps.earnings) {
+                    const category = earningToCategory[e.nameEn];
+                    if (category && config.compCategories?.[category]?.enabled) {
+                        // This is additional compensation
+                        totalAdditionalComp += e.amount;
+                        if (!additionalCompBreakdown[e.nameEn]) additionalCompBreakdown[e.nameEn] = 0;
+                        additionalCompBreakdown[e.nameEn] += e.amount;
+                    } else {
+                        // This is base salary
+                        totalBaseSalary += e.amount;
+                    }
+                }
+            }
+
+            // Calculate expected additional compensation from config
+            let expectedMonthlyAdditional = 0;
+            const expectedAdditionalBreakdown = [];
+            if (config.compCategories) {
+                for (const [cat, settings] of Object.entries(config.compCategories)) {
+                    if (settings.enabled && settings.expectedMonthly > 0) {
+                        expectedMonthlyAdditional += settings.expectedMonthly;
+                        expectedAdditionalBreakdown.push({ category: cat, monthly: settings.expectedMonthly });
+                    }
+                }
+            }
+            const expectedAnnualAdditional = expectedMonthlyAdditional * monthsInYear;
+
+            // Calculate averages and projections
+            const avgMonthlyGross = totalGross / parsedPayslips.length;
+            const avgMonthlyBase = totalBaseSalary / parsedPayslips.length;
+            const avgMonthlyAdditional = totalAdditionalComp / parsedPayslips.length;
+
+            // Prorate annual salary
+            const proratedAnnualGross = config.annualGross > 0 ? (config.annualGross / 12) * monthsInYear : 0;
+            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional;
+
+            // Extrapolate to end of year based on average from parsed payslips
+            const monthsUntilYearEnd = 13 - lastPayslip.month; // remaining months including last parsed
+            const projectedRemainingGross = avgMonthlyGross * (monthsUntilYearEnd - 1); // exclude already parsed last month
+            const projectedYearGross = totalGross + projectedRemainingGross;
+            const projectedYearBase = totalBaseSalary + (avgMonthlyBase * (monthsUntilYearEnd - 1));
+            const projectedYearAdditional = totalAdditionalComp + (avgMonthlyAdditional * (monthsUntilYearEnd - 1));
+
+            html += `<div class="card"><h2>${t('summary')}</h2>`;
+            html += '<div class="summary-grid">';
+            html += `<div class="summary-item"><div class="value">${parsedPayslips.length}</div><div class="label">${t('payslipsParsed')}</div></div>`;
+            html += `<div class="summary-item"><div class="value">${formatCurrency(totalGross)}</div><div class="label">${t('totalGross')}</div></div>`;
+            html += `<div class="summary-item"><div class="value">${formatCurrency(totalDeductions)}</div><div class="label">${t('totalDeductions')}</div></div>`;
+            html += `<div class="summary-item"><div class="value">${formatCurrency(totalNet)}</div><div class="label">${t('totalNet')}</div></div>`;
+            html += '</div>';
+
+            // Annual gross validation against config (prorated)
+            if (config.annualGross > 0) {
+                // Compare against base salary + expected additional compensation
+                const expectedTotal = proratedPlusAdditional;
+                const annualDiff = projectedYearGross - expectedTotal;
+                const percentDiff = expectedTotal > 0 ? Math.abs(annualDiff / expectedTotal * 100) : 0;
+                const tolerance = config.tolerance || 2;
+                const isMatch = percentDiff <= tolerance;
+                const isClose = percentDiff <= tolerance + 1; // Within 1% of tolerance
+
+                let validClass, validIcon;
+                if (isMatch) {
+                    validClass = 'alert-success';
+                    validIcon = '✓';
+                } else if (isClose) {
+                    validClass = 'alert-warning';
+                    validIcon = '⚠';
+                } else {
+                    validClass = 'alert-danger';
+                    validIcon = '⚠';
+                }
+                const validLabel = currentLang === 'es' ? 'Proyección Salario Anual' : 'Annual Salary Projection';
+
+                const monthNames = currentLang === 'es' ?
+                    ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] :
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+                // Build additional compensation details for tooltip/display
+                let additionalDetails = '';
+                if (expectedAnnualAdditional > 0) {
+                    additionalDetails = expectedAdditionalBreakdown.map(b =>
+                        `${b.category}: ${formatCurrency(b.monthly)}/mo`
+                    ).join(', ');
+                }
+
+                html += `<div class="alert ${validClass}" style="margin-top: 15px;">
+                    <strong>${validIcon} ${validLabel}</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 13px; color: var(--text-muted);">
+                        ${currentLang === 'es'
+                            ? `Inicio: ${monthNames[startMonth]} ${firstPayslip.year} (${monthsInYear} meses del año)`
+                            : `Start: ${monthNames[startMonth]} ${firstPayslip.year} (${monthsInYear} months of year)`}
+                    </p>
+                    <table style="margin-top: 8px; font-size: 14px;">
+                        <tr>
+                            <td>${currentLang === 'es' ? 'Salario anual contrato:' : 'Contract annual salary:'}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(config.annualGross)}</td>
+                        </tr>
+                        <tr>
+                            <td>${currentLang === 'es' ? `Prorrateado (${monthsInYear} meses):` : `Prorated (${monthsInYear} months):`}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(proratedAnnualGross)}</td>
+                        </tr>
+                        ${expectedAnnualAdditional > 0 ? `
+                        <tr>
+                            <td colspan="2">
+                                <details style="margin: 0;" class="expandable-row">
+                                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Compensación adicional esperada:' : 'Expected additional compensation:'}</span>
+                                        <span style="padding-left: 15px;">+${formatCurrency(expectedAnnualAdditional)}</span>
+                                    </summary>
+                                    <div style="padding: 8px 0 0 20px; font-size: 13px; color: var(--text-muted);">
+                                        ${expectedAdditionalBreakdown.map(b => {
+                                            const categoryNames = {
+                                                wallet: 'Wallet Benefits',
+                                                awardco: 'Awardco',
+                                                exemptInsurance: 'Exempt Insurance',
+                                                taxableInsurance: 'Taxable Insurance',
+                                                rsu: 'RSUs / Stock',
+                                                espp: 'ESPP',
+                                                bonus: 'Bonuses',
+                                                other: 'Other'
+                                            };
+                                            const name = categoryNames[b.category] || b.category;
+                                            const annualAmount = b.monthly * monthsInYear;
+                                            return `<div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                                                <span>${name} (${formatCurrency(b.monthly)}/mo × ${monthsInYear}):</span>
+                                                <span>${formatCurrency(annualAmount)}</span>
+                                            </div>`;
+                                        }).join('')}
+                                    </div>
+                                </details>
+                            </td>
+                        </tr>
+                        <tr style="font-weight: 600; border-top: 1px solid var(--border);">
+                            <td>${currentLang === 'es' ? 'Total esperado (base + adicional):' : 'Expected total (base + additional):'}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(expectedTotal)}</td>
+                        </tr>
+                        ` : ''}
+                        <tr style="border-top: 1px solid var(--border);">
+                            <td>${currentLang === 'es' ? `Parseado base (${parsedPayslips.length} nóminas):` : `Parsed base (${parsedPayslips.length} payslips):`}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(totalBaseSalary)}</td>
+                        </tr>
+                        ${totalAdditionalComp > 0 ? `
+                        <tr>
+                            <td colspan="2">
+                                <details style="margin: 0;" class="expandable-row">
+                                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Parseado adicional:' : 'Parsed additional:'}</span>
+                                        <span style="padding-left: 15px;">+${formatCurrency(totalAdditionalComp)}</span>
+                                    </summary>
+                                    <div style="padding: 8px 0 0 20px; font-size: 13px;">
+                                        ${Object.entries(additionalCompBreakdown).map(([name, amount]) => {
+                                            // Check if this item has an expected amount configured
+                                            const category = earningToCategory[name];
+                                            const catConfig = category && config.compCategories?.[category];
+                                            const expectedMonthly = catConfig?.expectedMonthly || 0;
+                                            const benefitStartMonth = catConfig?.startMonth || 0;
+
+                                            // Count payslips that are on or after the benefit start month
+                                            let applicableMonths = parsedPayslips.length;
+                                            if (benefitStartMonth > 0) {
+                                                applicableMonths = parsedPayslips.filter(ps => ps.month >= benefitStartMonth).length;
+                                            }
+
+                                            const expectedForParsed = expectedMonthly ? expectedMonthly * applicableMonths : 0;
+                                            const hasExpected = expectedMonthly > 0;
+                                            const diff = hasExpected && expectedForParsed > 0 ? amount - expectedForParsed : 0;
+                                            const diffStr = hasExpected && expectedForParsed > 0 ? (diff >= 0 ? '+' : '') + formatCurrency(diff) : '';
+                                            const statusIcon = hasExpected
+                                                ? (expectedForParsed === 0 ? '—' : (Math.abs(diff / expectedForParsed * 100) <= (config.tolerance || 2) ? '✓' : '⚠'))
+                                                : '?';
+                                            const statusColor = hasExpected
+                                                ? (expectedForParsed === 0 ? 'var(--text-muted)' : (Math.abs(diff / expectedForParsed * 100) <= (config.tolerance || 2) ? 'var(--success)' : 'var(--warning)'))
+                                                : 'var(--text-muted)';
+                                            const monthLabel = benefitStartMonth > 0 ? applicableMonths + ' mo (from ' + ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][benefitStartMonth] + ')' : applicableMonths + ' mo';
+                                            return `<div style="display: flex; justify-content: space-between; padding: 2px 0; color: ${hasExpected ? 'inherit' : 'var(--text-muted)'};">
+                                                <span><span style="color: ${statusColor};">${statusIcon}</span> ${name}${hasExpected ? '' : ' (no expected set)'}:</span>
+                                                <span>${formatCurrency(amount)}${hasExpected && expectedForParsed > 0 ? ' <span style="color: var(--text-muted); font-size: 11px;">(exp: ' + formatCurrency(expectedForParsed) + ' for ' + monthLabel + ', ' + diffStr + ')</span>' : ''}</span>
+                                            </div>`;
+                                        }).join('')}
+                                    </div>
+                                </details>
+                            </td>
+                        </tr>
+                        ` : ''}
+                        <tr>
+                            <td>${currentLang === 'es' ? 'Parseado total:' : 'Parsed total:'}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(totalGross)}</td>
+                        </tr>
+                        <tr>
+                            <td>${currentLang === 'es' ? `Proyección resto del año:` : `Projected remaining:`}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(projectedRemainingGross)}</td>
+                        </tr>
+                        <tr style="font-weight: 600; border-top: 1px solid var(--border);">
+                            <td>${currentLang === 'es' ? 'Total proyectado año:' : 'Projected year total:'}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(projectedYearGross)}</td>
+                        </tr>
+                        <tr style="font-weight: 600;">
+                            <td>${currentLang === 'es' ? 'Diferencia:' : 'Difference:'}</td>
+                            <td class="text-right" style="padding-left: 15px;">${annualDiff >= 0 ? '+' : ''}${formatCurrency(annualDiff)} (${percentDiff.toFixed(1)}%)</td>
+                        </tr>
+                    </table>
+                </div>`;
+            }
+            html += '</div>';
+
+            // Monthly breakdown with net pay validation
+            if (!config.expectedNetPay) config.expectedNetPay = {};
+
+            html += `<div class="card"><h2>${t('monthlyBreakdown')}</h2>`;
+            html += `<p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                ${currentLang === 'es'
+                    ? 'Validación: Neto Calculado (devengos - deducciones) vs. Neto en Nómina (Líquido a Percibir). Opcionalmente ingresa tu neto real del banco.'
+                    : 'Validation: Calculated Net (earnings - deductions) vs. Payslip Net (Líquido a Percibir). Optionally enter your actual bank deposit.'}
+            </p>`;
+            html += `<table>
+                <thead><tr>
+                    <th>${t('period')}</th>
+                    <th class="text-right">${t('earnings')}</th>
+                    <th class="text-right">${t('deductions')}</th>
+                    <th class="text-right">${currentLang === 'es' ? 'Neto Calc.' : 'Calc. Net'}</th>
+                    <th class="text-right">${currentLang === 'es' ? 'Neto Nómina' : 'Payslip Net'}</th>
+                    <th class="text-right">${currentLang === 'es' ? 'Neto Banco' : 'Bank Net'}</th>
+                    <th>${currentLang === 'es' ? 'Estado' : 'Status'}</th>
+                </tr></thead><tbody>`;
+
+            for (const ps of parsedPayslips) {
+                const monthNames = currentLang === 'es' ?
+                    ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] :
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const periodLabel = `${monthNames[ps.month]} ${ps.year}`;
+                const periodKey = `${ps.month}/${ps.year}`;
+
+                // Calculate net from parsed items
+                const parsedEarnings = ps.earnings.reduce((sum, e) => sum + e.amount, 0);
+                const parsedDeductions = ps.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                const calculatedNet = parsedEarnings - parsedDeductions;
+
+                // Get parsed Líquido from payslip (may differ if we missed items)
+                const payslipNet = ps.totals.netPay;
+
+                // Check if parsing is complete (sums match totals)
+                const tDev = ps.totals.tDevengado || 0;
+                const tDed = ps.totals.tDeducir || 0;
+                const earningsOk = tDev === 0 || Math.abs(parsedEarnings - tDev) < 1;
+                const deductionsOk = tDed === 0 || Math.abs(parsedDeductions - tDed) < 1;
+                const earningsIndicator = earningsOk ? '' : ` <span style="color:var(--danger)" title="${currentLang === 'es' ? 'Items parseados no suman T. DEVENGADO' : 'Parsed items do not sum to T. DEVENGADO'}">⚠</span>`;
+                const deductionsIndicator = deductionsOk ? '' : ` <span style="color:var(--danger)" title="${currentLang === 'es' ? 'Items parseados no suman T. A DEDUCIR' : 'Parsed items do not sum to T. A DEDUCIR'}">⚠</span>`;
+
+                // Validate calculated vs payslip net
+                const netDiff = Math.abs(calculatedNet - payslipNet);
+                const netMatchOk = netDiff < 1; // Within €1
+                const calcNetIndicator = netMatchOk
+                    ? ` <span style="color:var(--success)" title="${currentLang === 'es' ? 'Coincide con Líquido a Percibir' : 'Matches Líquido a Percibir'}">✓</span>`
+                    : ` <span style="color:var(--danger)" title="${currentLang === 'es' ? `Diferencia de ${formatCurrency(netDiff)} vs. Líquido` : `Differs by ${formatCurrency(netDiff)} from Líquido`}">⚠</span>`;
+
+                // Bank net pay - inline input with validation
+                const bankNet = config.expectedNetPay[periodKey] || '';
+                const bankNetNum = parseFloat(bankNet) || 0;
+                let bankStatusHtml = '';
+
+                if (bankNetNum > 0) {
+                    const bankDiff = Math.abs(payslipNet - bankNetNum);
+                    const tolerance = config.tolerance || 2;
+                    const percentDiff = bankDiff / bankNetNum * 100;
+                    const bankOk = percentDiff <= tolerance;
+                    const diffSign = payslipNet >= bankNetNum ? '+' : '';
+                    const diffAmount = payslipNet - bankNetNum;
+                    bankStatusHtml = bankOk
+                        ? `<span class="badge badge-success" title="${diffSign}${formatCurrency(diffAmount)}">✓</span>`
+                        : `<span class="badge badge-danger" title="${diffSign}${formatCurrency(diffAmount)}">⚠ ${diffSign}${formatCurrency(diffAmount)}</span>`;
+                }
+
+                // Overall status - check validation overrides
+                if (!config.validationOverrides) config.validationOverrides = {};
+                const calcOverride = config.validationOverrides[`calc_${periodKey}`] || {};
+                const bankOverride = config.validationOverrides[`bank_${periodKey}`] || {};
+
+                // Determine calc status considering override
+                let calcStatusOk = netMatchOk;
+                let calcAcknowledged = false;
+                let calcNeedsCorrection = false;
+                if (calcOverride.status === 'acknowledged') {
+                    calcStatusOk = true;
+                    calcAcknowledged = true;
+                } else if (calcOverride.status === 'needs_correction') {
+                    calcStatusOk = false;
+                    calcNeedsCorrection = true;
+                }
+
+                // Determine bank status considering override
+                let bankStatusOk = true;
+                let bankAcknowledged = false;
+                let bankNeedsCorrection = false;
+                if (bankNetNum > 0) {
+                    const bankDiff = Math.abs(payslipNet - bankNetNum);
+                    const percentDiff = bankDiff / bankNetNum * 100;
+                    bankStatusOk = percentDiff <= (config.tolerance || 2);
+
+                    if (bankOverride.status === 'acknowledged') {
+                        bankStatusOk = true;
+                        bankAcknowledged = true;
+                    } else if (bankOverride.status === 'needs_correction') {
+                        bankStatusOk = false;
+                        bankNeedsCorrection = true;
+                    }
+                }
+
+                // Calculate overall status
+                let overallStatus = '';
+                const hasNeedsCorrection = calcNeedsCorrection || bankNeedsCorrection;
+                const hasAcknowledged = calcAcknowledged || bankAcknowledged;
+
+                // Check for unresolved mismatches (mismatch without override)
+                const hasUnresolvedCalc = !netMatchOk && !calcAcknowledged && !calcNeedsCorrection;
+                const hasUnresolvedBank = bankNetNum > 0 && !bankStatusOk && !bankAcknowledged && !bankNeedsCorrection;
+                const hasUnresolvedMismatch = hasUnresolvedCalc || hasUnresolvedBank;
+
+                if (hasNeedsCorrection) {
+                    // Red warning - something needs fixing
+                    overallStatus = '<span class="badge badge-danger">⚠</span>';
+                } else if (hasAcknowledged && !hasUnresolvedMismatch) {
+                    // Yellow checkmark - reviewed and acknowledged (takes precedence)
+                    overallStatus = '<span class="badge badge-warning">✓</span>';
+                } else if (hasUnresolvedMismatch || !earningsOk || !deductionsOk) {
+                    // Yellow warning - unreviewed mismatches or parsing issues
+                    overallStatus = '<span class="badge badge-warning">⚠</span>';
+                } else {
+                    // Green checkmark - all OK naturally
+                    overallStatus = '<span class="badge badge-success">✓</span>';
+                }
+
+                html += `<tr>
+                    <td>${periodLabel}</td>
+                    <td class="text-right amount">${formatCurrency(parsedEarnings)}${earningsIndicator}</td>
+                    <td class="text-right amount amount-negative">${formatCurrency(parsedDeductions)}${deductionsIndicator}</td>
+                    <td class="text-right amount">${formatCurrency(calculatedNet)}${calcNetIndicator}</td>
+                    <td class="text-right amount"><strong>${formatCurrency(payslipNet)}</strong></td>
+                    <td class="text-right">
+                        <input type="number" step="0.01" class="expected-net-input"
+                            data-period="${periodKey}"
+                            value="${bankNet}"
+                            placeholder="${payslipNet.toFixed(2)}"
+                            style="width: 90px; text-align: right; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;"
+                            onchange="updateExpectedNet('${periodKey}', this.value)"
+                            title="${currentLang === 'es' ? 'Ingresa el monto recibido en tu banco' : 'Enter the amount received in your bank'}">
+                        ${bankStatusHtml}
+                    </td>
+                    <td class="text-center">${overallStatus}</td>
+                </tr>`;
+            }
+            html += '</tbody></table>';
+
+            // Show summary of validation with expandable details and notes
+            if (!config.validationOverrides) config.validationOverrides = {};
+
+            const monthNames = currentLang === 'es' ?
+                ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] :
+                ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            let calcMatchCount = 0;
+            let calcMismatchCount = 0;
+            let calcAcknowledgedCount = 0;
+            let calcNeedsCorrectionCount = 0;
+            let calcDetails = [];
+            let bankMatchCount = 0;
+            let bankMismatchCount = 0;
+            let bankAcknowledgedCount = 0;
+            let bankNeedsCorrectionCount = 0;
+            let bankMissingCount = 0;
+            let bankDetails = [];
+
+            for (const ps of parsedPayslips) {
+                const periodKey = `${ps.month}/${ps.year}`;
+                const periodLabel = `${monthNames[ps.month]} ${ps.year}`;
+                const calcOverrideKey = `calc_${periodKey}`;
+                const bankOverrideKey = `bank_${periodKey}`;
+
+                // Check calculated vs payslip net
+                const parsedEarnings = ps.earnings.reduce((sum, e) => sum + e.amount, 0);
+                const parsedDeductions = ps.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                const calculatedNet = parsedEarnings - parsedDeductions;
+                const netDiff = calculatedNet - ps.totals.netPay;
+                const netDiffAbs = Math.abs(netDiff);
+                const calcOverride = config.validationOverrides[calcOverrideKey] || {};
+
+                let calcOk = netDiffAbs < 1;
+                let calcStatus = calcOk ? 'ok' : 'mismatch';
+
+                // Apply override
+                if (calcOverride.status === 'acknowledged') {
+                    calcStatus = 'acknowledged';
+                    calcAcknowledgedCount++;
+                } else if (calcOverride.status === 'needs_correction') {
+                    calcStatus = 'needs_correction';
+                    calcNeedsCorrectionCount++;
+                } else if (calcOk) {
+                    calcMatchCount++;
+                } else {
+                    calcMismatchCount++;
+                }
+
+                const diffSign = netDiff > 0 ? '+' : '';
+                calcDetails.push({
+                    periodKey,
+                    period: periodLabel,
+                    overrideKey: calcOverrideKey,
+                    status: calcStatus,
+                    notes: calcOverride.notes || '',
+                    message: calcOk
+                        ? `${formatCurrency(parsedEarnings)} - ${formatCurrency(parsedDeductions)} = ${formatCurrency(calculatedNet)}`
+                        : (currentLang === 'es'
+                            ? `Calculado: ${formatCurrency(calculatedNet)}, Nómina: ${formatCurrency(ps.totals.netPay)} (${diffSign}${formatCurrency(netDiff)})`
+                            : `Calculated: ${formatCurrency(calculatedNet)}, Payslip: ${formatCurrency(ps.totals.netPay)} (${diffSign}${formatCurrency(netDiff)})`)
+                });
+
+                // Check bank net if provided
+                const bankNet = config.expectedNetPay[periodKey];
+                if (bankNet !== undefined && bankNet > 0) {
+                    const bankDiff = ps.totals.netPay - bankNet;
+                    const bankDiffAbs = Math.abs(bankDiff);
+                    const percentDiff = bankDiffAbs / bankNet * 100;
+                    const diffSign = bankDiff > 0 ? '+' : '';
+                    const bankOverride = config.validationOverrides[bankOverrideKey] || {};
+
+                    let bankOk = percentDiff <= (config.tolerance || 2);
+                    let bankStatus = bankOk ? 'ok' : 'mismatch';
+
+                    // Apply override
+                    if (bankOverride.status === 'acknowledged') {
+                        bankStatus = 'acknowledged';
+                        bankAcknowledgedCount++;
+                    } else if (bankOverride.status === 'needs_correction') {
+                        bankStatus = 'needs_correction';
+                        bankNeedsCorrectionCount++;
+                    } else if (bankOk) {
+                        bankMatchCount++;
+                    } else {
+                        bankMismatchCount++;
+                    }
+
+                    bankDetails.push({
+                        periodKey,
+                        period: periodLabel,
+                        overrideKey: bankOverrideKey,
+                        status: bankStatus,
+                        notes: bankOverride.notes || '',
+                        message: bankOk
+                            ? (currentLang === 'es'
+                                ? `Nómina: ${formatCurrency(ps.totals.netPay)}, Banco: ${formatCurrency(bankNet)}`
+                                : `Payslip: ${formatCurrency(ps.totals.netPay)}, Bank: ${formatCurrency(bankNet)}`)
+                            : (currentLang === 'es'
+                                ? `Nómina: ${formatCurrency(ps.totals.netPay)}, Banco: ${formatCurrency(bankNet)} (${diffSign}${formatCurrency(bankDiff)})`
+                                : `Payslip: ${formatCurrency(ps.totals.netPay)}, Bank: ${formatCurrency(bankNet)} (${diffSign}${formatCurrency(bankDiff)})`)
+                    });
+                } else {
+                    bankMissingCount++;
+                }
+            }
+
+            // Helper to render status icon
+            function getStatusIcon(status) {
+                switch (status) {
+                    case 'ok': return '<span style="color: var(--success);">✓</span>';
+                    case 'acknowledged': return '<span style="color: #f0ad4e;">✓</span>';
+                    case 'needs_correction': return '<span style="color: var(--danger);">⚠</span>';
+                    case 'mismatch': return '<span style="color: var(--danger);">⚠</span>';
+                    default: return '';
+                }
+            }
+
+            // Build expandable calc validation section with controls
+            const calcDetailsHtml = calcDetails.map(d => {
+                const statusIcon = getStatusIcon(d.status);
+                const isOverridable = d.status === 'mismatch' || d.status === 'acknowledged' || d.status === 'needs_correction';
+                const ackChecked = d.status === 'acknowledged' ? 'checked' : '';
+                const needsCorChecked = d.status === 'needs_correction' ? 'checked' : '';
+
+                return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong>${d.period}:</strong>
+                        <span>${d.message}</span>
+                        ${statusIcon}
+                    </div>
+                    ${isOverridable || d.notes ? `
+                    <div style="margin-top: 6px; padding-left: 12px; font-size: 11px;">
+                        <label style="margin-right: 12px; cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="mismatch"
+                                ${d.status === 'mismatch' ? 'checked' : ''}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'mismatch')">
+                            ${currentLang === 'es' ? 'Sin resolver' : 'Unresolved'}
+                        </label>
+                        <label style="margin-right: 12px; cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="acknowledged"
+                                ${ackChecked}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'acknowledged')">
+                            <span style="color: #f0ad4e;">✓</span> ${currentLang === 'es' ? 'Revisado' : 'Acknowledged'}
+                        </label>
+                        <label style="cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="needs_correction"
+                                ${needsCorChecked}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'needs_correction')">
+                            <span style="color: var(--danger);">⚠</span> ${currentLang === 'es' ? 'Necesita corrección' : 'Needs Correction'}
+                        </label>
+                    </div>
+                    ` : ''}
+                    <div style="margin-top: 6px; padding-left: 12px;">
+                        <input type="text" placeholder="${currentLang === 'es' ? 'Notas...' : 'Notes...'}"
+                            value="${(d.notes || '').replace(/"/g, '&quot;')}"
+                            style="width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px;"
+                            onchange="updateValidationNotes('${d.overrideKey}', this.value)">
+                    </div>
+                </div>`;
+            }).join('');
+
+            // Build expandable bank validation section with controls
+            const bankDetailsHtml = bankDetails.length > 0 ? bankDetails.map(d => {
+                const statusIcon = getStatusIcon(d.status);
+                const isOverridable = d.status === 'mismatch' || d.status === 'acknowledged' || d.status === 'needs_correction';
+                const ackChecked = d.status === 'acknowledged' ? 'checked' : '';
+                const needsCorChecked = d.status === 'needs_correction' ? 'checked' : '';
+
+                return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong>${d.period}:</strong>
+                        <span>${d.message}</span>
+                        ${statusIcon}
+                    </div>
+                    ${isOverridable || d.notes ? `
+                    <div style="margin-top: 6px; padding-left: 12px; font-size: 11px;">
+                        <label style="margin-right: 12px; cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="mismatch"
+                                ${d.status === 'mismatch' ? 'checked' : ''}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'mismatch')">
+                            ${currentLang === 'es' ? 'Sin resolver' : 'Unresolved'}
+                        </label>
+                        <label style="margin-right: 12px; cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="acknowledged"
+                                ${ackChecked}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'acknowledged')">
+                            <span style="color: #f0ad4e;">✓</span> ${currentLang === 'es' ? 'Revisado' : 'Acknowledged'}
+                        </label>
+                        <label style="cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="needs_correction"
+                                ${needsCorChecked}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'needs_correction')">
+                            <span style="color: var(--danger);">⚠</span> ${currentLang === 'es' ? 'Necesita corrección' : 'Needs Correction'}
+                        </label>
+                    </div>
+                    ` : ''}
+                    <div style="margin-top: 6px; padding-left: 12px;">
+                        <input type="text" placeholder="${currentLang === 'es' ? 'Notas...' : 'Notes...'}"
+                            value="${(d.notes || '').replace(/"/g, '&quot;')}"
+                            style="width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px;"
+                            onchange="updateValidationNotes('${d.overrideKey}', this.value)">
+                    </div>
+                </div>`;
+            }).join('') : `<div style="padding: 4px 0; color: var(--text-muted);">${currentLang === 'es' ? 'No hay datos de banco ingresados' : 'No bank data entered'}</div>`;
+
+            // Calculate effective counts for summary
+            const calcEffectiveCorrect = calcMatchCount + calcAcknowledgedCount;
+            const calcEffectiveMismatch = calcMismatchCount + calcNeedsCorrectionCount;
+            const bankEffectiveCorrect = bankMatchCount + bankAcknowledgedCount;
+            const bankEffectiveMismatch = bankMismatchCount + bankNeedsCorrectionCount;
+
+            html += `<div style="margin-top: 15px; padding: 10px; background: var(--bg); border-radius: 4px; font-size: 13px;">
+                <details class="expandable-row" style="margin-bottom: 8px;">
+                    <summary style="cursor: pointer; list-style: none;">
+                        <strong>${currentLang === 'es' ? 'Validación de cálculo:' : 'Calculation validation:'}</strong>
+                        ${calcMatchCount > 0 ? `<span class="badge badge-success" style="margin-left: 10px;">✓ ${calcMatchCount}</span>` : ''}
+                        ${calcAcknowledgedCount > 0 ? `<span class="badge" style="margin-left: 5px; background: #f0ad4e; color: #000;">✓ ${calcAcknowledgedCount} ${currentLang === 'es' ? 'revisados' : 'ack'}</span>` : ''}
+                        ${calcMismatchCount > 0 ? `<span class="badge badge-danger" style="margin-left: 5px;">⚠ ${calcMismatchCount}</span>` : ''}
+                        ${calcNeedsCorrectionCount > 0 ? `<span class="badge badge-danger" style="margin-left: 5px;">⚠ ${calcNeedsCorrectionCount} ${currentLang === 'es' ? 'corregir' : 'fix'}</span>` : ''}
+                        <span style="color: var(--text-muted); font-size: 11px; margin-left: 8px;">${currentLang === 'es' ? '(clic para detalles)' : '(click for details)'}</span>
+                    </summary>
+                    <div style="margin-top: 8px; padding: 8px; background: var(--card-bg); border-radius: 4px; font-size: 12px;">
+                        ${calcDetailsHtml}
+                    </div>
+                </details>
+                <details class="expandable-row">
+                    <summary style="cursor: pointer; list-style: none;">
+                        <strong>${currentLang === 'es' ? 'Validación vs. banco:' : 'Bank validation:'}</strong>
+                        ${bankMatchCount > 0 ? `<span class="badge badge-success" style="margin-left: 10px;">✓ ${bankMatchCount}</span>` : ''}
+                        ${bankAcknowledgedCount > 0 ? `<span class="badge" style="margin-left: 5px; background: #f0ad4e; color: #000;">✓ ${bankAcknowledgedCount} ${currentLang === 'es' ? 'revisados' : 'ack'}</span>` : ''}
+                        ${bankMismatchCount > 0 ? `<span class="badge badge-danger" style="margin-left: 5px;">⚠ ${bankMismatchCount}</span>` : ''}
+                        ${bankNeedsCorrectionCount > 0 ? `<span class="badge badge-danger" style="margin-left: 5px;">⚠ ${bankNeedsCorrectionCount} ${currentLang === 'es' ? 'corregir' : 'fix'}</span>` : ''}
+                        ${bankMissingCount > 0 ? `<span class="badge badge-warning" style="margin-left: 5px;">? ${bankMissingCount}</span>` : ''}
+                        <span style="color: var(--text-muted); font-size: 11px; margin-left: 8px;">${currentLang === 'es' ? '(clic para detalles)' : '(click for details)'}</span>
+                    </summary>
+                    <div style="margin-top: 8px; padding: 8px; background: var(--card-bg); border-radius: 4px; font-size: 12px;">
+                        ${bankDetailsHtml}
+                    </div>
+                </details>
+            </div>`;
+
+            html += '</div>';
+
+            // Detailed payslips
+            html += `<div class="card"><h2>${currentLang === 'es' ? 'Detalle por Nómina' : 'Detailed Payslips'}</h2>`;
+
+            for (const ps of parsedPayslips) {
+                const monthNames = currentLang === 'es' ?
+                    ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] :
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const periodLabel = `${monthNames[ps.month]} ${ps.year}`;
+
+                html += `<div class="payslip-section">
+                    <div class="payslip-header" onclick="togglePayslip(this)">
+                        <span>${periodLabel}</span>
+                        <span>${t('netPay')}: <strong>${formatCurrency(ps.totals.netPay)}</strong></span>
+                    </div>
+                    <div class="payslip-body">
+                        <div class="two-col">
+                            <div>
+                                <h4 style="margin-top:0;">${t('earnings')}</h4>
+                                <table style="font-size: 12px;">
+                                    <thead><tr>
+                                        <th>${t('concept')}</th>
+                                        <th class="text-right">${currentLang === 'es' ? 'Cuantía' : 'Qty'}</th>
+                                        <th class="text-right">${currentLang === 'es' ? 'Precio' : 'Price'}</th>
+                                        <th class="text-right">${t('amount')}</th>
+                                        <th>${currentLang === 'es' ? 'Calc' : 'Calc'}</th>
+                                    </tr></thead>
+                                    <tbody>`;
+
+                const parsedEarningsSum = ps.earnings.reduce((sum, e) => sum + e.amount, 0);
+                const tDevengado = ps.totals.tDevengado || 0;
+                const earningsValid = tDevengado > 0 && Math.abs(parsedEarningsSum - tDevengado) < 1;
+                const earningsDiff = tDevengado > 0 ? parsedEarningsSum - tDevengado : 0;
+
+                for (const e of ps.earnings) {
+                    const name = currentLang === 'es' ? e.nameEs : (currentLang === 'both' ? `${e.nameEn} / ${e.nameEs}` : e.nameEn);
+                    const amountClass = e.amount < 0 ? 'amount-negative' : 'amount-positive';
+                    const cuantiaStr = e.cuantia ? e.cuantia.toFixed(2) : '—';
+                    const precioStr = e.precio ? formatCurrency(e.precio) : '—';
+                    let calcStatus = '—';
+
+                    // Check for wallet validation
+                    const isWallet = e.nameEn.toLowerCase().includes('wallet') || e.nameEs.toLowerCase().includes('wallet');
+                    if (isWallet && config.expectedWallet > 0) {
+                        const tolerance = config.tolerance || 2;
+                        const diff = e.amount - config.expectedWallet;
+                        const percentDiff = Math.abs(diff / config.expectedWallet * 100);
+                        const isExact = Math.abs(diff) < 0.01;
+                        const isOk = percentDiff <= tolerance;
+                        if (isExact) {
+                            calcStatus = '<span style="color:var(--success)">✓</span>';
+                        } else if (isOk) {
+                            calcStatus = `<span style="color:var(--warning)" title="Expected ${formatCurrency(config.expectedWallet)}, diff: ${formatCurrency(diff)}">⚠ ${formatCurrency(diff)}</span>`;
+                        } else {
+                            calcStatus = `<span style="color:var(--danger)" title="Expected ${formatCurrency(config.expectedWallet)}, diff: ${formatCurrency(diff)}">⚠ ${formatCurrency(diff)}</span>`;
+                        }
+                    } else if (e.cuantia && e.precio) {
+                        const isExact = Math.abs(e.calcDiff || 0) < 0.01;
+                        if (isExact) {
+                            calcStatus = '<span style="color:var(--success)">✓</span>';
+                        } else if (e.calcValid) {
+                            // Within tolerance but not exact - show yellow with diff
+                            const diffStr = e.calcDiff >= 0 ? `+${e.calcDiff.toFixed(2)}` : e.calcDiff.toFixed(2);
+                            calcStatus = `<span style="color:var(--warning)" title="${e.cuantia} × ${formatCurrency(e.precio)} = ${formatCurrency(e.calculatedAmount)} (${diffStr})">✓</span>`;
+                        } else {
+                            calcStatus = `<span style="color:var(--danger)" title="${e.cuantia} × ${formatCurrency(e.precio)} = ${formatCurrency(e.calculatedAmount)}">⚠</span>`;
+                        }
+                    }
+                    // Get explanation for info icon
+                    const explanation = itemExplanations[e.nameEn] || '';
+                    const escapedExplanation = explanation.replace(/"/g, '&quot;');
+                    const infoIcon = explanation ? `<span class="info-icon" title="${escapedExplanation}">i</span>` : '';
+
+                    html += `<tr>
+                        <td>${name}${infoIcon}</td>
+                        <td class="text-right">${cuantiaStr}</td>
+                        <td class="text-right">${precioStr}</td>
+                        <td class="text-right amount ${amountClass}">${formatCurrency(e.amount)}</td>
+                        <td class="text-center">${calcStatus}</td>
+                    </tr>`;
+                }
+                html += `<tr style="font-weight:600;"><td colspan="3">${currentLang === 'es' ? 'Suma Parseada' : 'Parsed Sum'}</td><td class="text-right amount">${formatCurrency(parsedEarningsSum)}</td><td></td></tr>`;
+                html += `<tr style="font-weight:600; border-top: 2px solid var(--border);"><td colspan="3">T. DEVENGADO</td><td class="text-right amount">${tDevengado > 0 ? formatCurrency(tDevengado) : '<span class="text-muted">—</span>'}</td><td></td></tr>`;
+                if (tDevengado > 0) {
+                    const validLabel = currentLang === 'es' ? 'Validación' : 'Validation';
+                    const validStatus = earningsValid
+                        ? `<span class="badge badge-success">✓ ${currentLang === 'es' ? 'Coincide' : 'Match'}</span>`
+                        : `<span class="badge badge-danger">⚠ ${formatCurrency(earningsDiff)} ${currentLang === 'es' ? 'diferencia' : 'diff'}</span>`;
+                    html += `<tr><td colspan="3">${validLabel}</td><td class="text-right">${validStatus}</td><td></td></tr>`;
+                }
+                html += `</tbody></table></div>
+                            <div>
+                                <h4 style="margin-top:0;">${t('deductions')}</h4>
+                                <table style="font-size: 12px;">
+                                    <thead><tr>
+                                        <th>${t('concept')}</th>
+                                        <th class="text-right">%</th>
+                                        <th class="text-right">${t('amount')}</th>
+                                        <th>${currentLang === 'es' ? 'Calc' : 'Calc'}</th>
+                                    </tr></thead>
+                                    <tbody>`;
+
+                const parsedDeductionsSum = ps.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                const tDeducir = ps.totals.tDeducir || 0;
+                const deductionsValid = tDeducir > 0 && Math.abs(parsedDeductionsSum - tDeducir) < 1;
+                const deductionsDiff = tDeducir > 0 ? parsedDeductionsSum - tDeducir : 0;
+                const baseIRPF = ps.totals.baseIRPF || 0;
+                const baseCC = ps.totals.baseCC || 0;
+
+                for (const d of ps.deductions) {
+                    const name = currentLang === 'es' ? d.nameEs : (currentLang === 'both' ? `${d.nameEn} / ${d.nameEs}` : d.nameEn);
+                    const percentStr = d.percent ? `${d.percent}%` : '—';
+
+                    // Validate rate calculation based on deduction type
+                    let calcStatus = '—';
+                    if (d.percent) {
+                        let base = 0;
+                        let baseName = '';
+
+                        // Check Repercutidos first (before IRPF, since both contain "Income Tax")
+                        if (d.nameEs.includes('Repercutidos') || d.nameEn.includes('Passed-on')) {
+                            // Try to find which earnings this tax is calculated from
+                            const repPercent = parseFloat(d.percent) / 100;
+                            if (repPercent > 0) {
+                                // Calculate what the base would need to be
+                                const impliedBase = d.amount / repPercent;
+
+                                // Check each earning to see if it matches the implied base
+                                for (const earning of ps.earnings) {
+                                    if (Math.abs(earning.amount - impliedBase) < 1) {
+                                        base = earning.amount;
+                                        baseName = earning.nameEn;
+                                        break;
+                                    }
+                                }
+
+                                // Also check sum of typical benefit items (Wallet, Seguros, Awardco)
+                                if (base === 0) {
+                                    const benefitItems = ps.earnings.filter(e =>
+                                        e.nameEn.toLowerCase().includes('wallet') ||
+                                        e.nameEs.toLowerCase().includes('seguros') ||
+                                        e.nameEn.toLowerCase().includes('insurance') ||
+                                        e.nameEn.toLowerCase().includes('awardco')
+                                    );
+                                    const benefitSum = benefitItems.reduce((sum, e) => sum + e.amount, 0);
+                                    if (Math.abs(benefitSum - impliedBase) < 1) {
+                                        base = benefitSum;
+                                        baseName = 'Benefits sum';
+                                    }
+                                }
+
+                                // If no match found, show implied base so user can identify it
+                                if (base === 0) {
+                                    calcStatus = `<span style="color:var(--warning)" title="Implied base: ${formatCurrency(impliedBase)} (look for matching earning)">? ${formatCurrency(impliedBase)}</span>`;
+                                }
+                            }
+                        } else if (d.nameEn.includes('IRPF') || d.nameEn.includes('Income Tax')) {
+                            // IRPF uses Base I.R.P.F.
+                            base = baseIRPF;
+                            baseName = 'Base IRPF';
+                        } else if (d.nameEn.includes('Contingencies') || d.nameEn.includes('Equity') ||
+                                   d.nameEn.includes('Training') || d.nameEn.includes('Unemployment') ||
+                                   d.nameEs.includes('Cotización')) {
+                            base = baseCC;
+                            baseName = 'Base CC';
+                        }
+
+                        if (base > 0) {
+                            const expectedAmount = base * (parseFloat(d.percent) / 100);
+                            // Include baseName in explanation so user knows what was matched
+                            let calcExplanation = `${baseName} ${formatCurrency(base)} × ${d.percent}%`;
+                            let diff = Math.abs(expectedAmount - d.amount);
+                            const tolerance = config.tolerance || 2;
+                            let percentDiff = (diff / d.amount) * 100;
+                            let isExact = diff < 0.01;
+                            let isOk = percentDiff <= tolerance;
+
+                            // For IRPF (not Passed-on), check if Repercutidos explains any difference
+                            let explainedByRepercutidos = false;
+                            const isMainIRPF = d.nameEn.includes('IRPF') && !d.nameEn.includes('Passed-on');
+                            if (isMainIRPF && !isExact) {
+                                const repercutidos = ps.deductions.find(ded =>
+                                    ded.nameEs.includes('Repercutidos') || ded.nameEn.includes('Passed-on')
+                                );
+                                if (repercutidos) {
+                                    // Check if: calculated - actual ≈ repercutidos amount
+                                    const missingAmount = expectedAmount - d.amount;
+                                    if (Math.abs(missingAmount - repercutidos.amount) < 1) {
+                                        explainedByRepercutidos = true;
+                                        calcExplanation = `${baseName} ${formatCurrency(base)} × ${d.percent}% − Repercutidos ${formatCurrency(repercutidos.amount)}`;
+                                    }
+                                }
+                            }
+
+                            if (isExact) {
+                                // Always show tooltip explaining the calculation
+                                calcStatus = `<span style="color:var(--success)" title="${calcExplanation} = ${formatCurrency(expectedAmount)}">✓</span>`;
+                            } else if (explainedByRepercutidos) {
+                                // Difference explained by Repercutidos - show green with explanation
+                                calcStatus = `<span style="color:var(--success)" title="${calcExplanation}">✓ (−Rep)</span>`;
+                            } else if (isOk) {
+                                // Within tolerance but not exact - show yellow
+                                calcStatus = `<span style="color:var(--warning)" title="${calcExplanation} = ${formatCurrency(expectedAmount)}">✓</span>`;
+                            } else {
+                                calcStatus = `<span style="color:var(--danger)" title="${calcExplanation} = ${formatCurrency(expectedAmount)}">⚠</span>`;
+                            }
+                        }
+                    }
+
+                    // Get explanation for info icon
+                    const explanation = itemExplanations[d.nameEn] || '';
+                    const escapedExplanation = explanation.replace(/"/g, '&quot;');
+                    const infoIcon = explanation ? `<span class="info-icon" title="${escapedExplanation}">i</span>` : '';
+
+                    html += `<tr>
+                        <td>${name}${infoIcon}</td>
+                        <td class="text-right">${percentStr}</td>
+                        <td class="text-right amount amount-negative">${formatCurrency(d.amount)}</td>
+                        <td class="text-center">${calcStatus}</td>
+                    </tr>`;
+                }
+                html += `<tr style="font-weight:600;"><td colspan="2">${currentLang === 'es' ? 'Suma Parseada' : 'Parsed Sum'}</td><td class="text-right amount amount-negative">${formatCurrency(parsedDeductionsSum)}</td><td></td></tr>`;
+                html += `<tr style="font-weight:600; border-top: 2px solid var(--border);"><td colspan="2">T. A DEDUCIR</td><td class="text-right amount amount-negative">${tDeducir > 0 ? formatCurrency(tDeducir) : '<span class="text-muted">—</span>'}</td><td></td></tr>`;
+                if (tDeducir > 0) {
+                    const validLabel = currentLang === 'es' ? 'Validación' : 'Validation';
+                    const validStatus = deductionsValid
+                        ? `<span class="badge badge-success">✓ ${currentLang === 'es' ? 'Coincide' : 'Match'}</span>`
+                        : `<span class="badge badge-danger">⚠ ${formatCurrency(deductionsDiff)} ${currentLang === 'es' ? 'diferencia' : 'diff'}</span>`;
+                    html += `<tr><td colspan="2">${validLabel}</td><td class="text-right">${validStatus}</td><td></td></tr>`;
+                }
+                html += `</tbody></table></div>
+                        </div>
+                        <div class="info-box" style="margin-top:15px;">
+                            <table style="font-size:12px;">
+                                <tr><td>Base C.C.:</td><td class="text-right">${formatCurrency(ps.totals.baseCC)}</td>
+                                    <td style="padding-left:20px;">Base I.R.P.F.:</td><td class="text-right">${formatCurrency(ps.totals.baseIRPF)}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>`;
+            }
+            html += '</div>';
+
+            // Export button
+            html += '<div style="margin-top: 20px;">';
+            html += `<button onclick="exportResults()">${t('exportResults')}</button>`;
+            html += '</div>';
+
+            container.innerHTML = html;
+        }
+
+        function togglePayslip(header) {
+            header.nextElementSibling.classList.toggle('show');
+        }
+
+        function formatCurrency(value) {
+            const displayCurrency = config.displayCurrency || 'EUR';
+            const numberFormat = config.numberFormat || 'es-ES';
+            const eurToUsdRate = config.eurToUsdRate || 1.08;
+
+            // Convert if displaying in USD (payslip values are in EUR)
+            let displayValue = value;
+            if (displayCurrency === 'USD') {
+                displayValue = value * eurToUsdRate;
+            }
+
+            return new Intl.NumberFormat(numberFormat, {
+                style: 'currency',
+                currency: displayCurrency,
+                minimumFractionDigits: 2
+            }).format(displayValue);
+        }
+
+        // Config - now loads from autosave slot
+        function loadConfig() {
+            // Load from autosave slot if it exists (handled by loadSaveSlots)
+            // This function now just applies config to UI
+            applyConfigToUI();
+        }
+
+        function applyConfigToUI() {
+            document.getElementById('annualGross').value = config.annualGross || '';
+            document.getElementById('expectedMonthlyGross').value = config.expectedMonthlyGross || '';
+            document.getElementById('expectedWallet').value = config.expectedWallet || '';
+            document.getElementById('tolerance').value = config.tolerance || 2;
+            // Apply compensation categories
+            if (config.compCategories) {
+                Object.keys(config.compCategories).forEach(cat => {
+                    const cb = document.querySelector(`input[data-category="${cat}"]`);
+                    const amountInput = document.querySelector(`input[data-category-amount="${cat}"]`);
+                    const startMonthSelect = document.querySelector(`select[data-start-month="${cat}"]`);
+                    if (cb) cb.checked = config.compCategories[cat].enabled;
+                    if (amountInput && config.compCategories[cat].expectedMonthly > 0) {
+                        amountInput.value = config.compCategories[cat].expectedMonthly;
+                    }
+                    if (startMonthSelect && config.compCategories[cat].startMonth > 0) {
+                        startMonthSelect.value = config.compCategories[cat].startMonth;
+                    }
+                });
+            }
+
+            // Sync expectedWallet to wallet category amount
+            if (config.expectedWallet > 0) {
+                const walletCatAmount = document.querySelector('input[data-category-amount="wallet"]');
+                if (walletCatAmount) walletCatAmount.value = config.expectedWallet;
+            }
+
+            // Apply display settings
+            if (config.displayCurrency) {
+                document.getElementById('displayCurrency').value = config.displayCurrency;
+            }
+            if (config.eurToUsdRate) {
+                document.getElementById('eurToUsdRate').value = config.eurToUsdRate;
+            }
+            if (config.numberFormat) {
+                document.getElementById('numberFormat').value = config.numberFormat;
+            }
+
+            updateBaselineButton();
+
+            if (config.baseline) {
+                showBaselineDetails();
+            }
+        }
+
+        function calculateExpected() {
+            const annual = parseFloat(document.getElementById('annualGross').value) || 0;
+            const monthly = annual / 12;
+            document.getElementById('expectedMonthlyGross').value = monthly.toFixed(2);
+            autoSaveConfig();
+        }
+
+        function autoSaveConfig() {
+            // Collect compensation categories
+            const compCategories = {};
+            document.querySelectorAll('#compensationCategories input[data-category]').forEach(cb => {
+                const cat = cb.dataset.category;
+                const startMonthSelect = document.querySelector(`select[data-start-month="${cat}"]`);
+                compCategories[cat] = {
+                    enabled: cb.checked,
+                    expectedMonthly: parseFloat(document.querySelector(`input[data-category-amount="${cat}"]`)?.value) || 0,
+                    startMonth: startMonthSelect ? parseInt(startMonthSelect.value) || 0 : 0
+                };
+            });
+
+            config = {
+                annualGross: parseFloat(document.getElementById('annualGross').value) || 0,
+                expectedMonthlyGross: parseFloat(document.getElementById('expectedMonthlyGross').value) || 0,
+                expectedWallet: parseFloat(document.getElementById('expectedWallet').value) || 0,
+                tolerance: parseFloat(document.getElementById('tolerance').value) || 2,
+                baseline: config.baseline || null,
+                expectedNetPay: config.expectedNetPay || {},
+                validationOverrides: config.validationOverrides || {},
+                compCategories: compCategories,
+                displayCurrency: document.getElementById('displayCurrency')?.value || 'EUR',
+                eurToUsdRate: parseFloat(document.getElementById('eurToUsdRate')?.value) || 1.08,
+                numberFormat: document.getElementById('numberFormat')?.value || 'es-ES'
+            };
+
+            // Update autosave slot's config if it exists
+            const autosaveIdx = saveSlots.findIndex(s => s.id === 'autosave');
+            if (autosaveIdx >= 0) {
+                saveSlots[autosaveIdx].config = { ...config };
+                saveSlots[autosaveIdx].savedAt = new Date().toISOString();
+                saveSlotsToStorage();
+            }
+        }
+
+        // Update expected net pay from inline input in results table
+        function updateExpectedNet(periodKey, value) {
+            if (!config.expectedNetPay) config.expectedNetPay = {};
+            if (value && parseFloat(value) > 0) {
+                config.expectedNetPay[periodKey] = parseFloat(value);
+            } else {
+                delete config.expectedNetPay[periodKey];
+            }
+            autoSaveConfig();
+            displayResults(); // Re-render results to show updated diff
+        }
+
+        // Update validation override status
+        function updateValidationStatus(overrideKey, status) {
+            if (!config.validationOverrides) config.validationOverrides = {};
+            if (!config.validationOverrides[overrideKey]) {
+                config.validationOverrides[overrideKey] = {};
+            }
+            if (status === 'mismatch') {
+                // Remove override, revert to auto-detected status
+                delete config.validationOverrides[overrideKey].status;
+                // Clean up empty objects
+                if (Object.keys(config.validationOverrides[overrideKey]).length === 0 ||
+                    (Object.keys(config.validationOverrides[overrideKey]).length === 1 && !config.validationOverrides[overrideKey].notes)) {
+                    if (!config.validationOverrides[overrideKey].notes) {
+                        delete config.validationOverrides[overrideKey];
+                    }
+                }
+            } else {
+                config.validationOverrides[overrideKey].status = status;
+            }
+            autoSaveConfig();
+            displayResults();
+        }
+
+        // Update validation notes
+        function updateValidationNotes(overrideKey, notes) {
+            if (!config.validationOverrides) config.validationOverrides = {};
+            if (!config.validationOverrides[overrideKey]) {
+                config.validationOverrides[overrideKey] = {};
+            }
+            if (notes && notes.trim()) {
+                config.validationOverrides[overrideKey].notes = notes.trim();
+            } else {
+                delete config.validationOverrides[overrideKey].notes;
+                // Clean up empty objects
+                if (Object.keys(config.validationOverrides[overrideKey]).length === 0) {
+                    delete config.validationOverrides[overrideKey];
+                }
+            }
+            autoSaveConfig();
+        }
+
+        function saveConfig() {
+            autoSaveConfig();
+            alert(currentLang === 'es' ? '¡Configuración guardada!' : 'Configuration saved!');
+        }
+
+        async function fetchExchangeRate() {
+            const statusEl = document.getElementById('rateStatus');
+            const rateInput = document.getElementById('eurToUsdRate');
+
+            statusEl.textContent = 'Fetching...';
+            statusEl.style.color = 'var(--text-muted)';
+
+            try {
+                // Using exchangerate.host free API (no key required)
+                const response = await fetch('https://api.exchangerate.host/latest?base=EUR&symbols=USD');
+                const data = await response.json();
+
+                if (data.success && data.rates?.USD) {
+                    const rate = data.rates.USD;
+                    rateInput.value = rate.toFixed(4);
+                    statusEl.textContent = `Updated: ${new Date().toLocaleDateString()}`;
+                    statusEl.style.color = '#28a745';
+                    autoSaveConfig();
+                } else {
+                    // Fallback to frankfurter.app
+                    const fallbackResponse = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                    const fallbackData = await fallbackResponse.json();
+
+                    if (fallbackData.rates?.USD) {
+                        const rate = fallbackData.rates.USD;
+                        rateInput.value = rate.toFixed(4);
+                        statusEl.textContent = `Updated: ${new Date().toLocaleDateString()}`;
+                        statusEl.style.color = '#28a745';
+                        autoSaveConfig();
+                    } else {
+                        throw new Error('No rate data');
+                    }
+                }
+            } catch (err) {
+                statusEl.textContent = 'Failed to fetch rate';
+                statusEl.style.color = '#dc3545';
+                console.error('Exchange rate fetch error:', err);
+            }
+        }
+
+        function updateBaselineButton() {
+            const btn = document.getElementById('baselineBtn');
+            btn.disabled = parsedPayslips.length === 0;
+        }
+
+        function useFirstPayslipAsBaseline() {
+            if (parsedPayslips.length === 0) return;
+
+            const first = parsedPayslips[0];
+
+            // Create baseline from first payslip (excludes additional compensation items)
+            const baselineEarnings = first.earnings.filter(e => {
+                const category = earningToCategory[e.nameEn];
+                // Exclude if it's a category marked as additional compensation
+                return !(category && config.compCategories?.[category]?.enabled);
+            });
+
+            config.baseline = {
+                period: `${first.month}/${first.year}`,
+                grossTotal: first.totals.grossTotal,
+                earnings: baselineEarnings,
+                deductions: first.deductions,
+                // Calculate fixed gross (excluding variable items)
+                fixedGross: baselineEarnings.reduce((sum, e) => sum + e.amount, 0)
+            };
+
+            // Update expected monthly to match baseline
+            document.getElementById('expectedMonthlyGross').value = config.baseline.fixedGross.toFixed(2);
+
+            autoSaveConfig();
+            showBaselineDetails();
+
+            document.getElementById('baselineStatus').textContent =
+                currentLang === 'es' ? '✓ Línea base establecida' : '✓ Baseline set';
+        }
+
+        function showBaselineDetails() {
+            if (!config.baseline) return;
+
+            const container = document.getElementById('baselineDetails');
+            const content = document.getElementById('baselineContent');
+            container.style.display = 'block';
+
+            let html = `<p><strong>Based on:</strong> ${config.baseline.period}</p>`;
+            html += `<p><strong>Fixed Monthly Gross:</strong> ${formatCurrency(config.baseline.fixedGross)}</p>`;
+            html += '<h4>Fixed Earnings (used for validation)</h4><table><thead><tr><th>Concept</th><th class="text-right">Amount</th></tr></thead><tbody>';
+
+            for (const e of config.baseline.earnings) {
+                const name = currentLang === 'es' ? e.nameEs : e.nameEn;
+                html += `<tr><td>${name}</td><td class="text-right">${formatCurrency(e.amount)}</td></tr>`;
+            }
+            html += `<tr style="font-weight:600;"><td>Total</td><td class="text-right">${formatCurrency(config.baseline.fixedGross)}</td></tr>`;
+            html += '</tbody></table>';
+
+            content.innerHTML = html;
+        }
+
+        // Auto-save to a special "autosave" slot
+        function autoSavePayslips() {
+            if (parsedPayslips.length === 0) return;
+
+            // Strip PII before saving
+            const sanitizedPayslips = parsedPayslips.map(ps => ({
+                period: ps.period,
+                month: ps.month,
+                year: ps.year,
+                earnings: ps.earnings,
+                deductions: ps.deductions,
+                totals: ps.totals
+            }));
+
+            const autosaveSlot = {
+                id: 'autosave',
+                name: '⟳ Autosave',
+                isAutosave: true,
+                savedAt: new Date().toISOString(),
+                payslipCount: parsedPayslips.length,
+                periods: parsedPayslips.map(p => `${p.month}/${p.year}`),
+                totalNet: parsedPayslips.reduce((sum, p) => sum + p.totals.netPay, 0),
+                config: { ...config },
+                payslips: sanitizedPayslips
+            };
+
+            // Update or add autosave slot
+            const existingIdx = saveSlots.findIndex(s => s.id === 'autosave');
+            if (existingIdx >= 0) {
+                saveSlots[existingIdx] = autosaveSlot;
+            } else {
+                saveSlots.unshift(autosaveSlot); // Add at beginning
+            }
+
+            saveSlotsToStorage();
+            renderSaveSlots();
+        }
+
+        function exportConfig() {
+            autoSaveConfig();
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'payroll-config.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importConfig(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    config = JSON.parse(e.target.result);
+                    document.getElementById('annualGross').value = config.annualGross || '';
+                    document.getElementById('expectedMonthlyGross').value = config.expectedMonthlyGross || '';
+                    document.getElementById('expectedWallet').value = config.expectedWallet || '';
+                    document.getElementById('tolerance').value = config.tolerance || 2;
+                    localStorage.setItem('payrollCheckerConfig', JSON.stringify(config));
+                    if (config.baseline) showBaselineDetails();
+                    alert(currentLang === 'es' ? '¡Configuración importada!' : 'Configuration imported!');
+                } catch (err) {
+                    alert('Error: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportResults() {
+            // Export without PII
+            const sanitized = parsedPayslips.map(ps => ({
+                period: `${ps.month}/${ps.year}`,
+                month: ps.month,
+                year: ps.year,
+                earnings: ps.earnings,
+                deductions: ps.deductions,
+                totals: ps.totals
+            }));
+            const data = {
+                exportedAt: new Date().toISOString(),
+                config: config,
+                payslips: sanitized
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'payroll-results.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ==================== SAVE SLOTS ====================
+
+        let saveSlots = [];
+
+        function loadSaveSlots() {
+            const saved = localStorage.getItem('payrollCheckerSaveSlots');
+            if (saved) {
+                try {
+                    saveSlots = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Error loading save slots:', e);
+                    saveSlots = [];
+                }
+            }
+
+            // Auto-load the autosave slot into current session
+            const autosave = saveSlots.find(s => s.id === 'autosave');
+            if (autosave) {
+                config = { ...autosave.config };
+                parsedPayslips = autosave.payslips.map(p => ({ ...p }));
+                applyConfigToUI();
+            }
+
+            renderSaveSlots();
+            updateCurrentSessionInfo();
+        }
+
+        function saveSlotsToStorage() {
+            localStorage.setItem('payrollCheckerSaveSlots', JSON.stringify(saveSlots));
+        }
+
+        function updateCurrentSessionInfo() {
+            const container = document.getElementById('currentSessionInfo');
+            const btn = document.getElementById('saveToSlotBtn');
+
+            if (parsedPayslips.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">No payslips loaded. Parse some payslips first.</p>';
+                btn.disabled = true;
+            } else {
+                const months = parsedPayslips.map(p => `${p.month}/${p.year}`).join(', ');
+                const totalNet = parsedPayslips.reduce((sum, p) => sum + p.totals.netPay, 0);
+                container.innerHTML = `
+                    <table style="font-size: 13px;">
+                        <tr><td style="padding-right: 20px;"><strong>Payslips:</strong></td><td>${parsedPayslips.length}</td></tr>
+                        <tr><td><strong>Periods:</strong></td><td>${months}</td></tr>
+                        <tr><td><strong>Total Net:</strong></td><td>${formatCurrency(totalNet)}</td></tr>
+                        <tr><td><strong>Annual Gross Config:</strong></td><td>${config.annualGross ? formatCurrency(config.annualGross) : 'Not set'}</td></tr>
+                    </table>
+                `;
+                btn.disabled = false;
+            }
+        }
+
+        function saveToSlot() {
+            const nameInput = document.getElementById('saveSlotName');
+            let name = nameInput.value.trim();
+
+            if (!name) {
+                // Auto-generate name from payslip periods
+                if (parsedPayslips.length > 0) {
+                    const years = [...new Set(parsedPayslips.map(p => p.year))];
+                    name = `Payslips ${years.join('-')}`;
+                } else {
+                    name = `Save ${new Date().toLocaleDateString()}`;
+                }
+            }
+
+            // Sanitize payslips (remove PII)
+            const sanitizedPayslips = parsedPayslips.map(ps => ({
+                period: ps.period,
+                month: ps.month,
+                year: ps.year,
+                earnings: ps.earnings,
+                deductions: ps.deductions,
+                totals: ps.totals
+            }));
+
+            const slot = {
+                id: Date.now().toString(),
+                name: name,
+                savedAt: new Date().toISOString(),
+                payslipCount: parsedPayslips.length,
+                periods: parsedPayslips.map(p => `${p.month}/${p.year}`),
+                totalNet: parsedPayslips.reduce((sum, p) => sum + p.totals.netPay, 0),
+                config: { ...config },
+                payslips: sanitizedPayslips
+            };
+
+            saveSlots.push(slot);
+            saveSlotsToStorage();
+            renderSaveSlots();
+
+            nameInput.value = '';
+            alert(currentLang === 'es' ? `¡Guardado en "${name}"!` : `Saved to "${name}"!`);
+        }
+
+        function renderSaveSlots() {
+            const container = document.getElementById('saveSlotsList');
+
+            // Filter out autosave for separate display
+            const autosave = saveSlots.find(s => s.id === 'autosave');
+            const manualSlots = saveSlots.filter(s => s.id !== 'autosave');
+
+            if (!autosave && manualSlots.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">No saved slots yet. Parse payslips to create an autosave, or manually save above.</p>';
+                return;
+            }
+
+            let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+
+            // Show autosave first with special styling
+            if (autosave) {
+                const savedDate = new Date(autosave.savedAt).toLocaleString();
+                html += `
+                    <div class="save-slot-item" style="background: #e8f4fd; border: 2px solid var(--primary); border-radius: 8px; padding: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <strong style="font-size: 15px; color: var(--primary);">⟳ Autosave</strong>
+                                <span class="badge" style="background: var(--primary); color: white; margin-left: 10px;">Current Session</span>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
+                                    Last saved: ${savedDate}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="small secondary" onclick="exportSlot('autosave')">Export</button>
+                            </div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 13px;">
+                            <span class="badge badge-info">${autosave.payslipCount} payslips</span>
+                            <span style="margin-left: 10px;">Periods: ${autosave.periods.join(', ')}</span>
+                            <span style="margin-left: 10px;">Net: <strong>${formatCurrency(autosave.totalNet)}</strong></span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Show manual saves
+            for (const slot of manualSlots) {
+                const savedDate = new Date(slot.savedAt).toLocaleString();
+                html += `
+                    <div class="save-slot-item" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <strong style="font-size: 15px;">${escapeHtml(slot.name)}</strong>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 5px;">
+                                    Saved: ${savedDate}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="small" onclick="loadSlot('${slot.id}')">Load</button>
+                                <button class="small secondary" onclick="exportSlot('${slot.id}')">Export</button>
+                                <button class="small" style="background: var(--danger);" onclick="deleteSlot('${slot.id}')">Delete</button>
+                            </div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 13px;">
+                            <span class="badge badge-info">${slot.payslipCount} payslips</span>
+                            <span style="margin-left: 10px;">Periods: ${slot.periods.join(', ')}</span>
+                            <span style="margin-left: 10px;">Net: <strong>${formatCurrency(slot.totalNet)}</strong></span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+
+            // Add import button
+            html += `
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                    <label style="display: inline-block;">
+                        <input type="file" id="importSlotInput" accept=".json" style="display: none;" onchange="importSlot(event)">
+                        <span style="background: #6c757d; color: white; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">Import Save Slot</span>
+                    </label>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function loadSlot(slotId) {
+            const slot = saveSlots.find(s => s.id === slotId);
+            if (!slot) return;
+
+            // Confirm if current session has unsaved data
+            if (parsedPayslips.length > 0) {
+                const confirmMsg = currentLang === 'es'
+                    ? '¿Cargar este guardado? Los datos actuales no guardados se perderán.'
+                    : 'Load this save? Current unsaved data will be lost.';
+                if (!confirm(confirmMsg)) return;
+            }
+
+            // Load the slot data
+            config = { ...slot.config };
+            parsedPayslips = slot.payslips.map(p => ({ ...p }));
+
+            // Update UI
+            document.getElementById('annualGross').value = config.annualGross || '';
+            document.getElementById('expectedMonthlyGross').value = config.expectedMonthlyGross || '';
+            document.getElementById('expectedWallet').value = config.expectedWallet || '';
+            document.getElementById('tolerance').value = config.tolerance || 2;
+
+            if (config.baseline) showBaselineDetails();
+
+            updateCurrentSessionInfo();
+            updateBaselineButton();
+
+            if (parsedPayslips.length > 0) {
+                displayResults();
+                document.querySelector('[data-tab="results"]').click();
+            }
+
+            alert(currentLang === 'es' ? `¡"${slot.name}" cargado!` : `"${slot.name}" loaded!`);
+        }
+
+        function deleteSlot(slotId) {
+            const slot = saveSlots.find(s => s.id === slotId);
+            if (!slot) return;
+
+            const confirmMsg = currentLang === 'es'
+                ? `¿Eliminar "${slot.name}"? Esta acción no se puede deshacer.`
+                : `Delete "${slot.name}"? This cannot be undone.`;
+
+            if (!confirm(confirmMsg)) return;
+
+            saveSlots = saveSlots.filter(s => s.id !== slotId);
+            saveSlotsToStorage();
+            renderSaveSlots();
+        }
+
+        function exportSlot(slotId) {
+            const slot = saveSlots.find(s => s.id === slotId);
+            if (!slot) return;
+
+            const blob = new Blob([JSON.stringify(slot, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `payroll-save-${slot.name.replace(/[^a-z0-9]/gi, '-')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importSlot(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const slot = JSON.parse(e.target.result);
+
+                    // Validate it looks like a save slot
+                    if (!slot.payslips || !slot.config || !slot.name) {
+                        throw new Error('Invalid save file format');
+                    }
+
+                    // Generate new ID to avoid conflicts
+                    slot.id = Date.now().toString();
+                    slot.name = slot.name + ' (imported)';
+                    slot.savedAt = new Date().toISOString();
+
+                    saveSlots.push(slot);
+                    saveSlotsToStorage();
+                    renderSaveSlots();
+
+                    alert(currentLang === 'es' ? '¡Guardado importado!' : 'Save imported!');
+                } catch (err) {
+                    alert('Error importing: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function clearCurrentSession() {
+            if (parsedPayslips.length > 0) {
+                const confirmMsg = currentLang === 'es'
+                    ? '¿Limpiar la sesión actual? Los datos no guardados se perderán.'
+                    : 'Clear current session? Unsaved data will be lost.';
+                if (!confirm(confirmMsg)) return;
+            }
+
+            parsedPayslips = [];
+            pdfFiles = [];
+            config = {};
+
+            document.getElementById('annualGross').value = '';
+            document.getElementById('expectedMonthlyGross').value = '';
+            document.getElementById('expectedWallet').value = '';
+            document.getElementById('tolerance').value = '2';
+            document.getElementById('baselineDetails').style.display = 'none';
+
+            // Reset compensation categories
+            document.querySelectorAll('#compensationCategories input[data-category]').forEach(cb => {
+                cb.checked = cb.dataset.category === 'wallet' || cb.dataset.category === 'awardco';
+            });
+            document.querySelectorAll('#compensationCategories input[data-category-amount]').forEach(input => {
+                input.value = '';
+            });
+
+            renderFileList();
+            updateParseButton();
+            updateCurrentSessionInfo();
+            updateBaselineButton();
+
+            document.getElementById('resultsContent').innerHTML =
+                `<div class="alert alert-info">${t('noResults')}</div>`;
+
+            // Remove autosave slot
+            saveSlots = saveSlots.filter(s => s.id !== 'autosave');
+            saveSlotsToStorage();
+            renderSaveSlots();
+        }
+
+        // ==================== INITIALIZATION ====================
+
+        // Initialize
+        loadConfig();
+        loadSaveSlots();
+        applyTranslations();
+
+        // Restore results if payslips were loaded from localStorage
+        if (parsedPayslips.length > 0) {
+            displayResults();
+            updateCurrentSessionInfo();
+            // Switch to results tab when loading saved data
+            document.querySelector('[data-tab="results"]').click();
+        }
+
+        // Auto-save config on input changes
+        document.getElementById('expectedWallet').addEventListener('change', function() {
+            // Sync with wallet category amount
+            const walletCatAmount = document.querySelector('input[data-category-amount="wallet"]');
+            if (walletCatAmount) walletCatAmount.value = this.value;
+            autoSaveConfig();
+        });
+        document.getElementById('tolerance').addEventListener('change', autoSaveConfig);
+
+        // Auto-save for compensation categories
+        document.querySelectorAll('#compensationCategories input').forEach(input => {
+            input.addEventListener('change', function() {
+                // Sync wallet category amount with main expectedWallet field
+                if (this.dataset.categoryAmount === 'wallet') {
+                    document.getElementById('expectedWallet').value = this.value;
+                }
+                autoSaveConfig();
+                if (parsedPayslips.length > 0) displayResults();
+            });
+        });
+
+        // Auto-save for benefit start dates
+        document.querySelectorAll('#benefitStartDates select').forEach(select => {
+            select.addEventListener('change', function() {
+                autoSaveConfig();
+                if (parsedPayslips.length > 0) displayResults();
+            });
+        });
+
+        // Auto-save for display settings
+        ['displayCurrency', 'eurToUsdRate', 'numberFormat'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', function() {
+                    autoSaveConfig();
+                    if (parsedPayslips.length > 0) displayResults();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
