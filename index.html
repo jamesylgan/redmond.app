@@ -415,6 +415,278 @@
             margin: 15px 0;
             font-size: 13px;
         }
+
+        /* Page-level switcher */
+        .page-switcher {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid var(--primary);
+        }
+        .page-switcher-btn {
+            flex: 1;
+            padding: 12px 20px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            background: white;
+            color: var(--primary);
+            border: none;
+            margin: 0;
+            transition: all 0.2s;
+        }
+        .page-switcher-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        .page-switcher-btn:hover:not(.active) {
+            background: #e7f3ff;
+        }
+
+        /* ============ ON-CALL TRACKER (scoped) ============ */
+        #oncallPage {
+            --bg: #f0f2f5; --bg-card: white; --bg-hover: #f9fafb; --text: #1a1a1a;
+            --text-muted: #6b7280; --border: #e5e7eb; --border-light: #f3f4f6;
+            --accent: #2563eb; --accent-hover: #1d4ed8; --accent-light: #dbeafe;
+            --green: #16a34a; --green-light: #dcfce7; --red: #dc2626; --red-light: #fee2e2;
+            --yellow: #f59e0b; --yellow-light: #fef3c7; --orange: #f97316; --orange-light: #ffedd5;
+            --purple: #7c3aed; --purple-light: #ede9fe;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px; margin: 0 auto; padding: 16px;
+            background: var(--bg); color: var(--text);
+        }
+        #oncallPage[data-theme="dark"] {
+            --bg: #111827; --bg-card: #1f2937; --bg-hover: #374151; --text: #f3f4f6;
+            --text-muted: #9ca3af; --border: #374151; --border-light: #374151;
+            --accent: #3b82f6; --accent-hover: #2563eb; --accent-light: #1e3a5f;
+            --green: #22c55e; --green-light: #14532d; --red: #ef4444; --red-light: #7f1d1d;
+            --yellow: #fbbf24; --yellow-light: #713f12; --orange: #fb923c; --orange-light: #7c2d12;
+            --purple: #a78bfa; --purple-light: #3b0764;
+        }
+        #oncallPage .oc-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; margin-bottom: 16px; border-bottom: 3px solid var(--accent);
+            flex-wrap: wrap; gap: 8px;
+        }
+        #oncallPage .oc-header h2 { font-size: 1.4rem; margin: 0; border: none; padding: 0; }
+        #oncallPage .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        #oncallPage .timer-area { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        #oncallPage .timer-widget {
+            display: flex; align-items: center; gap: 6px;
+            background: var(--red-light); border: 1px solid var(--red);
+            border-radius: 8px; padding: 4px 10px; font-size: 12px;
+        }
+        #oncallPage .timer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: ocPulse 1.5s infinite; }
+        @keyframes ocPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        #oncallPage .timer-elapsed { font-weight: 600; font-variant-numeric: tabular-nums; }
+        #oncallPage .timer-name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+        #oncallPage .oc-btn {
+            font-size: 13px; padding: 6px 12px; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--bg-card); color: var(--text);
+            cursor: pointer; font-family: inherit; margin: 0;
+        }
+        #oncallPage .oc-btn:hover { background: var(--bg-hover); }
+        #oncallPage .oc-btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+        #oncallPage .oc-btn-primary:hover { background: var(--accent-hover); }
+        #oncallPage .oc-btn-danger { background: var(--red); color: white; border-color: var(--red); }
+        #oncallPage .oc-btn-danger:hover { background: #b91c1c; }
+        #oncallPage .oc-btn-sm { font-size: 12px; padding: 4px 8px; }
+        #oncallPage .oc-btn-icon { background: none; border: none; font-size: 18px; padding: 4px; color: var(--text-muted); cursor: pointer; margin: 0; }
+        #oncallPage .oc-btn-icon:hover { color: var(--text); }
+        #oncallPage .oc-tabs { display: flex; gap: 4px; margin-bottom: 16px; overflow-x: auto; }
+        #oncallPage .oc-tab {
+            padding: 8px 16px; border-radius: 6px 6px 0 0;
+            border: 1px solid var(--border); border-bottom: none;
+            background: var(--bg-card); color: var(--text-muted); cursor: pointer;
+            font-size: 13px; font-weight: 500; white-space: nowrap;
+        }
+        #oncallPage .oc-tab:hover { color: var(--text); }
+        #oncallPage .oc-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        #oncallPage .oc-tab-content { display: none; }
+        #oncallPage .oc-tab-content.active { display: block; }
+        #oncallPage .oc-card {
+            background: var(--bg-card); border-radius: 8px; padding: 16px;
+            margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid var(--border);
+        }
+        #oncallPage .oc-card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; gap: 8px;
+        }
+        #oncallPage .oc-card-title { font-size: 15px; font-weight: 600; }
+        #oncallPage .oc-badge {
+            display: inline-block; font-size: 11px; padding: 2px 8px;
+            border-radius: 4px; font-weight: 500;
+        }
+        #oncallPage .oc-badge-workday { background: var(--accent-light); color: var(--accent); }
+        #oncallPage .oc-badge-weekend { background: var(--purple-light); color: var(--purple); }
+        #oncallPage .oc-badge-holiday { background: var(--orange-light); color: var(--orange); }
+        #oncallPage .oc-badge-away { background: var(--yellow-light); color: var(--yellow); }
+        #oncallPage .oc-badge-l1 { background: var(--green-light); color: var(--green); }
+        #oncallPage .oc-badge-l2 { background: var(--yellow-light); color: var(--yellow); }
+        #oncallPage .oc-badge-off { background: var(--border-light); color: var(--text-muted); }
+        #oncallPage .cal-nav {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+        }
+        #oncallPage .cal-nav-center { font-size: 15px; font-weight: 600; }
+        #oncallPage .cal-summary {
+            display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;
+            font-size: 13px; color: var(--text-muted);
+        }
+        #oncallPage .cal-summary strong { color: var(--text); }
+        #oncallPage .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        #oncallPage .cal-header-cell { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 4px; }
+        #oncallPage .cal-cell {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 6px; padding: 8px; min-height: 110px;
+            cursor: pointer; transition: border-color 0.15s;
+        }
+        #oncallPage .cal-cell:hover { border-color: var(--accent); }
+        #oncallPage .cal-cell.today { border-color: var(--accent); border-width: 2px; }
+        #oncallPage .cal-day-num { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+        #oncallPage .cal-day-info { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+        #oncallPage .cal-day-info .money { color: var(--green); font-weight: 500; }
+        #oncallPage .cal-day-info .pto { color: var(--purple); font-weight: 500; }
+        #oncallPage .cal-incident-bar {
+            background: var(--red-light); border-left: 3px solid var(--red);
+            border-radius: 3px; padding: 2px 4px; margin-top: 4px;
+            font-size: 10px; color: var(--red); overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        #oncallPage .oc-form-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+        #oncallPage .oc-form-group { display: flex; flex-direction: column; gap: 4px; }
+        #oncallPage .oc-form-group label { font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 0; }
+        #oncallPage input, #oncallPage select, #oncallPage textarea {
+            font-family: inherit; font-size: 14px; padding: 8px 10px;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg-card); color: var(--text); width: auto;
+        }
+        #oncallPage input:focus, #oncallPage select:focus, #oncallPage textarea:focus {
+            outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+        #oncallPage textarea { resize: vertical; min-height: 60px; }
+        #oncallPage .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px; margin-bottom: 16px;
+        }
+        #oncallPage .stat-box {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 16px;
+        }
+        #oncallPage .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+        #oncallPage .stat-value { font-size: 24px; font-weight: 700; }
+        #oncallPage .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        #oncallPage .stat-value.money { color: var(--green); }
+        #oncallPage .stat-value.pto { color: var(--purple); }
+        #oncallPage .stat-value.hours { color: var(--accent); }
+        #oncallPage .progress-bar { height: 12px; background: var(--border); border-radius: 6px; overflow: hidden; margin: 8px 0; }
+        #oncallPage .progress-fill { height: 100%; border-radius: 6px; transition: width 0.3s; }
+        #oncallPage .progress-fill.green { background: var(--green); }
+        #oncallPage .progress-fill.yellow { background: var(--yellow); }
+        #oncallPage .progress-fill.red { background: var(--red); }
+        #oncallPage .log-entry {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+        }
+        #oncallPage .log-entry-header {
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+        }
+        #oncallPage .log-entry-date { font-weight: 600; font-size: 14px; }
+        #oncallPage .log-entry-time { font-size: 13px; color: var(--text-muted); }
+        #oncallPage .log-entry-incident { font-size: 14px; margin-top: 4px; }
+        #oncallPage .log-entry-pay {
+            display: flex; gap: 12px; margin-top: 6px; font-size: 12px;
+            color: var(--text-muted); flex-wrap: wrap;
+        }
+        #oncallPage .log-entry-actions { display: flex; gap: 4px; }
+        #oncallPage .log-group { border: 2px solid var(--accent-light); border-radius: 10px; padding: 8px; margin-bottom: 10px; }
+        #oncallPage .log-group-header {
+            font-size: 12px; color: var(--accent); font-weight: 600;
+            padding: 4px 8px; margin-bottom: 4px;
+        }
+        #oncallPage .log-group .log-entry { margin-bottom: 4px; border-color: var(--accent-light); }
+        #oncallPage .log-group .log-entry:last-child { margin-bottom: 0; }
+        #oncallPage .pay-detail {
+            background: var(--green-light); border-radius: 4px; padding: 4px 8px;
+            font-size: 11px; margin-top: 4px; display: inline-block;
+        }
+        #oncallPage .oc-breakdown-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+        #oncallPage .oc-breakdown-table th, #oncallPage .oc-breakdown-table td {
+            padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border);
+        }
+        #oncallPage .oc-breakdown-table th { font-weight: 600; color: var(--text-muted); font-size: 12px; }
+        #oncallPage .oc-breakdown-table tr:last-child td { border-bottom: none; }
+        #oncallPage .oc-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: flex-start;
+            padding: 40px 16px; overflow-y: auto;
+        }
+        #oncallPage .oc-overlay.active { display: flex; }
+        #oncallPage .oc-panel {
+            background: var(--bg-card); border-radius: 12px; padding: 24px;
+            max-width: 600px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        #oncallPage .oc-panel h2 { font-size: 18px; margin-bottom: 16px; border: none; padding: 0; }
+        #oncallPage .panel-section { margin-bottom: 20px; }
+        #oncallPage .panel-section h3 { font-size: 14px; margin-bottom: 8px; color: var(--text-muted); }
+        #oncallPage .day-detail-overlay {
+            display: none; position: fixed; top: 0; right: 0; bottom: 0;
+            width: 380px; max-width: 100vw; background: var(--bg-card);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.15); z-index: 90; overflow-y: auto; padding: 20px;
+        }
+        #oncallPage .day-detail-overlay.active { display: block; }
+        #oncallPage .day-detail-backdrop {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); z-index: 89;
+        }
+        #oncallPage .day-detail-backdrop.active { display: block; }
+        #oncallPage .date-list { list-style: none; max-height: 200px; overflow-y: auto; }
+        #oncallPage .date-list li {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 4px 0; font-size: 13px; border-bottom: 1px solid var(--border-light);
+        }
+        #oncallPage .date-list li:last-child { border-bottom: none; }
+        #oncallPage .oc-toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #1f2937; color: white; padding: 10px 20px;
+            border-radius: 8px; font-size: 13px; z-index: 200;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        #oncallPage .oc-toast.show { opacity: 1; }
+        #oncallPage .rotation-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+            margin-bottom: 6px; font-size: 13px;
+        }
+        #oncallPage .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        #oncallPage .empty-state p { font-size: 14px; margin-bottom: 12px; }
+        #oncallPage .rotation-history { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        #oncallPage .rotation-chip {
+            font-size: 12px; padding: 4px 10px; border-radius: 4px;
+            border: 1px solid var(--border); background: var(--bg-card);
+        }
+        #oncallPage .rate-display {
+            background: var(--accent-light); border-radius: 6px; padding: 10px;
+            font-size: 13px; margin-top: 8px;
+        }
+        #oncallPage .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+        @media (max-width: 700px) {
+            #oncallPage .cal-grid { grid-template-columns: 1fr; }
+            #oncallPage .cal-cell { min-height: auto; }
+            #oncallPage .cal-header-cell { display: none; }
+            #oncallPage .stats-grid { grid-template-columns: 1fr 1fr; }
+            #oncallPage .day-detail-overlay { width: 100vw; }
+            #oncallPage .oc-form-row { flex-direction: column; }
+            #oncallPage .oc-form-row .oc-form-group { width: 100%; }
+        }
+        @media (max-width: 480px) {
+            #oncallPage .stats-grid { grid-template-columns: 1fr; }
+            #oncallPage .header-right { width: 100%; justify-content: flex-end; }
+        }
     </style>
 </head>
 <body>
@@ -449,6 +721,13 @@
     </script>
 
     <a href="../" class="back-link">&larr; <span data-i18n="back">Back to Tools</span></a>
+
+    <div class="page-switcher">
+        <button class="page-switcher-btn active" onclick="switchPage('payroll')">Payroll Checker</button>
+        <button class="page-switcher-btn" onclick="switchPage('oncall')">On-Call Tracker</button>
+    </div>
+
+    <div id="payrollPage">
     <h1 data-i18n="title">Payroll Checker</h1>
     <p class="subtitle" data-i18n="subtitle">Parse and validate Spanish payslips (nóminas)</p>
     <p class="attribution">
@@ -569,6 +848,16 @@
                     <label>Tolerance % for validation</label>
                     <input type="number" id="tolerance" placeholder="e.g., 2" step="0.1" value="2">
                 </div>
+            </div>
+
+            <div style="margin-top: 15px; padding: 15px; background: #e8f4fd; border: 1px solid var(--primary); border-radius: 6px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                    <input type="checkbox" id="includeOncallComp" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();">
+                    Include on-call compensation in expected gross
+                </label>
+                <p style="color: var(--text-muted); font-size: 12px; margin: 8px 0 0 0;">
+                    When enabled, on-call stipends and response pay from the On-Call Tracker are added to expected monthly gross for each payslip month. Switch to the On-Call Tracker page to manage rotation and incident data.
+                </p>
             </div>
 
             <details style="margin-top: 20px; padding: 15px; background: var(--bg); border-radius: 6px;" open>
@@ -911,6 +1200,63 @@
             </div>
         </div>
     </div>
+    </div><!-- end payrollPage -->
+
+    <!-- ON-CALL TRACKER PAGE -->
+    <div id="oncallPage" style="display:none">
+        <div class="oc-header">
+            <h2>On-Call Tracker</h2>
+            <div class="header-right">
+                <div class="timer-area" id="ocTimerArea"></div>
+                <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.openTimerStart()">Start Timer</button>
+                <button class="oc-btn-icon" onclick="OC.openSettings()" title="Settings">&#9881;</button>
+            </div>
+        </div>
+
+        <div class="oc-tabs">
+            <div class="oc-tab active" onclick="OC.switchTab('calendar')">Calendar</div>
+            <div class="oc-tab" onclick="OC.switchTab('log')">Log</div>
+            <div class="oc-tab" onclick="OC.switchTab('summary')">Monthly</div>
+            <div class="oc-tab" onclick="OC.switchTab('yearly')">Yearly</div>
+        </div>
+
+        <div id="oc-tab-calendar" class="oc-tab-content active"></div>
+        <div id="oc-tab-log" class="oc-tab-content"></div>
+        <div id="oc-tab-summary" class="oc-tab-content"></div>
+        <div id="oc-tab-yearly" class="oc-tab-content"></div>
+
+        <div class="day-detail-backdrop" id="ocDayBackdrop" onclick="OC.closeDayDetail()"></div>
+        <div class="day-detail-overlay" id="ocDayDetail"></div>
+
+        <div class="oc-overlay" id="ocSettingsOverlay">
+            <div class="oc-panel" id="ocSettingsPanel"></div>
+        </div>
+        <div class="oc-overlay" id="ocEditResponseOverlay">
+            <div class="oc-panel" id="ocEditResponsePanel"></div>
+        </div>
+        <div class="oc-overlay" id="ocAddRotationOverlay">
+            <div class="oc-panel" id="ocAddRotationPanel"></div>
+        </div>
+        <div class="oc-overlay" id="ocTimerStartOverlay">
+            <div class="oc-panel" style="max-width:400px;">
+                <h2>Start Timer</h2>
+                <div class="oc-form-group" style="margin-bottom:12px;">
+                    <label>Incident Name</label>
+                    <input type="text" id="ocTimerIncidentName" placeholder="e.g. PD-12345 Gateway timeout">
+                </div>
+                <div class="oc-form-group" style="margin-bottom:16px;">
+                    <label>Notes (optional)</label>
+                    <textarea id="ocTimerNotes" rows="2" placeholder="Initial observations..."></textarea>
+                </div>
+                <div class="oc-form-row" style="justify-content:flex-end;">
+                    <button class="oc-btn" onclick="OC.closeTimerStart()">Cancel</button>
+                    <button class="oc-btn oc-btn-danger" onclick="OC.startTimer()">Start Timer</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="oc-toast" id="ocToast"></div>
+    </div><!-- end oncallPage -->
 
     <script src="../lib/storage-version-manager.js"></script>
     <script>
@@ -1125,11 +1471,11 @@
             return translations[currentLang]?.[key] || translations.en[key] || key;
         }
 
-        // Tab switching
-        document.querySelectorAll('.tab').forEach(tab => {
+        // Tab switching (scoped to payroll page)
+        document.querySelectorAll('#payrollPage .tab').forEach(tab => {
             tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelectorAll('#payrollPage .tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('#payrollPage .tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById(tab.dataset.tab).classList.add('active');
             });
@@ -1621,6 +1967,23 @@
             }
             const expectedAnnualAdditional = expectedMonthlyAdditional * monthsInYear;
 
+            // Calculate on-call compensation if enabled
+            let totalOncallComp = 0;
+            let oncallStipendTotal = 0, oncallResponseTotal = 0;
+            const oncallCompByMonth = {};
+            if (config.includeOncallComp && typeof OC !== 'undefined') {
+                OC.ensureInit();
+                for (let m = startMonth; m <= 12; m++) {
+                    const comp = OC.getMonthlyCompensation(m, firstPayslip.year);
+                    if (comp.total > 0) {
+                        oncallCompByMonth[m] = comp;
+                        totalOncallComp += comp.total;
+                        oncallStipendTotal += comp.stipend;
+                        oncallResponseTotal += comp.responsePay;
+                    }
+                }
+            }
+
             // Calculate averages and projections
             const avgMonthlyGross = totalGross / parsedPayslips.length;
             const avgMonthlyBase = totalBaseSalary / parsedPayslips.length;
@@ -1628,7 +1991,7 @@
 
             // Prorate annual salary
             const proratedAnnualGross = config.annualGross > 0 ? (config.annualGross / 12) * monthsInYear : 0;
-            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional;
+            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional + totalOncallComp;
 
             // Extrapolate to end of year based on average from parsed payslips
             const monthsUntilYearEnd = 13 - lastPayslip.month; // remaining months including last parsed
@@ -1727,11 +2090,66 @@
                                 </details>
                             </td>
                         </tr>
-                        <tr style="font-weight: 600; border-top: 1px solid var(--border);">
-                            <td>${currentLang === 'es' ? 'Total esperado (base + adicional):' : 'Expected total (base + additional):'}</td>
-                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(expectedTotal)}</td>
+                        ${totalOncallComp > 0 ? `
+                        <tr>
+                            <td colspan="2">
+                                <details style="margin: 0;" class="expandable-row">
+                                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Compensación on-call:' : 'On-call compensation:'}</span>
+                                        <span style="padding-left: 15px;">+${formatCurrency(totalOncallComp)}</span>
+                                    </summary>
+                                    <div style="padding: 8px 0 0 20px; font-size: 13px; color: var(--text-muted);">
+                                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                                            <span>${currentLang === 'es' ? 'Estipendio:' : 'Stipend:'}</span>
+                                            <span>${formatCurrency(oncallStipendTotal)}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                                            <span>${currentLang === 'es' ? 'Pago por respuesta:' : 'Response pay:'}</span>
+                                            <span>${formatCurrency(oncallResponseTotal)}</span>
+                                        </div>
+                                        <div style="padding-top: 4px; border-top: 1px solid var(--border); font-size: 12px;">
+                                            ${Object.entries(oncallCompByMonth).map(([m, c]) => {
+                                                const mn = currentLang === 'es'
+                                                    ? ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m]
+                                                    : ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+                                                return `<div style="display:flex;justify-content:space-between;padding:1px 0;"><span>${mn}:</span><span>${formatCurrency(c.total)}</span></div>`;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                </details>
+                            </td>
                         </tr>
                         ` : ''}
+                        <tr style="font-weight: 600; border-top: 1px solid var(--border);">
+                            <td>${currentLang === 'es' ? `Total esperado (base${expectedAnnualAdditional > 0 ? ' + adicional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}):` : `Expected total (base${expectedAnnualAdditional > 0 ? ' + additional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}):`}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(expectedTotal)}</td>
+                        </tr>
+                        ` : `${totalOncallComp > 0 ? `
+                        <tr>
+                            <td colspan="2">
+                                <details style="margin: 0;" class="expandable-row">
+                                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Compensación on-call:' : 'On-call compensation:'}</span>
+                                        <span style="padding-left: 15px;">+${formatCurrency(totalOncallComp)}</span>
+                                    </summary>
+                                    <div style="padding: 8px 0 0 20px; font-size: 13px; color: var(--text-muted);">
+                                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                                            <span>${currentLang === 'es' ? 'Estipendio:' : 'Stipend:'}</span>
+                                            <span>${formatCurrency(oncallStipendTotal)}</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                                            <span>${currentLang === 'es' ? 'Pago por respuesta:' : 'Response pay:'}</span>
+                                            <span>${formatCurrency(oncallResponseTotal)}</span>
+                                        </div>
+                                    </div>
+                                </details>
+                            </td>
+                        </tr>
+                        <tr style="font-weight: 600; border-top: 1px solid var(--border);">
+                            <td>${currentLang === 'es' ? 'Total esperado (base + on-call):' : 'Expected total (base + on-call):'}</td>
+                            <td class="text-right" style="padding-left: 15px;">${formatCurrency(proratedPlusAdditional)}</td>
+                        </tr>
+                        ` : ''}`}
                         <tr style="border-top: 1px solid var(--border);">
                             <td>${currentLang === 'es' ? `Parseado base (${parsedPayslips.length} nóminas):` : `Parsed base (${parsedPayslips.length} payslips):`}</td>
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(totalBaseSalary)}</td>
@@ -2497,6 +2915,10 @@
                 if (walletCatAmount) walletCatAmount.value = config.expectedWallet;
             }
 
+            // Apply on-call integration toggle
+            const oncallToggle = document.getElementById('includeOncallComp');
+            if (oncallToggle) oncallToggle.checked = config.includeOncallComp || false;
+
             // Apply display settings
             if (config.displayCurrency) {
                 document.getElementById('displayCurrency').value = config.displayCurrency;
@@ -2546,7 +2968,8 @@
                 compCategories: compCategories,
                 displayCurrency: document.getElementById('displayCurrency')?.value || 'EUR',
                 eurToUsdRate: parseFloat(document.getElementById('eurToUsdRate')?.value) || 1.08,
-                numberFormat: document.getElementById('numberFormat')?.value || 'es-ES'
+                numberFormat: document.getElementById('numberFormat')?.value || 'es-ES',
+                includeOncallComp: document.getElementById('includeOncallComp')?.checked || false
             };
 
             // Update autosave slot's config if it exists
@@ -3178,6 +3601,1069 @@
                 });
             }
         });
+    </script>
+
+    <!-- ON-CALL TRACKER JS -->
+    <script>
+    'use strict';
+    const OC = (function() {
+
+    // ── Schema ──
+    const ocSchema = StorageVersionManager.defineSchema('oncall-tracker', {
+        version: 3,
+        default: {
+            settings: {
+                annualSalary: 0,
+                darkMode: false,
+                businessHoursStart: '09:00',
+                businessHoursEnd: '18:00',
+                customHolidays: [],
+                awayDays: []
+            },
+            rotations: [],
+            responses: [],
+            activeTimers: []
+        },
+        migrations: {
+            1: d => d,
+            2: d => {
+                if (d.activeTimer) { d.activeTimers = [d.activeTimer]; delete d.activeTimer; }
+                else { d.activeTimers = d.activeTimers || []; }
+                if (!d.settings.awayDays || d.settings.awayDays.length === 0) {
+                    d.settings.awayDays = [
+                        { date: '2026-01-02', name: 'Bridge Day' },
+                        { date: '2026-05-15', name: 'Away Day' },
+                        { date: '2026-08-17', name: 'Away Day (Asuncion bridge)' },
+                        { date: '2026-11-09', name: 'Away Day' },
+                        { date: '2026-12-24', name: 'Christmas Eve' },
+                        { date: '2026-12-31', name: "New Year's Eve" }
+                    ];
+                }
+                return d;
+            },
+            3: d => {
+                // Remove away days now covered by Madrid holidays (May 15, Nov 9) and past dates (Jan 2)
+                const removeSet = new Set(['2026-01-02', '2026-05-15', '2026-11-09']);
+                if (d.settings.awayDays) {
+                    d.settings.awayDays = d.settings.awayDays.filter(a => !removeSet.has(a.date));
+                }
+                return d;
+            }
+        }
+    });
+
+    let data = StorageVersionManager.load(ocSchema);
+    let currentTab = 'calendar';
+    let calWeekStart = getMonday(new Date());
+    let summaryMonth = new Date().getMonth();
+    let summaryYear = new Date().getFullYear();
+    let yearlyYear = new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
+    let timerInterval = null;
+
+    // Spanish national + Madrid (Comunidad + municipal) holidays
+    const SPANISH_HOLIDAYS = {
+        2026: [
+            { date: '2026-04-02', name: 'Jueves Santo' },
+            { date: '2026-04-03', name: 'Viernes Santo' },
+            { date: '2026-05-01', name: 'Dia del Trabajador' },
+            { date: '2026-05-02', name: 'Dos de Mayo (Madrid)' },
+            { date: '2026-05-15', name: 'San Isidro (Madrid)' },
+            { date: '2026-08-15', name: 'Asuncion de la Virgen' },
+            { date: '2026-10-12', name: 'Fiesta Nacional' },
+            { date: '2026-11-02', name: 'Todos los Santos (trasladado)' },
+            { date: '2026-11-09', name: 'Almudena (Madrid)' },
+            { date: '2026-12-07', name: 'Dia de la Constitucion (trasladado)' },
+            { date: '2026-12-08', name: 'Inmaculada Concepcion' },
+            { date: '2026-12-25', name: 'Navidad' },
+        ],
+        2027: [
+            { date: '2027-01-01', name: 'Ano Nuevo' },
+            { date: '2027-01-06', name: 'Epifania del Senor' },
+            { date: '2027-03-25', name: 'Jueves Santo' },
+            { date: '2027-03-26', name: 'Viernes Santo' },
+            { date: '2027-05-01', name: 'Dia del Trabajador' },
+            { date: '2027-05-03', name: 'Dos de Mayo (Madrid, trasladado)' },
+            { date: '2027-08-16', name: 'Asuncion de la Virgen (trasladado)' },
+            { date: '2027-10-12', name: 'Fiesta Nacional' },
+            { date: '2027-11-01', name: 'Todos los Santos' },
+            { date: '2027-11-09', name: 'Almudena (Madrid)' },
+            { date: '2027-12-06', name: 'Dia de la Constitucion' },
+            { date: '2027-12-08', name: 'Inmaculada Concepcion' },
+            { date: '2027-12-25', name: 'Navidad' },
+        ],
+        2028: [
+            { date: '2028-01-01', name: 'Ano Nuevo' },
+            { date: '2028-01-06', name: 'Epifania del Senor' },
+            { date: '2028-04-13', name: 'Jueves Santo' },
+            { date: '2028-04-14', name: 'Viernes Santo' },
+            { date: '2028-05-01', name: 'Dia del Trabajador' },
+            { date: '2028-05-02', name: 'Dos de Mayo (Madrid)' },
+            { date: '2028-05-15', name: 'San Isidro (Madrid)' },
+            { date: '2028-08-15', name: 'Asuncion de la Virgen' },
+            { date: '2028-10-12', name: 'Fiesta Nacional' },
+            { date: '2028-11-01', name: 'Todos los Santos' },
+            { date: '2028-11-09', name: 'Almudena (Madrid)' },
+            { date: '2028-12-06', name: 'Dia de la Constitucion' },
+            { date: '2028-12-08', name: 'Inmaculada Concepcion' },
+            { date: '2028-12-25', name: 'Navidad' },
+        ]
+    };
+
+    // Company holidays (Affirm) — importable as away days
+    const COMPANY_HOLIDAYS = {
+        2026: [
+            { date: '2026-08-17', name: 'Bridge Day (Asuncion)' },
+            { date: '2026-12-24', name: 'Christmas Eve' },
+            { date: '2026-12-31', name: "New Year's Eve" },
+        ]
+    };
+
+    // ── Utility ──
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+    function save() { StorageVersionManager.save(ocSchema, data); }
+    function toast(msg) {
+        const t = document.getElementById('ocToast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2500);
+    }
+    function fmtEur(n) { return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n); }
+    function fmtDate(ds) {
+        const d = new Date(ds + 'T12:00:00');
+        return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    function fmtDateShort(ds) {
+        return new Date(ds + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+    function dateStr(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function getMonday(d) {
+        const dt = new Date(d); const day = dt.getDay();
+        dt.setDate(dt.getDate() - day + (day === 0 ? -6 : 1));
+        dt.setHours(0, 0, 0, 0); return dt;
+    }
+    function addDays(d, n) { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt; }
+    function timeToMin(t) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
+    function durStr(minutes) {
+        if (minutes <= 0) return '0min';
+        const h = Math.floor(minutes / 60), m = Math.round(minutes % 60);
+        if (h === 0) return m + 'min';
+        if (m === 0) return h + 'h';
+        return h + 'h' + m + 'min';
+    }
+    function getResponseDuration(r) {
+        let s = timeToMin(r.startTime), e = timeToMin(r.endTime);
+        if (e < s) e += 24 * 60;
+        return e - s;
+    }
+
+    // ── Day Type ──
+    function getDayType(ds) {
+        const d = new Date(ds + 'T12:00:00').getDay();
+        if (d === 0 || d === 6) return 'weekend';
+        if (isHoliday(ds)) return 'holiday';
+        if (isAwayDay(ds)) return 'away_day';
+        return 'workday';
+    }
+    function isHoliday(ds) {
+        const y = ds.substring(0, 4);
+        return (SPANISH_HOLIDAYS[y] || []).some(h => h.date === ds) || data.settings.customHolidays.some(h => h.date === ds);
+    }
+    function getHolidayName(ds) {
+        const y = ds.substring(0, 4);
+        const nat = (SPANISH_HOLIDAYS[y] || []).find(h => h.date === ds);
+        if (nat) return nat.name;
+        const cust = data.settings.customHolidays.find(h => h.date === ds);
+        return cust ? cust.name : '';
+    }
+    function isAwayDay(ds) { return data.settings.awayDays.some(a => a.date === ds); }
+    function getAwayDayName(ds) { const a = data.settings.awayDays.find(a => a.date === ds); return a ? (a.name || 'Away Day') : 'Away Day'; }
+    function getDayTypeBadge(ds) {
+        const t = getDayType(ds);
+        if (t === 'weekend') return '<span class="oc-badge oc-badge-weekend">Weekend</span>';
+        if (t === 'holiday') return `<span class="oc-badge oc-badge-holiday" title="${getHolidayName(ds)}">Holiday</span>`;
+        if (t === 'away_day') return `<span class="oc-badge oc-badge-away" title="${getAwayDayName(ds)}">Away Day</span>`;
+        return '<span class="oc-badge oc-badge-workday">Workday</span>';
+    }
+
+    // ── Rotation ──
+    function getRotationForDate(ds) { return data.rotations.find(r => ds >= r.startDate && ds <= r.endDate) || null; }
+    function getRoleBadge(role) {
+        if (role === 'L1') return '<span class="oc-badge oc-badge-l1">L1</span>';
+        if (role === 'L2') return '<span class="oc-badge oc-badge-l2">L2</span>';
+        return '<span class="oc-badge oc-badge-off">Off</span>';
+    }
+    function getRotationForResponse(r) {
+        const rot = getRotationForDate(r.date);
+        if (rot) return rot;
+        if (timeToMin(r.startTime) < 7 * 60) {
+            const prevDay = dateStr(addDays(new Date(r.date + 'T12:00:00'), -1));
+            return getRotationForDate(prevDay);
+        }
+        return null;
+    }
+
+    // ── Compensation ──
+    function getHourlyRate() {
+        if (!data.settings.annualSalary || data.settings.annualSalary <= 0) return 0;
+        return data.settings.annualSalary / 2080.08;
+    }
+    function getOvertimeRate() { return getHourlyRate() * 2; }
+    function getDailyStipend(ds, role) {
+        if (role !== 'L1') return 0;
+        return getDayType(ds) === 'workday' ? 20 : 50;
+    }
+    function getDailyPTO(ds, role) {
+        if (role !== 'L1') return 0;
+        return getDayType(ds) === 'workday' ? 0 : 1;
+    }
+
+    function getOutsideBusinessMinutes(ds, startTime, endTime) {
+        const dayType = getDayType(ds);
+        let s = timeToMin(startTime), e = timeToMin(endTime);
+        if (e < s) e += 24 * 60;
+        const total = e - s;
+        if (dayType !== 'workday') return total;
+        const bs = timeToMin(data.settings.businessHoursStart), be = timeToMin(data.settings.businessHoursEnd);
+        let outside = 0;
+        if (s < bs) outside += Math.min(e, bs) - s;
+        if (e > be) outside += e - Math.max(s, be);
+        return Math.max(0, outside);
+    }
+
+    function calculateDayResponsePay(dayResponses, ds) {
+        if (!dayResponses || dayResponses.length === 0) return { paidMinutes: 0, realMinutes: 0, pay: 0, groups: [] };
+        const dayType = getDayType(ds);
+        const eligible = dayResponses.map(r => {
+            const outsideMin = getOutsideBusinessMinutes(ds, r.startTime, r.endTime);
+            const isOutside = dayType !== 'workday' || (
+                timeToMin(r.startTime) < timeToMin(data.settings.businessHoursStart) ||
+                timeToMin(r.startTime) >= timeToMin(data.settings.businessHoursEnd)
+            );
+            if (!isOutside && outsideMin <= 0) return null;
+            let s = timeToMin(r.startTime), e = timeToMin(r.endTime);
+            if (e < s) e += 24 * 60;
+            return { ...r, outsideMin: Math.max(0, outsideMin), _start: s, _end: e };
+        }).filter(Boolean);
+        if (eligible.length === 0) return { paidMinutes: 0, realMinutes: 0, pay: 0, groups: [] };
+        // Use proper timestamps for overlap detection — only group if start of one
+        // is strictly before the end of another (back-to-back entries are separate)
+        const [yr, mo, dy] = ds.split('-').map(Number);
+        eligible.forEach(r => {
+            const [sh, sm] = r.startTime.split(':').map(Number);
+            const [eh, em] = r.endTime.split(':').map(Number);
+            r._tsStart = new Date(yr, mo - 1, dy, sh, sm).getTime();
+            r._tsEnd = new Date(yr, mo - 1, dy, eh, em).getTime();
+            if (r._tsEnd < r._tsStart) r._tsEnd += 24 * 60 * 60 * 1000; // only wrap actual overnight entries, not 0-duration
+        });
+        eligible.sort((a, b) => a._tsStart - b._tsStart || (b._tsEnd - b._tsStart) - (a._tsEnd - a._tsStart));
+        const groups = [];
+        let curGroup = [eligible[0]], curEnd = eligible[0]._tsEnd;
+        for (let i = 1; i < eligible.length; i++) {
+            const r = eligible[i];
+            if (r._tsStart < curEnd) {
+                curGroup.push(r);
+                if (r._tsEnd > curEnd) curEnd = r._tsEnd;
+            } else {
+                groups.push(curGroup);
+                curGroup = [r];
+                curEnd = r._tsEnd;
+            }
+        }
+        groups.push(curGroup);
+        let totalPaidMin = 0, totalRealMin = 0;
+        const groupResults = [];
+        groups.forEach(group => {
+            const realMin = group.reduce((sum, r) => sum + r.outsideMin, 0);
+            let paidMin = Math.max(realMin, 60);
+            paidMin = Math.ceil(paidMin / 15) * 15;
+            totalPaidMin += paidMin; totalRealMin += realMin;
+            groupResults.push({
+                incidents: group.map(r => r.incidentName || 'Unnamed'),
+                ids: group.map(r => r.id), realMin, paidMin, entries: group
+            });
+        });
+        const rate = getOvertimeRate();
+        return { paidMinutes: totalPaidMin, realMinutes: totalRealMin, pay: (totalPaidMin / 60) * rate, groups: groupResults };
+    }
+
+    function getPayGroupForResponse(responseId, ds) {
+        const dayResponses = data.responses.filter(r => r.date === ds);
+        const result = calculateDayResponsePay(dayResponses, ds);
+        return result.groups.find(g => g.ids.includes(responseId));
+    }
+
+    // ── Week Data ──
+    function getWeekDates(monday) {
+        const dates = [];
+        for (let i = 0; i < 7; i++) dates.push(dateStr(addDays(monday, i)));
+        return dates;
+    }
+    function getWeekData(monday) {
+        const dates = getWeekDates(monday);
+        let totalStipend = 0, totalPTO = 0, totalPaidMin = 0, totalRealMin = 0, totalPay = 0;
+        let rotation = null;
+        const days = dates.map(ds => {
+            const rot = getRotationForDate(ds);
+            if (rot && !rotation) rotation = rot;
+            const role = rot ? rot.role : null;
+            const stipend = role ? getDailyStipend(ds, role) : 0;
+            const pto = role ? getDailyPTO(ds, role) : 0;
+            const dayResponses = data.responses.filter(r => r.date === ds);
+            const rp = calculateDayResponsePay(dayResponses, ds);
+            totalStipend += stipend; totalPTO += pto;
+            totalPaidMin += rp.paidMinutes; totalRealMin += rp.realMinutes; totalPay += rp.pay;
+            return { date: ds, dayType: getDayType(ds), role, stipend, pto, responses: dayResponses, responsePay: rp };
+        });
+        return { days, rotation, totalStipend, totalPTO, totalPaidMin, totalRealMin, totalPay };
+    }
+
+    // ── Rendering ──
+    function render() {
+        if (currentTab === 'calendar') renderCalendar();
+        else if (currentTab === 'log') renderLog();
+        else if (currentTab === 'summary') renderSummary();
+        else if (currentTab === 'yearly') renderYearly();
+        renderTimers();
+    }
+    function switchTab(tab) {
+        currentTab = tab;
+        try { localStorage.setItem('oncall_activeTab', tab); } catch(e) {}
+        document.querySelectorAll('#oncallPage .oc-tab').forEach((t, i) => {
+            t.classList.toggle('active', ['calendar', 'log', 'summary', 'yearly'][i] === tab);
+        });
+        document.querySelectorAll('#oncallPage .oc-tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('oc-tab-' + tab).classList.add('active');
+        render();
+    }
+
+    // ── Calendar ──
+    function renderCalendar() {
+        const wd = getWeekData(calWeekStart);
+        const monday = calWeekStart, sunday = addDays(monday, 6);
+        const todayStr = dateStr(new Date());
+        let html = `<div class="cal-nav">
+            <button class="oc-btn oc-btn-sm" onclick="OC.calNav(-7)">&laquo; Prev</button>
+            <div class="cal-nav-center">${fmtDateShort(dateStr(monday))} &ndash; ${fmtDateShort(dateStr(sunday))}, ${sunday.getFullYear()}</div>
+            <div style="display:flex;gap:4px;">
+                <button class="oc-btn oc-btn-sm" onclick="OC.calNavToday()">Today</button>
+                <button class="oc-btn oc-btn-sm" onclick="OC.calNav(7)">Next &raquo;</button>
+            </div>
+        </div>`;
+        const rot = wd.rotation;
+        html += `<div class="cal-summary">
+            <span>On-call: ${rot ? getRoleBadge(rot.role) : getRoleBadge(null)}</span>
+            <span>Stipend: <strong>${fmtEur(wd.totalStipend)}</strong></span>
+            <span>PTO: <strong>${wd.totalPTO}h</strong></span>`;
+        if (wd.totalPaidMin > 0) {
+            html += `<span>Real OT: <strong>${durStr(wd.totalRealMin)}</strong></span>`;
+            html += `<span>Paid OT: <strong>${durStr(wd.totalPaidMin)}</strong> (${fmtEur(wd.totalPay)})</span>`;
+        }
+        html += `</div>
+        <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="oc-btn oc-btn-primary oc-btn-sm" onclick="OC.openAddRotation()">+ Add Rotation</button>
+            <button class="oc-btn oc-btn-sm" onclick="OC.openAddResponse()">+ Log Incident</button>
+        </div>
+        <div class="cal-grid">`;
+        ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => { html += `<div class="cal-header-cell">${d}</div>`; });
+        wd.days.forEach(day => {
+            const d = new Date(day.date + 'T12:00:00');
+            html += `<div class="cal-cell ${day.date === todayStr ? 'today' : ''}" onclick="OC.openDayDetail('${day.date}')">
+                <div class="cal-day-num">${d.getDate()}</div>
+                ${getDayTypeBadge(day.date)} ${day.role ? getRoleBadge(day.role) : ''}
+                <div class="cal-day-info">
+                    ${day.stipend > 0 ? `<div class="money">${fmtEur(day.stipend)}</div>` : ''}
+                    ${day.pto > 0 ? `<div class="pto">+${day.pto}h PTO</div>` : ''}
+                </div>`;
+            day.responses.forEach(r => {
+                html += `<div class="cal-incident-bar">${r.startTime}-${r.endTime} ${r.incidentName || ''}</div>`;
+            });
+            html += `</div>`;
+        });
+        html += `</div>`;
+        document.getElementById('oc-tab-calendar').innerHTML = html;
+    }
+    function calNav(days) { calWeekStart = addDays(calWeekStart, days); renderCalendar(); }
+    function calNavToday() { calWeekStart = getMonday(new Date()); renderCalendar(); }
+
+    // ── Day Detail ──
+    function openDayDetail(ds) {
+        const rot = getRotationForDate(ds), role = rot ? rot.role : null;
+        const dayType = getDayType(ds);
+        const dayResponses = data.responses.filter(r => r.date === ds);
+        const rp = calculateDayResponsePay(dayResponses, ds);
+        const stipend = role ? getDailyStipend(ds, role) : 0;
+        const pto = role ? getDailyPTO(ds, role) : 0;
+        let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h2 style="font-size:16px;">${fmtDate(ds)}</h2>
+            <button class="oc-btn-icon" onclick="OC.closeDayDetail()" style="font-size:22px;">&times;</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">${getDayTypeBadge(ds)} ${role ? getRoleBadge(role) : getRoleBadge(null)}</div>`;
+        if (dayType === 'holiday') html += `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">${getHolidayName(ds)}</div>`;
+        if (dayType === 'away_day') html += `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">${getAwayDayName(ds)}</div>`;
+        html += `<div class="stats-grid" style="margin-bottom:16px;">
+            <div class="stat-box"><div class="stat-label">Stipend</div><div class="stat-value money" style="font-size:18px;">${fmtEur(stipend)}</div></div>
+            <div class="stat-box"><div class="stat-label">PTO Accrual</div><div class="stat-value pto" style="font-size:18px;">${pto}h</div></div>
+        </div>
+        <h3 style="font-size:14px;margin-bottom:8px;">Incident Responses (${dayResponses.length})</h3>`;
+        if (dayResponses.length === 0) {
+            html += `<div style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">No incidents logged</div>`;
+        } else {
+            const renderedIds = new Set();
+            rp.groups.forEach(g => {
+                const isGrouped = g.entries.length > 1;
+                const rate = getOvertimeRate();
+                const payStr = rate > 0 ? ` = ${fmtEur((g.paidMin / 60) * rate)}` : '';
+                const payDetail = g.realMin < 60 ? `1h min applied` : (g.paidMin > g.realMin ? `Rounded to 15min` : '');
+                if (isGrouped) {
+                    html += `<div class="log-group"><div class="log-group-header">Overlapping incidents &mdash; Real: ${durStr(g.realMin)} &rarr; Paid: ${durStr(g.paidMin)}${payStr}</div>`;
+                }
+                g.entries.forEach(r => {
+                    renderedIds.add(r.id);
+                    const dur = getResponseDuration(r);
+                    html += `<div class="log-entry" style="margin-bottom:6px;">
+                        <div class="log-entry-header"><div>
+                            <span class="log-entry-time">${r.startTime} - ${r.endTime} (${durStr(dur)})</span>
+                            <div class="log-entry-incident">${r.incidentName || '<em>No name</em>'}</div>
+                        </div><div class="log-entry-actions">
+                            <button class="oc-btn oc-btn-sm" onclick="OC.editResponse('${r.id}')">Edit</button>
+                            <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.deleteResponse('${r.id}')">Del</button>
+                        </div></div>
+                        ${r.notes ? `<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${r.notes}</div>` : ''}
+                    </div>`;
+                });
+                if (isGrouped) html += `</div>`;
+                else {
+                    html += `<div class="pay-detail">${payDetail}${payDetail ? ' &mdash; ' : ''}Paid: ${durStr(g.paidMin)}${payStr}</div>`;
+                }
+            });
+            dayResponses.filter(r => !renderedIds.has(r.id)).forEach(r => {
+                const dur = getResponseDuration(r);
+                html += `<div class="log-entry" style="margin-bottom:6px;opacity:0.6;">
+                    <div class="log-entry-header"><div>
+                        <span class="log-entry-time">${r.startTime} - ${r.endTime} (${durStr(dur)})</span>
+                        <div class="log-entry-incident">${r.incidentName || '<em>No name</em>'}</div>
+                    </div><div class="log-entry-actions">
+                        <button class="oc-btn oc-btn-sm" onclick="OC.editResponse('${r.id}')">Edit</button>
+                        <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.deleteResponse('${r.id}')">Del</button>
+                    </div></div>
+                    <div class="pay-detail" style="background:var(--border-light);">During business hours - no OT pay</div>
+                </div>`;
+            });
+            if (rp.paidMinutes > 0) {
+                html += `<div style="margin-top:8px;font-size:13px;border-top:1px solid var(--border);padding-top:8px;">
+                    <strong>Total:</strong> Real ${durStr(rp.realMinutes)} &rarr; Paid ${durStr(rp.paidMinutes)} = ${fmtEur(rp.pay)}
+                </div>`;
+            }
+        }
+        html += `<button class="oc-btn oc-btn-primary oc-btn-sm" style="margin-top:12px;" onclick="OC.openAddResponse('${ds}')">+ Log Incident</button>`;
+        document.getElementById('ocDayDetail').innerHTML = html;
+        document.getElementById('ocDayDetail').classList.add('active');
+        document.getElementById('ocDayBackdrop').classList.add('active');
+    }
+    function closeDayDetail() {
+        document.getElementById('ocDayDetail').classList.remove('active');
+        document.getElementById('ocDayBackdrop').classList.remove('active');
+    }
+
+    // ── Log Tab ──
+    function navigateToDate(ds) { calWeekStart = getMonday(new Date(ds + 'T12:00:00')); switchTab('calendar'); }
+
+    function renderLog() {
+        const sorted = [...data.responses].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+        let html = `<div class="filter-bar">
+            <button class="oc-btn oc-btn-primary oc-btn-sm" onclick="OC.openAddResponse()">+ Manual Entry</button>
+        </div>`;
+        if (sorted.length === 0) {
+            html += `<div class="empty-state"><p>No incident responses logged yet.</p></div>`;
+        } else {
+            const rotGroups = {}, unassigned = [];
+            sorted.forEach(r => {
+                const rot = getRotationForResponse(r);
+                if (rot) {
+                    if (!rotGroups[rot.id]) rotGroups[rot.id] = { rotation: rot, responses: [] };
+                    rotGroups[rot.id].responses.push(r);
+                } else { unassigned.push(r); }
+            });
+            const sortedGroups = Object.values(rotGroups).sort((a, b) => b.rotation.startDate.localeCompare(a.rotation.startDate));
+            sortedGroups.forEach(group => {
+                const rot = group.rotation;
+                html += `<div class="oc-card"><div class="oc-card-header">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        ${getRoleBadge(rot.role)}
+                        <span class="oc-card-title">${fmtDateShort(rot.startDate)} &ndash; ${fmtDateShort(rot.endDate)}</span>
+                    </div>
+                    <button class="oc-btn oc-btn-sm" onclick="OC.navigateToDate('${rot.startDate}')">Cal &rarr;</button>
+                </div>`;
+                const byDay = {};
+                group.responses.forEach(r => {
+                    if (!byDay[r.date]) byDay[r.date] = [];
+                    byDay[r.date].push(r);
+                });
+                const dayKeys = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
+                dayKeys.forEach(ds => {
+                    const dayResps = byDay[ds];
+                    const rp = calculateDayResponsePay(dayResps, ds);
+                    rp.groups.forEach(g => {
+                        const isGrouped = g.entries.length > 1;
+                        const rate = getOvertimeRate();
+                        const payStr = rate > 0 ? ` = ${fmtEur((g.paidMin / 60) * rate)}` : '';
+                        if (isGrouped) html += `<div class="log-group"><div class="log-group-header">Overlapping incidents &mdash; Real: ${durStr(g.realMin)} &rarr; Paid: ${durStr(g.paidMin)}${payStr}</div>`;
+                        g.entries.forEach(r => { html += renderLogEntry(r, g); });
+                        if (isGrouped) html += `</div>`;
+                    });
+                    const payIds = new Set(rp.groups.flatMap(g => g.ids));
+                    dayResps.filter(r => !payIds.has(r.id)).forEach(r => { html += renderLogEntry(r, null); });
+                });
+                html += `</div>`;
+            });
+            if (unassigned.length > 0) {
+                html += `<div class="oc-card"><div class="oc-card-header">
+                    <span class="oc-card-title" style="color:var(--text-muted);">Not in a rotation</span>
+                </div>`;
+                unassigned.forEach(r => { html += renderLogEntry(r, null); });
+                html += `</div>`;
+            }
+        }
+        document.getElementById('oc-tab-log').innerHTML = html;
+    }
+
+    function renderLogEntry(r, payGroup) {
+        const dur = getResponseDuration(r);
+        const outsideMin = getOutsideBusinessMinutes(r.date, r.startTime, r.endTime);
+        let payInfo = '';
+        if (payGroup) {
+            const isSingle = payGroup.entries.length === 1;
+            if (isSingle) {
+                const parts = [];
+                if (payGroup.realMin < 60) parts.push('1h minimum');
+                else if (payGroup.paidMin > payGroup.realMin) parts.push('rounded to 15min');
+                parts.push(`Paid: ${durStr(payGroup.paidMin)}`);
+                if (getOvertimeRate() > 0) parts.push(fmtEur((payGroup.paidMin / 60) * getOvertimeRate()));
+                payInfo = `<div class="pay-detail">${parts.join(' | ')}</div>`;
+            }
+        } else if (outsideMin <= 0) {
+            payInfo = `<div class="pay-detail" style="background:var(--border-light);">During business hours</div>`;
+        }
+        return `<div class="log-entry" style="cursor:pointer;" onclick="OC.navigateToDate('${r.date}')">
+            <div class="log-entry-header"><div>
+                <span class="log-entry-date">${fmtDate(r.date)}</span>
+                <span class="log-entry-time" style="margin-left:8px;">${r.startTime} - ${r.endTime} (${durStr(dur)})</span>
+                <div class="log-entry-incident">${r.incidentName || '<em>Unnamed</em>'}</div>
+                ${r.notes ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${r.notes}</div>` : ''}
+            </div><div class="log-entry-actions" onclick="event.stopPropagation()">
+                <button class="oc-btn oc-btn-sm" onclick="OC.editResponse('${r.id}')">Edit</button>
+                <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.deleteResponse('${r.id}')">Del</button>
+            </div></div>
+            <div class="log-entry-pay">
+                <span>Outside hrs: ${durStr(outsideMin)}</span>
+            </div>
+            ${payInfo}
+        </div>`;
+    }
+
+    // ── Monthly Summary ──
+    function renderSummary() {
+        const year = summaryYear, month = summaryMonth;
+        const lastDay = new Date(year, month + 1, 0);
+        const monthName = new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        let html = `<div class="oc-form-row" style="margin-bottom:16px;">
+            <button class="oc-btn oc-btn-sm" onclick="OC.summaryNav(-1)">&laquo;</button>
+            <strong style="min-width:140px;text-align:center;">${monthName}</strong>
+            <button class="oc-btn oc-btn-sm" onclick="OC.summaryNav(1)">&raquo;</button>
+        </div>`;
+        let totStipend = 0, totPTO = 0, totPaidMin = 0, totRealMin = 0, totPay = 0;
+        let workdays = 0, specialDays = 0, incidents = 0;
+        const dayBreakdowns = [];
+        for (let d = 1; d <= lastDay.getDate(); d++) {
+            const ds = dateStr(new Date(year, month, d));
+            const rot = getRotationForDate(ds), role = rot ? rot.role : null;
+            if (role) {
+                totStipend += getDailyStipend(ds, role);
+                totPTO += getDailyPTO(ds, role);
+                if (getDayType(ds) === 'workday') workdays++; else specialDays++;
+            }
+            const dayR = data.responses.filter(r => r.date === ds);
+            if (dayR.length > 0) {
+                incidents += dayR.length;
+                const rp = calculateDayResponsePay(dayR, ds);
+                totPaidMin += rp.paidMinutes; totRealMin += rp.realMinutes; totPay += rp.pay;
+                if (rp.paidMinutes > 0) dayBreakdowns.push({ date: ds, ...rp });
+            }
+        }
+        html += `<div class="stats-grid">
+            <div class="stat-box"><div class="stat-label">Stipends</div><div class="stat-value money">${fmtEur(totStipend)}</div>
+                <div class="stat-sub">${workdays} workdays + ${specialDays} special days</div></div>
+            <div class="stat-box"><div class="stat-label">PTO Accrued</div><div class="stat-value pto">${totPTO}h</div></div>
+            <div class="stat-box"><div class="stat-label">Real OT</div><div class="stat-value hours">${durStr(totRealMin)}</div>
+                <div class="stat-sub">Actual outside-hours work</div></div>
+            <div class="stat-box"><div class="stat-label">Paid OT</div><div class="stat-value hours">${durStr(totPaidMin)}</div>
+                <div class="stat-sub">After minimums &amp; rounding</div></div>
+            <div class="stat-box"><div class="stat-label">Response Pay</div><div class="stat-value money">${fmtEur(totPay)}</div>
+                <div class="stat-sub">at ${fmtEur(getOvertimeRate())}/hr</div></div>
+        </div>
+        <div class="oc-card"><div class="oc-card-title">Monthly Total</div>
+            <div style="font-size:28px;font-weight:700;color:var(--green);margin-top:8px;">${fmtEur(totStipend + totPay)}</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">${fmtEur(totStipend)} stipends + ${fmtEur(totPay)} response pay + ${totPTO}h PTO</div>
+        </div>`;
+        if (dayBreakdowns.length > 0) {
+            html += `<div class="oc-card"><div class="oc-card-title">Response Pay Breakdown</div>
+                <table class="oc-breakdown-table"><tr><th>Date</th><th>Incidents</th><th>Real</th><th>Paid</th><th>Pay</th></tr>`;
+            dayBreakdowns.forEach(db => {
+                db.groups.forEach(g => {
+                    html += `<tr><td>${fmtDateShort(db.date)}</td><td>${g.incidents.join(', ')}</td>
+                        <td>${durStr(g.realMin)}</td><td>${durStr(g.paidMin)}</td>
+                        <td>${fmtEur((g.paidMin / 60) * getOvertimeRate())}</td></tr>`;
+                });
+            });
+            html += `</table></div>`;
+        }
+        document.getElementById('oc-tab-summary').innerHTML = html;
+    }
+    function summaryNav(dir) {
+        summaryMonth += dir;
+        if (summaryMonth > 11) { summaryMonth = 0; summaryYear++; }
+        if (summaryMonth < 0) { summaryMonth = 11; summaryYear--; }
+        renderSummary();
+    }
+
+    // ── Yearly Overview ──
+    function renderYearly() {
+        const year = yearlyYear;
+        let html = `<div class="oc-form-row" style="margin-bottom:16px;">
+            <button class="oc-btn oc-btn-sm" onclick="OC.yearlyNav(-1)">&laquo;</button>
+            <strong style="min-width:60px;text-align:center;">${year}</strong>
+            <button class="oc-btn oc-btn-sm" onclick="OC.yearlyNav(1)">&raquo;</button>
+        </div>`;
+        let totStipend = 0, totPTO = 0, totPaidMin = 0, totRealMin = 0, totPay = 0;
+        const monthlyData = [];
+        for (let m = 0; m < 12; m++) {
+            const lastDay = new Date(year, m + 1, 0);
+            let ms = 0, mp = 0, mPaidMin = 0, mRealMin = 0, mPay = 0;
+            for (let d = 1; d <= lastDay.getDate(); d++) {
+                const ds = dateStr(new Date(year, m, d));
+                const rot = getRotationForDate(ds), role = rot ? rot.role : null;
+                if (role) { ms += getDailyStipend(ds, role); mp += getDailyPTO(ds, role); }
+                const dayR = data.responses.filter(r => r.date === ds);
+                if (dayR.length > 0) {
+                    const rp = calculateDayResponsePay(dayR, ds);
+                    mPaidMin += rp.paidMinutes; mRealMin += rp.realMinutes; mPay += rp.pay;
+                }
+            }
+            totStipend += ms; totPTO += mp; totPaidMin += mPaidMin; totRealMin += mRealMin; totPay += mPay;
+            if (ms > 0 || mPaidMin > 0) monthlyData.push({ month: m, stipend: ms, pto: mp, paidMin: mPaidMin, realMin: mRealMin, pay: mPay });
+        }
+        const paidHrs = totPaidMin / 60, realHrs = totRealMin / 60;
+        const paidPct = Math.min(100, (paidHrs / 80) * 100);
+        const realPct = Math.min(100, (realHrs / 80) * 100);
+        const paidColor = paidPct < 60 ? 'green' : paidPct < 85 ? 'yellow' : 'red';
+        const realColor = realPct < 60 ? 'green' : realPct < 85 ? 'yellow' : 'red';
+
+        html += `<div class="stats-grid">
+            <div class="stat-box"><div class="stat-label">Real OT (80h cap)</div>
+                <div class="stat-value hours">${realHrs.toFixed(1)}h / 80h</div>
+                <div class="progress-bar"><div class="progress-fill ${realColor}" style="width:${realPct}%"></div></div>
+                <div class="stat-sub">${(80 - realHrs).toFixed(1)}h remaining</div></div>
+            <div class="stat-box"><div class="stat-label">Paid OT (80h cap)</div>
+                <div class="stat-value hours">${paidHrs.toFixed(1)}h / 80h</div>
+                <div class="progress-bar"><div class="progress-fill ${paidColor}" style="width:${paidPct}%"></div></div>
+                <div class="stat-sub">${(80 - paidHrs).toFixed(1)}h remaining</div></div>
+            <div class="stat-box"><div class="stat-label">PTO Bank (${year})</div><div class="stat-value pto">${totPTO}h</div></div>
+            <div class="stat-box"><div class="stat-label">Total Stipends</div><div class="stat-value money">${fmtEur(totStipend)}</div></div>
+        </div>
+        <div class="oc-card"><div class="oc-card-title">Total Compensation (${year})</div>
+            <div style="font-size:28px;font-weight:700;color:var(--green);margin-top:8px;">${fmtEur(totStipend + totPay)}</div></div>`;
+        if (monthlyData.length > 0) {
+            html += `<div class="oc-card"><div class="oc-card-title">Monthly Breakdown</div>
+                <table class="oc-breakdown-table"><tr><th>Month</th><th>Stipends</th><th>PTO</th><th>Real OT</th><th>Paid OT</th><th>Pay</th><th>Total</th></tr>`;
+            monthlyData.forEach(md => {
+                const mName = new Date(year, md.month, 1).toLocaleDateString('en-GB', { month: 'short' });
+                html += `<tr><td>${mName}</td><td>${fmtEur(md.stipend)}</td><td>${md.pto}h</td>
+                    <td>${durStr(md.realMin)}</td><td>${durStr(md.paidMin)}</td>
+                    <td>${fmtEur(md.pay)}</td><td><strong>${fmtEur(md.stipend + md.pay)}</strong></td></tr>`;
+            });
+            html += `</table></div>`;
+        }
+        const yearRots = data.rotations.filter(r => r.startDate.startsWith(String(year)) || r.endDate.startsWith(String(year)));
+        if (yearRots.length > 0) {
+            html += `<div class="oc-card"><div class="oc-card-title">Rotation History</div><div class="rotation-history">`;
+            yearRots.sort((a, b) => a.startDate.localeCompare(b.startDate)).forEach(r => {
+                html += `<div class="rotation-chip">${getRoleBadge(r.role)} ${fmtDateShort(r.startDate)} - ${fmtDateShort(r.endDate)}</div>`;
+            });
+            html += `</div></div>`;
+        }
+        document.getElementById('oc-tab-yearly').innerHTML = html;
+    }
+    function yearlyNav(dir) { yearlyYear += dir; renderYearly(); }
+
+    // ── Rotation CRUD ──
+    function openAddRotation(editId) {
+        const existing = editId ? data.rotations.find(r => r.id === editId) : null;
+        const mon = getMonday(new Date()), sun = addDays(mon, 6);
+        const dStart = existing ? existing.startDate : dateStr(mon);
+        const dEnd = existing ? existing.endDate : dateStr(sun);
+        const dRole = existing ? existing.role : 'L1';
+        let html = `<h2>${existing ? 'Edit' : 'Add'} Rotation</h2>
+            <div class="oc-form-group" style="margin-bottom:12px;"><label>Start Date</label><input type="date" id="ocRotStart" value="${dStart}"></div>
+            <div class="oc-form-group" style="margin-bottom:12px;"><label>End Date</label><input type="date" id="ocRotEnd" value="${dEnd}"></div>
+            <div class="oc-form-group" style="margin-bottom:16px;"><label>Role</label>
+                <select id="ocRotRole"><option value="L1" ${dRole==='L1'?'selected':''}>L1 (Primary)</option><option value="L2" ${dRole==='L2'?'selected':''}>L2 (Backup)</option></select></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">L1 receives stipends + PTO. L2 can only log response hours.</div>
+            <div class="oc-form-row" style="justify-content:flex-end;gap:8px;">
+                ${existing ? `<button class="oc-btn oc-btn-danger oc-btn-sm" onclick="OC.deleteRotation('${editId}')">Delete</button>` : ''}
+                <button class="oc-btn" onclick="OC.closeAddRotation()">Cancel</button>
+                <button class="oc-btn oc-btn-primary" onclick="OC.saveRotation('${editId || ''}')">${existing ? 'Save' : 'Add'}</button>
+            </div>`;
+        if (data.rotations.length > 0) {
+            html += `<div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;"><h3 style="font-size:14px;margin-bottom:8px;">Existing Rotations</h3>`;
+            data.rotations.sort((a, b) => b.startDate.localeCompare(a.startDate)).forEach(r => {
+                html += `<div class="rotation-item"><span>${getRoleBadge(r.role)} ${fmtDateShort(r.startDate)} - ${fmtDateShort(r.endDate)}</span>
+                    <div style="display:flex;gap:4px;"><button class="oc-btn oc-btn-sm" onclick="OC.openAddRotation('${r.id}')">Edit</button>
+                    <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.deleteRotation('${r.id}')">Del</button></div></div>`;
+            });
+            html += `</div>`;
+        }
+        document.getElementById('ocAddRotationPanel').innerHTML = html;
+        document.getElementById('ocAddRotationOverlay').classList.add('active');
+    }
+    function closeAddRotation() { document.getElementById('ocAddRotationOverlay').classList.remove('active'); }
+    function saveRotation(editId) {
+        const s = document.getElementById('ocRotStart').value, e = document.getElementById('ocRotEnd').value, role = document.getElementById('ocRotRole').value;
+        if (!s || !e) { toast('Fill in both dates'); return; }
+        if (e < s) { toast('End must be after start'); return; }
+        if (data.rotations.find(r => r.id !== editId && s <= r.endDate && e >= r.startDate)) { toast('Overlaps existing rotation'); return; }
+        if (editId) { const r = data.rotations.find(r => r.id === editId); r.startDate = s; r.endDate = e; r.role = role; }
+        else data.rotations.push({ id: uid(), startDate: s, endDate: e, role });
+        save(); closeAddRotation(); render(); toast(editId ? 'Updated' : 'Added');
+    }
+    function deleteRotation(id) { data.rotations = data.rotations.filter(r => r.id !== id); save(); closeAddRotation(); render(); toast('Deleted'); }
+
+    // ── Response CRUD ──
+    function openAddResponse(defaultDate) {
+        const today = dateStr(new Date());
+        document.getElementById('ocEditResponsePanel').innerHTML = `<h2>Log Incident Response</h2>
+            <div class="oc-form-group" style="margin-bottom:12px;"><label>Date</label><input type="date" id="ocRespDate" value="${defaultDate || today}"></div>
+            <div class="oc-form-row"><div class="oc-form-group" style="flex:1;"><label>Start Time</label><input type="time" id="ocRespStart"></div>
+                <div class="oc-form-group" style="flex:1;"><label>End Time</label><input type="time" id="ocRespEnd"></div></div>
+            <div class="oc-form-group" style="margin-bottom:12px;"><label>Incident Name</label><input type="text" id="ocRespName" placeholder="e.g. PD-12345"></div>
+            <div class="oc-form-group" style="margin-bottom:16px;"><label>Notes</label><textarea id="ocRespNotes" rows="2"></textarea></div>
+            <div class="oc-form-row" style="justify-content:flex-end;">
+                <button class="oc-btn" onclick="OC.closeEditResponse()">Cancel</button>
+                <button class="oc-btn oc-btn-primary" onclick="OC.saveNewResponse()">Save</button>
+            </div>`;
+        document.getElementById('ocEditResponseOverlay').classList.add('active');
+    }
+    function editResponse(id) {
+        const r = data.responses.find(x => x.id === id); if (!r) return;
+        document.getElementById('ocEditResponsePanel').innerHTML = `<h2>Edit Response</h2>
+            <div class="oc-form-group" style="margin-bottom:12px;"><label>Date</label><input type="date" id="ocRespDate" value="${r.date}"></div>
+            <div class="oc-form-row"><div class="oc-form-group" style="flex:1;"><label>Start Time</label><input type="time" id="ocRespStart" value="${r.startTime}"></div>
+                <div class="oc-form-group" style="flex:1;"><label>End Time</label><input type="time" id="ocRespEnd" value="${r.endTime}"></div></div>
+            <div class="oc-form-group" style="margin-bottom:12px;"><label>Incident Name</label><input type="text" id="ocRespName" value="${r.incidentName || ''}"></div>
+            <div class="oc-form-group" style="margin-bottom:16px;"><label>Notes</label><textarea id="ocRespNotes" rows="2">${r.notes || ''}</textarea></div>
+            <div class="oc-form-row" style="justify-content:flex-end;">
+                <button class="oc-btn oc-btn-danger" onclick="OC.deleteResponse('${r.id}')" style="margin-right:auto;">Delete</button>
+                <button class="oc-btn" onclick="OC.closeEditResponse()">Cancel</button>
+                <button class="oc-btn oc-btn-primary" onclick="OC.saveEditResponse('${r.id}')">Save</button>
+            </div>`;
+        document.getElementById('ocEditResponseOverlay').classList.add('active');
+    }
+    function closeEditResponse() { document.getElementById('ocEditResponseOverlay').classList.remove('active'); }
+    function saveNewResponse() {
+        const d = document.getElementById('ocRespDate').value, s = document.getElementById('ocRespStart').value, e = document.getElementById('ocRespEnd').value;
+        if (!d || !s || !e) { toast('Fill in date and times'); return; }
+        data.responses.push({ id: uid(), date: d, startTime: s, endTime: e, incidentName: document.getElementById('ocRespName').value.trim(), notes: document.getElementById('ocRespNotes').value.trim() });
+        save(); closeEditResponse(); closeDayDetail(); render(); toast('Response logged');
+    }
+    function saveEditResponse(id) {
+        const r = data.responses.find(x => x.id === id); if (!r) return;
+        r.date = document.getElementById('ocRespDate').value; r.startTime = document.getElementById('ocRespStart').value;
+        r.endTime = document.getElementById('ocRespEnd').value; r.incidentName = document.getElementById('ocRespName').value.trim();
+        r.notes = document.getElementById('ocRespNotes').value.trim();
+        save(); closeEditResponse(); closeDayDetail(); render(); toast('Updated');
+    }
+    function deleteResponse(id) { data.responses = data.responses.filter(r => r.id !== id); save(); closeEditResponse(); closeDayDetail(); render(); toast('Deleted'); }
+
+    // ── Multiple Concurrent Timers ──
+    function openTimerStart() {
+        document.getElementById('ocTimerIncidentName').value = '';
+        document.getElementById('ocTimerNotes').value = '';
+        document.getElementById('ocTimerStartOverlay').classList.add('active');
+        setTimeout(() => document.getElementById('ocTimerIncidentName').focus(), 100);
+    }
+    function closeTimerStart() { document.getElementById('ocTimerStartOverlay').classList.remove('active'); }
+    function startTimer() {
+        data.activeTimers.push({
+            id: uid(), startedAt: new Date().toISOString(),
+            incidentName: document.getElementById('ocTimerIncidentName').value.trim(),
+            notes: document.getElementById('ocTimerNotes').value.trim()
+        });
+        save(); closeTimerStart(); startTimerTick(); renderTimers(); toast('Timer started');
+    }
+    function stopTimer(timerId) {
+        const timer = data.activeTimers.find(t => t.id === timerId);
+        if (!timer) return;
+        const start = new Date(timer.startedAt), end = new Date();
+        data.responses.push({
+            id: uid(), date: dateStr(start),
+            startTime: String(start.getHours()).padStart(2, '0') + ':' + String(start.getMinutes()).padStart(2, '0'),
+            endTime: String(end.getHours()).padStart(2, '0') + ':' + String(end.getMinutes()).padStart(2, '0'),
+            incidentName: timer.incidentName, notes: timer.notes
+        });
+        data.activeTimers = data.activeTimers.filter(t => t.id !== timerId);
+        save(); renderTimers(); render(); toast('Timer stopped, response logged');
+        if (data.activeTimers.length === 0 && timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    }
+    function renderTimers() {
+        const area = document.getElementById('ocTimerArea');
+        if (data.activeTimers.length === 0) { area.innerHTML = ''; return; }
+        let html = '';
+        data.activeTimers.forEach(t => {
+            const elapsed = Math.floor((Date.now() - new Date(t.startedAt).getTime()) / 1000);
+            const h = Math.floor(elapsed / 3600), m = Math.floor((elapsed % 3600) / 60), s = elapsed % 60;
+            const timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            html += `<div class="timer-widget">
+                <div class="timer-dot"></div>
+                <span class="timer-elapsed">${timeStr}</span>
+                <span class="timer-name" title="${t.incidentName || ''}">${t.incidentName || 'Timer'}</span>
+                <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.stopTimer('${t.id}')" style="padding:2px 6px;font-size:11px;">Stop</button>
+            </div>`;
+        });
+        area.innerHTML = html;
+    }
+    function startTimerTick() {
+        if (timerInterval) return;
+        timerInterval = setInterval(renderTimers, 1000);
+    }
+
+    // ── Settings ──
+    function openSettings() {
+        const s = data.settings;
+        let html = `<h2>Settings</h2>
+            <div class="panel-section"><h3>Compensation</h3>
+                <div class="oc-form-group" style="margin-bottom:8px;"><label>Annual Base Salary (EUR)</label>
+                    <input type="number" id="ocSetSalary" value="${s.annualSalary || ''}" placeholder="e.g. 60000" oninput="OC.updateRatePreview()"></div>
+                <div class="rate-display" id="ocRatePreview">${s.annualSalary > 0 ? `Base hourly: <strong>${fmtEur(getHourlyRate())}</strong> | 2x rate: <strong>${fmtEur(getOvertimeRate())}</strong>/hr` : 'Enter salary to see rates'}</div>
+            </div>
+            <div class="panel-section"><h3>Business Hours</h3>
+                <div class="oc-form-row"><div class="oc-form-group" style="flex:1;"><label>Start</label><input type="time" id="ocSetBusStart" value="${s.businessHoursStart}"></div>
+                    <div class="oc-form-group" style="flex:1;"><label>End</label><input type="time" id="ocSetBusEnd" value="${s.businessHoursEnd}"></div></div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Work outside these hours on workdays = 2x pay.</div>
+            </div>
+            <div class="panel-section"><h3>Spanish National + Madrid Holidays (${currentYear})</h3><ul class="date-list">`;
+        (SPANISH_HOLIDAYS[currentYear] || []).forEach(h => {
+            const awayOverlap = s.awayDays.find(a => a.date === h.date);
+            html += `<li><span>${fmtDate(h.date)}</span><span style="color:var(--text-muted)">${h.name}${awayOverlap ? ' <span style="color:var(--accent);font-size:11px;">(+ Away Day)</span>' : ''}</span></li>`;
+        });
+        html += `</ul></div>
+            <div class="panel-section"><h3>Custom Holidays</h3><ul class="date-list">`;
+        s.customHolidays.forEach((h, i) => {
+            html += `<li><span>${fmtDate(h.date)} - ${h.name}</span><button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.removeCustomHoliday(${i})">Del</button></li>`;
+        });
+        html += `</ul><div class="oc-form-row" style="margin-top:8px;"><input type="date" id="ocNewHolidayDate" style="flex:1;"><input type="text" id="ocNewHolidayName" placeholder="Name" style="flex:1;">
+            <button class="oc-btn oc-btn-sm oc-btn-primary" onclick="OC.addCustomHoliday()">Add</button></div></div>
+            <div class="panel-section"><h3>Away Days</h3>
+            <button class="oc-btn oc-btn-sm" onclick="OC.importCompanyHolidays()" style="margin-bottom:8px;">Import ${currentYear} Company Holidays</button>
+            <ul class="date-list">`;
+        s.awayDays.forEach((a, i) => {
+            const holidayOverlap = getHolidayName(a.date);
+            html += `<li><span>${fmtDate(a.date)}${a.name ? ' - ' + a.name : ''}${holidayOverlap ? ' <span style="color:var(--text-muted);font-size:11px;">(also: ' + holidayOverlap + ')</span>' : ''}</span><button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.removeAwayDay(${i})">Del</button></li>`;
+        });
+        html += `</ul><div class="oc-form-row" style="margin-top:8px;"><input type="date" id="ocNewAwayDate" style="flex:1;"><input type="text" id="ocNewAwayName" placeholder="Name" style="flex:1;">
+            <button class="oc-btn oc-btn-sm oc-btn-primary" onclick="OC.addAwayDay()">Add</button></div></div>
+            <div class="panel-section"><h3>Data</h3><div class="oc-form-row">
+                <button class="oc-btn oc-btn-sm" onclick="OC.exportOcData()">Export JSON</button>
+                <label class="oc-btn oc-btn-sm" style="cursor:pointer;">Import<input type="file" accept=".json" onchange="OC.importDataFile(event)" style="display:none;"></label>
+                <button class="oc-btn oc-btn-sm oc-btn-danger" onclick="OC.clearAllData()">Clear All</button>
+            </div></div>
+            <div class="panel-section"><h3>Appearance</h3>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                    <input type="checkbox" id="ocSetDarkMode" ${s.darkMode ? 'checked' : ''} onchange="OC.toggleDarkMode()"> Dark mode
+                </label>
+            </div>
+            <div class="oc-form-row" style="justify-content:flex-end;margin-top:16px;"><button class="oc-btn oc-btn-primary" onclick="OC.saveSettings()">Done</button></div>`;
+        document.getElementById('ocSettingsPanel').innerHTML = html;
+        document.getElementById('ocSettingsOverlay').classList.add('active');
+    }
+    function closeSettings() { document.getElementById('ocSettingsOverlay').classList.remove('active'); }
+    function updateRatePreview() {
+        const sal = parseFloat(document.getElementById('ocSetSalary').value) || 0;
+        document.getElementById('ocRatePreview').innerHTML = sal > 0
+            ? `Base hourly: <strong>${fmtEur(sal / 2080.08)}</strong> | 2x rate: <strong>${fmtEur((sal / 2080.08) * 2)}</strong>/hr`
+            : 'Enter salary to see rates';
+    }
+    function saveSettings() {
+        data.settings.annualSalary = parseFloat(document.getElementById('ocSetSalary').value) || 0;
+        data.settings.businessHoursStart = document.getElementById('ocSetBusStart').value || '09:00';
+        data.settings.businessHoursEnd = document.getElementById('ocSetBusEnd').value || '18:00';
+        save(); closeSettings(); render(); toast('Settings saved');
+    }
+    function addCustomHoliday() {
+        const d = document.getElementById('ocNewHolidayDate').value, n = document.getElementById('ocNewHolidayName').value.trim();
+        if (!d || !n) { toast('Fill in date and name'); return; }
+        data.settings.customHolidays.push({ date: d, name: n }); save(); openSettings(); toast('Added');
+    }
+    function removeCustomHoliday(i) { data.settings.customHolidays.splice(i, 1); save(); openSettings(); }
+    function addAwayDay() {
+        const d = document.getElementById('ocNewAwayDate').value, n = document.getElementById('ocNewAwayName').value.trim();
+        if (!d) { toast('Select a date'); return; }
+        data.settings.awayDays.push({ date: d, name: n || 'Away Day' }); save(); openSettings(); toast('Added');
+    }
+    function removeAwayDay(i) { data.settings.awayDays.splice(i, 1); save(); openSettings(); }
+    function importCompanyHolidays() {
+        const holidays = COMPANY_HOLIDAYS[currentYear];
+        if (!holidays || holidays.length === 0) { toast('No company holidays defined for ' + currentYear); return; }
+        let added = 0, skippedHoliday = 0, skippedDup = 0;
+        holidays.forEach(h => {
+            if (isHoliday(h.date)) { skippedHoliday++; return; }
+            if (data.settings.awayDays.some(a => a.date === h.date)) { skippedDup++; return; }
+            data.settings.awayDays.push({ date: h.date, name: h.name });
+            added++;
+        });
+        data.settings.awayDays.sort((a, b) => a.date.localeCompare(b.date));
+        save(); openSettings();
+        const parts = [`Added ${added}`];
+        if (skippedHoliday > 0) parts.push(`${skippedHoliday} already national holidays`);
+        if (skippedDup > 0) parts.push(`${skippedDup} already added`);
+        toast(parts.join(', '));
+    }
+    function toggleDarkMode() {
+        data.settings.darkMode = document.getElementById('ocSetDarkMode').checked;
+        document.getElementById('oncallPage').setAttribute('data-theme', data.settings.darkMode ? 'dark' : 'light');
+        save();
+    }
+    function exportOcData() {
+        const blob = new Blob([JSON.stringify(StorageVersionManager.exportData(ocSchema), null, 2)], { type: 'application/json' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = 'oncall-tracker-backup.json'; a.click(); toast('Exported');
+    }
+    function importDataFile(event) {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                StorageVersionManager.importData(ocSchema, JSON.parse(e.target.result));
+                data = StorageVersionManager.load(ocSchema);
+                if (data.settings.darkMode) document.getElementById('oncallPage').setAttribute('data-theme', 'dark');
+                render(); closeSettings(); toast('Imported');
+            } catch (err) { toast('Import failed: ' + err.message); }
+        };
+        reader.readAsText(file);
+    }
+    function clearAllData() {
+        if (!confirm('Delete all on-call data? This cannot be undone.')) return;
+        StorageVersionManager.remove(ocSchema); data = StorageVersionManager.load(ocSchema);
+        save(); closeSettings(); render(); toast('Cleared');
+    }
+
+    // ── Close overlays on Escape ──
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.getElementById('oncallPage').style.display !== 'none') {
+            closeSettings(); closeEditResponse(); closeAddRotation(); closeTimerStart(); closeDayDetail();
+        }
+    });
+    ['ocSettingsOverlay', 'ocEditResponseOverlay', 'ocAddRotationOverlay', 'ocTimerStartOverlay'].forEach(id => {
+        document.getElementById(id).addEventListener('click', e => {
+            if (e.target.id === id) {
+                if (id === 'ocSettingsOverlay') closeSettings();
+                else if (id === 'ocEditResponseOverlay') closeEditResponse();
+                else if (id === 'ocAddRotationOverlay') closeAddRotation();
+                else if (id === 'ocTimerStartOverlay') closeTimerStart();
+            }
+        });
+    });
+
+    // ── Init ──
+    function init() {
+        if (data.settings.darkMode) document.getElementById('oncallPage').setAttribute('data-theme', 'dark');
+        if (data.activeTimers.length > 0) startTimerTick();
+        const savedTab = localStorage.getItem('oncall_activeTab');
+        if (savedTab && ['calendar', 'log', 'summary', 'yearly'].includes(savedTab)) {
+            currentTab = savedTab;
+        }
+        switchTab(currentTab);
+    }
+
+    // ── API for payroll integration ──
+    // Returns { stipend, responsePay, total } for a given month (1-12) and year
+    function getMonthlyCompensation(month, year) {
+        const lastDay = new Date(year, month, 0); // month is 1-indexed here, so month-0 = last day of that month
+        const daysInMonth = lastDay.getDate();
+        let totStipend = 0, totPay = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+            const ds = dateStr(new Date(year, month - 1, d));
+            const rot = getRotationForDate(ds), role = rot ? rot.role : null;
+            if (role) totStipend += getDailyStipend(ds, role);
+            const dayR = data.responses.filter(r => r.date === ds);
+            if (dayR.length > 0) {
+                const rp = calculateDayResponsePay(dayR, ds);
+                totPay += rp.pay;
+            }
+        }
+        return { stipend: totStipend, responsePay: totPay, total: totStipend + totPay };
+    }
+
+    // Lazy init - only render when page becomes visible
+    let initialized = false;
+    function ensureInit() {
+        if (!initialized) { initialized = true; init(); }
+    }
+
+    // Public API
+    return {
+        switchTab, calNav, calNavToday, openDayDetail, closeDayDetail, navigateToDate,
+        openAddRotation, closeAddRotation, saveRotation, deleteRotation,
+        openAddResponse, editResponse, closeEditResponse, saveNewResponse, saveEditResponse, deleteResponse,
+        openTimerStart, closeTimerStart, startTimer, stopTimer,
+        openSettings, closeSettings, updateRatePreview, saveSettings,
+        addCustomHoliday, removeCustomHoliday, addAwayDay, removeAwayDay, importCompanyHolidays,
+        toggleDarkMode, exportOcData, importDataFile, clearAllData,
+        summaryNav, yearlyNav, ensureInit, render,
+        getMonthlyCompensation
+    };
+
+    })();
+
+    // ==================== PAGE SWITCHER ====================
+
+    function switchPage(page) {
+        const payrollPage = document.getElementById('payrollPage');
+        const oncallPage = document.getElementById('oncallPage');
+        const btns = document.querySelectorAll('.page-switcher-btn');
+
+        btns.forEach((btn, i) => {
+            btn.classList.toggle('active', (i === 0 && page === 'payroll') || (i === 1 && page === 'oncall'));
+        });
+
+        if (page === 'payroll') {
+            payrollPage.style.display = '';
+            oncallPage.style.display = 'none';
+        } else {
+            payrollPage.style.display = 'none';
+            oncallPage.style.display = '';
+            OC.ensureInit();
+        }
+
+        // Update URL hash for bookmarkability
+        window.location.hash = page === 'oncall' ? '#oncall' : '';
+    }
+
+    // Handle page load with hash
+    if (window.location.hash === '#oncall') {
+        switchPage('oncall');
+    }
+
+    // ==================== PAYROLL ↔ ON-CALL INTEGRATION ====================
+
+    // Called by payroll's displayResults to get on-call data for a specific payslip month
+    function getOncallCompForPayslip(month, year) {
+        if (!config.includeOncallComp) return null;
+        return OC.getMonthlyCompensation(month, year);
+    }
+
+    // Make it available globally for the payroll code
+    window.getOncallCompForPayslip = getOncallCompForPayslip;
     </script>
 </body>
 </html>
