@@ -1112,6 +1112,20 @@
                         Company-paid insurance premiums that exceed the tax-exempt limit and are therefore subject to income tax.
                     </div>
                 </div>
+
+                <div class="explanation-item">
+                    <div class="term">RSU In-Kind Income <span class="term-es">/ Especies Si. RSUs Dep</span></div>
+                    <div class="definition" data-i18n="explainRSUInKind">
+                        Restricted Stock Units (RSUs) that vested this period, reported as in-kind income (retribución en especie). This amount is added to your gross earnings but offset by the "In-Kind Deduction" since you receive shares rather than cash. The IRPF on this amount appears as "Passed-on Income Tax" (Repercutidos).
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">RSU Tax Reported <span class="term-es">/ RSUs Tax Reported</span></div>
+                    <div class="definition" data-i18n="explainRSUTaxReported">
+                        Informational line showing the taxable value of RSU vesting reported for IRPF purposes. This is typically used for your annual tax return (Declaración de la Renta).
+                    </div>
+                </div>
             </div>
 
             <div class="explanation-panel">
@@ -1283,6 +1297,8 @@
                             year: ps.year,
                             earnings: ps.earnings || [],
                             deductions: ps.deductions || [],
+                            unparsedEarnings: ps.unparsedEarnings || [],
+                            unparsedDeductions: ps.unparsedDeductions || [],
                             totals: ps.totals || {}
                         }))
                     }));
@@ -1413,7 +1429,8 @@
             'Awardco': 'awardco',
             'Exempt Insurance': 'exemptInsurance',
             'Taxable Insurance': 'taxableInsurance',
-            // RSU, ESPP, Bonus patterns would be added if they appear in payslips
+            'RSU In-Kind Income': 'rsu',
+            'RSU Tax Reported': 'rsu',
         };
 
         // Explanations for payslip items (used in info tooltips)
@@ -1428,6 +1445,8 @@
             'Extra Pay Prorate': 'Monthly proration of the 2 extra "pagas" (14 payments/year in Spain), included in your regular paycheck.',
             'Exempt Insurance': 'Company-paid insurance premiums (health, life, etc.) that are exempt from income tax up to legal limits.',
             'Taxable Insurance': 'Company-paid insurance premiums that exceed the tax-exempt limit and are subject to income tax.',
+            'RSU In-Kind Income': 'Restricted Stock Units (RSUs) that vested this period, reported as in-kind income. This amount is added to your gross pay but deducted back via "Descuento Conceptos en Especie" since you receive shares, not cash. Subject to IRPF via Repercutidos.',
+            'RSU Tax Reported': 'Informational line showing the RSU tax value reported. This is typically the taxable value of RSU vesting used for IRPF calculation purposes.',
             // Deductions
             'Common Contingencies': 'Social security contribution (4.70%) covering healthcare, maternity/paternity leave, and retirement pension.',
             'Intergenerational Equity': 'Contribution (0.15%) to ensure pension sustainability across generations, introduced in 2023.',
@@ -1539,7 +1558,7 @@
         // PDF Parsing
         async function parsePayslips() {
             const password = document.getElementById('pdfPassword').value;
-            parsedPayslips = [];
+            const newPayslips = [];
 
             for (const pf of pdfFiles) {
                 try {
@@ -1556,7 +1575,7 @@
                     const payslip = await parsePayslipPDF(pdf, pf.name);
 
                     if (payslip) {
-                        parsedPayslips.push(payslip);
+                        newPayslips.push(payslip);
                         pf.status = 'success';
                     } else {
                         pf.status = 'error';
@@ -1568,6 +1587,18 @@
                     console.error('Error parsing', pf.name, err);
                 }
                 renderFileList();
+            }
+
+            // Merge new payslips into existing session (replace duplicates by month/year)
+            for (const newPs of newPayslips) {
+                const existingIdx = parsedPayslips.findIndex(
+                    p => p.month === newPs.month && p.year === newPs.year
+                );
+                if (existingIdx >= 0) {
+                    parsedPayslips[existingIdx] = newPs; // Replace existing with re-parsed version
+                } else {
+                    parsedPayslips.push(newPs);
+                }
             }
 
             // Sort by period
@@ -1593,7 +1624,8 @@
                     str: item.str.trim(),
                     x: Math.round(item.transform[4]),
                     y: Math.round(item.transform[5]),
-                    width: item.width
+                    width: item.width,
+                    page: i
                 })).filter(item => item.str.length > 0));
             }
 
@@ -1614,6 +1646,8 @@
                 position: '',
                 earnings: [],
                 deductions: [],
+                unparsedEarnings: [],
+                unparsedDeductions: [],
                 totals: {
                     grossTotal: 0,
                     deductionsTotal: 0,
@@ -1672,6 +1706,8 @@
                 { pattern: /Prorrata\s*Pagas/i, type: 'earning', nameEn: 'Extra Pay Prorate', nameEs: 'Prorrata Pagas' },
                 { pattern: /Seguros?\s*Exentos?/i, type: 'earning', nameEn: 'Exempt Insurance', nameEs: 'Seguros Exentos' },
                 { pattern: /Seguros?\s*Sujetos?/i, type: 'earning', nameEn: 'Taxable Insurance', nameEs: 'Seguros Sujetos' },
+                { pattern: /Especies.*Rsus?\s*Dep/i, type: 'earning', nameEn: 'RSU In-Kind Income', nameEs: 'Especies Si. RSUs Dep' },
+                { pattern: /Rsus?\s*Tax\s*R?ported/i, type: 'earning', nameEn: 'RSU Tax Reported', nameEs: 'RSUs Tax Reported' },
                 { pattern: /Descuento\s*Conceptos?\s*en\s*Especie/i, type: 'deduction', nameEn: 'In-Kind Deduction', nameEs: 'Descuento Conceptos en Especie' },
                 { pattern: /Cotizaci[oó]n\s*Contingencias\s*Comunes/i, type: 'deduction', nameEn: 'Common Contingencies', nameEs: 'Cotización Contingencias Comunes' },
                 { pattern: /Cotizaci[oó]n\s*Mecanismo\s*Equidad/i, type: 'deduction', nameEn: 'Intergenerational Equity', nameEs: 'Mecanismo Equidad Intergeneracional' },
@@ -1784,7 +1820,7 @@
                 const hasTDevengadoPos = numbers.some(item => item.x >= 420 && item.x < 500);
                 const hasTDeducirPos = numbers.some(item => item.x >= 500 && item.x < 560);
                 const hasMultipleNumbers = numbers.length >= 4;
-                const noConceptText = !rowText.match(/Salario|Mejora|Cotizaci|Tributaci|Wallet|Seguros/i);
+                const noConceptText = !rowText.match(/Salario|Mejora|Cotizaci|Tributaci|Wallet|Seguros|Rsus?|Especies|Repercutidos|Pacto|Convenio|Prorrata|Awardco|Descuento/i);
 
                 if (hasTDevengadoPos && hasTDeducirPos && hasMultipleNumbers && noConceptText) {
                     const tDevengadoItem = numbers.find(item => item.x >= 420 && item.x < 500);
@@ -1837,6 +1873,68 @@
                 }
             }
 
+            // Collect unparsed rows (rows with amounts that didn't match any known concept)
+            const knownRowPattern = (text) => {
+                if (conceptDefs.some(def => def.pattern.test(text))) return true;
+                if (text.match(/Líquido|Liquido|BASE\s*C\.C\.|BASE\s*I\.R\.P\.F\./i)) return true;
+                if (text.match(/CUANTIA|PRECIO|CONCEPTO|DEVENGOS|DEDUCCIONES/i)) return true;
+                if (text.match(/REM\.\s*TOTAL|T\.\s*DEVENGADO|T\.\s*A\s*DEDUCIR|P\.P\.\s*EXTRAS/i)) return true;
+                if (text.match(/EMPRESA|DOMICILIO|TRABAJADOR|AFILIACI|TARIFA|PERIODO|TOT\.\s*DÍAS/i)) return true;
+                if (text.match(/SELLO|RECIBI|FECHA|BANCO|CUENTA|MADRID|NIF|CIF/i)) return true;
+                if (text.match(/Contingencias|Formaci[oó]n|Desempleo|Base sujeta|horas extra|garantía|ERTE|Incapacidad/i)) return true;
+                if (text.match(/Importe\s*remuneración|Importe\s*prorrata|Percepciones|APORTACI|TIPO|CNAE|CBA|AREA|NRO/i)) return true;
+                if (text.match(/Página|página|INSCRIPCI|CATEGOR|PUESTO|ANTIGÜEDAD|D\.N\.I/i)) return true;
+                if (text.match(/Affirm|Financial|Solutions|GAN.*JAMES|Senior.*Engineer|PROGRAMACI/i)) return true;
+                if (text.match(/^\d+$/) || text.match(/^[\d\s\/\-]+$/)) return true;
+                if (text.match(/^Mensual|Marzo|Enero|Febrero|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre/i)) return true;
+                return false;
+            };
+
+            for (const row of rows) {
+                const sortedItems = [...row].sort((a, b) => a.x - b.x);
+                const rowText = sortedItems.map(i => i.str).join(' ');
+
+                if (knownRowPattern(rowText)) continue;
+
+                const allNumbers = sortedItems.filter(item =>
+                    /^-?\d+(?:\.\d{3})*,\d{2}$/.test(item.str)
+                );
+                const devengosAmounts = allNumbers.filter(item => item.x >= 430 && item.x < 510);
+                const deduccionesAmounts = allNumbers.filter(item => item.x >= 510);
+
+                if (devengosAmounts.length === 0 && deduccionesAmounts.length === 0) continue;
+
+                // Extract concept name from text items before the amount columns
+                const textItems = sortedItems.filter(item =>
+                    item.x >= 100 && item.x < 430 &&
+                    !/^-?\d+(?:\.\d{3})*,\d{2}$/.test(item.str) &&
+                    !/^\d+,\d{2}$/.test(item.str)
+                );
+                const name = textItems.map(i => i.str).join(' ').trim();
+                if (!name || name.length < 2) continue;
+
+                // Extract cuantía and precio
+                const preColumnNumbers = allNumbers.filter(item => item.x < 180);
+                let cuantia = null, precio = null;
+                if (preColumnNumbers.length >= 2) {
+                    cuantia = parseSpanishNumber(preColumnNumbers[0].str);
+                    precio = parseSpanishNumber(preColumnNumbers[1].str);
+                }
+
+                if (devengosAmounts.length > 0) {
+                    const amount = parseSpanishNumber(devengosAmounts[0].str);
+                    if (amount > 0) {
+                        payslip.unparsedEarnings.push({ name, amount, cuantia, precio });
+                    }
+                }
+                if (deduccionesAmounts.length > 0) {
+                    const amount = parseSpanishNumber(deduccionesAmounts[deduccionesAmounts.length - 1].str);
+                    if (amount > 0) {
+                        payslip.unparsedDeductions.push({ name, amount });
+                    }
+                }
+            }
+
             // If net pay not found directly, look for standalone large number
             if (payslip.totals.netPay === 0) {
                 for (const row of rows) {
@@ -1864,21 +1962,27 @@
             // Summary log
             const earningsSum = payslip.earnings.reduce((s, e) => s + e.amount, 0);
             const deductionsSum = payslip.deductions.reduce((s, d) => s + Math.abs(d.amount), 0);
-            console.log(`PARSED ${payslip.period}: ${payslip.earnings.length} earnings (sum: ${earningsSum.toFixed(2)}, T.DEV: ${payslip.totals.tDevengado}) | ${payslip.deductions.length} deductions (sum: ${deductionsSum.toFixed(2)}, T.DED: ${payslip.totals.tDeducir}) | Net: ${payslip.totals.netPay}`);
+            const unparsedESum = payslip.unparsedEarnings.reduce((s, e) => s + e.amount, 0);
+            const unparsedDSum = payslip.unparsedDeductions.reduce((s, d) => s + d.amount, 0);
+            console.log(`PARSED ${payslip.period}: ${payslip.earnings.length} earnings (sum: ${earningsSum.toFixed(2)}, T.DEV: ${payslip.totals.tDevengado}) | ${payslip.deductions.length} deductions (sum: ${deductionsSum.toFixed(2)}, T.DED: ${payslip.totals.tDeducir}) | Net: ${payslip.totals.netPay} | Unparsed: ${payslip.unparsedEarnings.length}E(${unparsedESum.toFixed(2)}) ${payslip.unparsedDeductions.length}D(${unparsedDSum.toFixed(2)})`);
 
             return payslip;
         }
 
         function groupIntoRows(items) {
-            // Sort by Y descending (PDF coordinates have Y increasing upward)
-            const sorted = [...items].sort((a, b) => b.y - a.y);
+            // Sort by page first, then Y descending (PDF coordinates have Y increasing upward)
+            const sorted = [...items].sort((a, b) => {
+                if (a.page !== b.page) return a.page - b.page;
+                return b.y - a.y;
+            });
 
             const rows = [];
             let currentRow = [];
             let lastY = null;
+            let lastPage = null;
 
             for (const item of sorted) {
-                if (lastY !== null && Math.abs(item.y - lastY) > 3) {
+                if (lastY !== null && (item.page !== lastPage || Math.abs(item.y - lastY) > 3)) {
                     if (currentRow.length > 0) {
                         rows.push(currentRow);
                     }
@@ -1886,6 +1990,7 @@
                 }
                 currentRow.push(item);
                 lastY = item.y;
+                lastPage = item.page;
             }
             if (currentRow.length > 0) {
                 rows.push(currentRow);
@@ -2690,12 +2795,35 @@
                     </tr>`;
                 }
                 html += `<tr style="font-weight:600;"><td colspan="3">${currentLang === 'es' ? 'Suma Parseada' : 'Parsed Sum'}</td><td class="text-right amount">${formatCurrency(parsedEarningsSum)}</td><td></td></tr>`;
+
+                // Unparsed earnings
+                const unparsedEarnings = ps.unparsedEarnings || [];
+                const unparsedEarningsSum = unparsedEarnings.reduce((sum, e) => sum + e.amount, 0);
+                if (unparsedEarnings.length > 0) {
+                    html += `<tr><td colspan="5" style="padding:0;"><hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;"></td></tr>`;
+                    for (const u of unparsedEarnings) {
+                        const cuantiaStr = u.cuantia ? u.cuantia.toFixed(2) : '—';
+                        const precioStr = u.precio ? formatCurrency(u.precio) : '—';
+                        html += `<tr style="color:var(--text-muted);font-style:italic;">
+                            <td title="${currentLang === 'es' ? 'Concepto no reconocido' : 'Unrecognized concept'}">${u.name}</td>
+                            <td class="text-right">${cuantiaStr}</td>
+                            <td class="text-right">${precioStr}</td>
+                            <td class="text-right amount">${formatCurrency(u.amount)}</td>
+                            <td class="text-center"><span style="color:var(--warning)" title="${currentLang === 'es' ? 'No parseado' : 'Unparsed'}">?</span></td>
+                        </tr>`;
+                    }
+                    html += `<tr style="font-weight:600;color:var(--text-muted);font-style:italic;"><td colspan="3">${currentLang === 'es' ? 'Suma No Parseada' : 'Unparsed Sum'}</td><td class="text-right amount">${formatCurrency(unparsedEarningsSum)}</td><td></td></tr>`;
+                }
+
+                const totalEarningsSum = parsedEarningsSum + unparsedEarningsSum;
+                const earningsValidWithUnparsed = tDevengado > 0 && Math.abs(totalEarningsSum - tDevengado) < 1;
                 html += `<tr style="font-weight:600; border-top: 2px solid var(--border);"><td colspan="3">T. DEVENGADO</td><td class="text-right amount">${tDevengado > 0 ? formatCurrency(tDevengado) : '<span class="text-muted">—</span>'}</td><td></td></tr>`;
                 if (tDevengado > 0) {
                     const validLabel = currentLang === 'es' ? 'Validación' : 'Validation';
-                    const validStatus = earningsValid
+                    const totalDiff = totalEarningsSum - tDevengado;
+                    const validStatus = earningsValidWithUnparsed
                         ? `<span class="badge badge-success">✓ ${currentLang === 'es' ? 'Coincide' : 'Match'}</span>`
-                        : `<span class="badge badge-danger">⚠ ${formatCurrency(earningsDiff)} ${currentLang === 'es' ? 'diferencia' : 'diff'}</span>`;
+                        : `<span class="badge badge-danger">⚠ ${formatCurrency(totalDiff)} ${currentLang === 'es' ? 'diferencia' : 'diff'}</span>`;
                     html += `<tr><td colspan="3">${validLabel}</td><td class="text-right">${validStatus}</td><td></td></tr>`;
                 }
                 html += `</tbody></table></div>
@@ -2750,12 +2878,28 @@
                                         e.nameEn.toLowerCase().includes('wallet') ||
                                         e.nameEs.toLowerCase().includes('seguros') ||
                                         e.nameEn.toLowerCase().includes('insurance') ||
-                                        e.nameEn.toLowerCase().includes('awardco')
+                                        e.nameEn.toLowerCase().includes('awardco') ||
+                                        e.nameEn.toLowerCase().includes('rsu')
                                     );
                                     const benefitSum = benefitItems.reduce((sum, e) => sum + e.amount, 0);
                                     if (Math.abs(benefitSum - impliedBase) < 1) {
                                         base = benefitSum;
                                         baseName = 'Benefits sum';
+                                    }
+
+                                    // Also try taxable in-kind items only (RSU + Taxable Insurance)
+                                    if (base === 0) {
+                                        const taxableInKind = ps.earnings.filter(e =>
+                                            e.nameEn.toLowerCase().includes('rsu in-kind') ||
+                                            e.nameEn.toLowerCase().includes('taxable insurance') ||
+                                            e.nameEs.toLowerCase().includes('seguros sujetos') ||
+                                            e.nameEs.toLowerCase().includes('especies')
+                                        );
+                                        const taxableSum = taxableInKind.reduce((sum, e) => sum + e.amount, 0);
+                                        if (Math.abs(taxableSum - impliedBase) < 1) {
+                                            base = taxableSum;
+                                            baseName = currentLang === 'es' ? 'Especie sujeta' : 'Taxable in-kind';
+                                        }
                                     }
                                 }
 
@@ -2830,12 +2974,32 @@
                     </tr>`;
                 }
                 html += `<tr style="font-weight:600;"><td colspan="2">${currentLang === 'es' ? 'Suma Parseada' : 'Parsed Sum'}</td><td class="text-right amount amount-negative">${formatCurrency(parsedDeductionsSum)}</td><td></td></tr>`;
+
+                // Unparsed deductions
+                const unparsedDeductions = ps.unparsedDeductions || [];
+                const unparsedDeductionsSum = unparsedDeductions.reduce((sum, d) => sum + d.amount, 0);
+                if (unparsedDeductions.length > 0) {
+                    html += `<tr><td colspan="4" style="padding:0;"><hr style="border:none;border-top:1px dashed var(--border);margin:4px 0;"></td></tr>`;
+                    for (const u of unparsedDeductions) {
+                        html += `<tr style="color:var(--text-muted);font-style:italic;">
+                            <td title="${currentLang === 'es' ? 'Concepto no reconocido' : 'Unrecognized concept'}">${u.name}</td>
+                            <td class="text-right">—</td>
+                            <td class="text-right amount amount-negative">${formatCurrency(u.amount)}</td>
+                            <td class="text-center"><span style="color:var(--warning)" title="${currentLang === 'es' ? 'No parseado' : 'Unparsed'}">?</span></td>
+                        </tr>`;
+                    }
+                    html += `<tr style="font-weight:600;color:var(--text-muted);font-style:italic;"><td colspan="2">${currentLang === 'es' ? 'Suma No Parseada' : 'Unparsed Sum'}</td><td class="text-right amount amount-negative">${formatCurrency(unparsedDeductionsSum)}</td><td></td></tr>`;
+                }
+
+                const totalDeductionsSum = parsedDeductionsSum + unparsedDeductionsSum;
+                const deductionsValidWithUnparsed = tDeducir > 0 && Math.abs(totalDeductionsSum - tDeducir) < 1;
                 html += `<tr style="font-weight:600; border-top: 2px solid var(--border);"><td colspan="2">T. A DEDUCIR</td><td class="text-right amount amount-negative">${tDeducir > 0 ? formatCurrency(tDeducir) : '<span class="text-muted">—</span>'}</td><td></td></tr>`;
                 if (tDeducir > 0) {
                     const validLabel = currentLang === 'es' ? 'Validación' : 'Validation';
-                    const validStatus = deductionsValid
+                    const totalDedDiff = totalDeductionsSum - tDeducir;
+                    const validStatus = deductionsValidWithUnparsed
                         ? `<span class="badge badge-success">✓ ${currentLang === 'es' ? 'Coincide' : 'Match'}</span>`
-                        : `<span class="badge badge-danger">⚠ ${formatCurrency(deductionsDiff)} ${currentLang === 'es' ? 'diferencia' : 'diff'}</span>`;
+                        : `<span class="badge badge-danger">⚠ ${formatCurrency(totalDedDiff)} ${currentLang === 'es' ? 'diferencia' : 'diff'}</span>`;
                     html += `<tr><td colspan="2">${validLabel}</td><td class="text-right">${validStatus}</td><td></td></tr>`;
                 }
                 html += `</tbody></table></div>
@@ -3147,6 +3311,8 @@
                 year: ps.year,
                 earnings: ps.earnings,
                 deductions: ps.deductions,
+                unparsedEarnings: ps.unparsedEarnings || [],
+                unparsedDeductions: ps.unparsedDeductions || [],
                 totals: ps.totals
             }));
 
@@ -3215,6 +3381,8 @@
                 year: ps.year,
                 earnings: ps.earnings,
                 deductions: ps.deductions,
+                unparsedEarnings: ps.unparsedEarnings || [],
+                unparsedDeductions: ps.unparsedDeductions || [],
                 totals: ps.totals
             }));
             const data = {
@@ -3308,6 +3476,8 @@
                 year: ps.year,
                 earnings: ps.earnings,
                 deductions: ps.deductions,
+                unparsedEarnings: ps.unparsedEarnings || [],
+                unparsedDeductions: ps.unparsedDeductions || [],
                 totals: ps.totals
             }));
 
