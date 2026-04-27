@@ -753,6 +753,7 @@
         <button class="tab" data-tab="config" data-i18n="tabConfig">Configuration</button>
         <button class="tab" data-tab="saves" data-i18n="tabSaves">Save Slots</button>
         <button class="tab" data-tab="guide" data-i18n="tabGuide">Payslip Guide</button>
+        <button class="tab" data-tab="equity-guide" data-i18n="tabEquityGuide" id="equityGuideTab" style="display:none;">Equity / US-ES</button>
     </div>
 
     <!-- Save Slots Tab -->
@@ -1276,6 +1277,145 @@
             </div>
         </div>
     </div>
+    <!-- Equity / US-ES Transfer Guide Tab -->
+    <div id="equity-guide" class="tab-content">
+        <div class="card">
+            <h2 data-i18n="equityGuideTitle">Equity Taxation: US → Spain Transfer</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px;" data-i18n="equityGuideIntro">
+                When you transfer from the US to Spain mid-vesting, RSU income is split between jurisdictions based on where you worked during the grant-to-vest period. This guide explains the process, formulas, and how to read your payslip.
+            </p>
+
+            <div class="explanation-panel">
+                <h3 data-i18n="equityGuideProRata">The Pro-Rata Formula</h3>
+                <div class="explanation-item">
+                    <div class="term">Grant-to-Vest Allocation <span class="term-es">/ Asignación por Período de Vesting</span></div>
+                    <div class="definition" data-i18n="explainProRata">
+                        Each RSU vest is split based on weekdays worked in each country between the <strong>grant date</strong> and the <strong>vest date</strong>. This is confirmed by IRS Chief Counsel Memo 202327014 (US) and Spain's DGT ruling V0425-25.
+                        <div style="margin: 12px 0; padding: 12px; background: white; border-radius: 4px; font-family: monospace; font-size: 13px;">
+                            US-sourced = Vest Value × (US workdays ÷ Total workdays)<br>
+                            Spain-sourced = Vest Value × (Spain workdays ÷ Total workdays)
+                        </div>
+                        Each quarterly vest is calculated independently — earlier vests have more US days, later vests have more Spain days. Workdays are weekdays (Mon–Fri, ~260/year).
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Practical Example <span class="term-es">/ Ejemplo Práctico</span></div>
+                    <div class="definition" data-i18n="explainProRataExample">
+                        Grant: Jan 1, 2022. Transfer to Spain: Jun 1, 2024. Vest: Mar 31, 2026.
+                        <div style="margin: 8px 0; padding: 10px; background: white; border-radius: 4px; font-size: 13px;">
+                            Total workdays (grant→vest): ~1,105<br>
+                            US workdays (Jan 2022→Jun 2024): ~630<br>
+                            Spain workdays (Jun 2024→Mar 2026): ~475<br>
+                            <strong>US: 57% · Spain: 43%</strong>
+                        </div>
+                        If that vest is worth €5,000 → €2,850 US-sourced, €2,150 Spain-sourced.
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-panel" style="margin-top: 20px;">
+                <h3 data-i18n="equityGuideJurisdictions">Taxation by Jurisdiction</h3>
+
+                <div class="explanation-item">
+                    <div class="term" style="color: #1565c0;">US-Sourced Portion <span class="term-es">/ Parte Atribuida a EEUU</span></div>
+                    <div class="definition" data-i18n="explainUSSourcing">
+                        <strong>Not taxable in Spain.</strong> Under the Beckham Law regime, only income from work performed in Spain is subject to Spanish taxation. The US-sourced portion is excluded entirely from your Spanish tax base.
+                        <br><br>
+                        <strong>US taxation:</strong> If you're a US citizen, the <em>full</em> vest value is taxable on your US return (worldwide income). You claim a Foreign Tax Credit (Form 1116) for any Spanish taxes paid on the Spain-sourced portion.
+                        <br><br>
+                        <strong>California:</strong> Uses the same grant-to-vest allocation. The CA-sourced portion is taxable even after you leave (Form 540NR). California does not allow credits for foreign taxes.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term" style="color: #2e7d32;">Spain-Sourced Portion <span class="term-es">/ Parte Atribuida a España</span></div>
+                    <div class="definition" data-i18n="explainESSourcing">
+                        <strong>Taxable in Spain.</strong> This portion is subject to Spanish IRPF.
+                        <br><br>
+                        <strong>Under Beckham Law:</strong> Flat 24% rate on employment income up to €600,000 (47% above that). This applies to the Spain-sourced RSU income classified as <em>retribución en especie</em>.
+                        <br><br>
+                        <strong>Without Beckham Law:</strong> Progressive rates (19%–47%) plus autonomous community rates. However, you can apply the 30% irregular income reduction for RSUs accruing over 2+ years (capped at €300k) — this reduction is <strong>not</strong> available under Beckham Law.
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-panel" style="margin-top: 20px;">
+                <h3 data-i18n="equityGuidePayslip">Reading RSUs on Your Spanish Payslip</h3>
+
+                <div class="explanation-item">
+                    <div class="term">RSU In-Kind Income <span class="term-es">/ Especies Si. RSUs Dep</span></div>
+                    <div class="definition" data-i18n="explainRSUPayslip1">
+                        The full fair market value of shares vesting this month, reported as in-kind income (<em>retribución en especie</em>). This is added to T. DEVENGADO but offset by the In-Kind Deduction below. <strong>Important:</strong> Your employer may report the full vest value here, not just the Spain-sourced portion — the jurisdiction split is handled at tax filing time (Modelo 151), not on the payslip.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">RSU Tax Reported <span class="term-es">/ RSUs Tax Reported</span></div>
+                    <div class="definition" data-i18n="explainRSUPayslip2">
+                        The taxable value of the RSU vesting for IRPF purposes. May differ from "In-Kind Income" if the employer absorbs part of the withholding or adjusts for cost basis. This is a real earning included in T. DEVENGADO.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">In-Kind Deduction <span class="term-es">/ Descuento Conceptos en Especie</span></div>
+                    <div class="definition" data-i18n="explainRSUPayslip3">
+                        Deduction that offsets the in-kind income — since you receive shares, not cash. This appears in T. A DEDUCIR and ensures RSUs don't inflate your cash net pay.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Passed-on Income Tax <span class="term-es">/ Imp. Ingr. Cta. Repercutidos</span></div>
+                    <div class="definition" data-i18n="explainRSUPayslip4">
+                        IRPF withheld on the in-kind income, "passed on" to you (deducted from your cash pay). Under Beckham Law, this should be at <strong>24%</strong>. If your employer withholds at the progressive rate instead, you're being over-withheld and can reclaim the difference via Modelo 151.
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-panel" style="margin-top: 20px;">
+                <h3 data-i18n="equityGuideOverWithholding">Over-Withholding & Refunds</h3>
+
+                <div class="explanation-item">
+                    <div class="term">Beckham Law Over-Withholding <span class="term-es">/ Retención Excesiva Ley Beckham</span></div>
+                    <div class="definition" data-i18n="explainOverWithholding">
+                        If your employer withholds IRPF at the progressive rate (e.g. 30%) instead of the Beckham flat 24%, you are being over-withheld each month. The difference accumulates and is refunded when you file your <strong>Modelo 151</strong> (the Beckham regime tax return, filed April–June of the following year).
+                        <br><br>
+                        <strong>To fix going forward:</strong> Provide your employer with your <strong>Modelo 149</strong> (Beckham regime election) and AEAT acknowledgment. They are then obligated to apply the 24% rate.
+                    </div>
+                </div>
+
+                <div class="explanation-item">
+                    <div class="term">Double Taxation Relief <span class="term-es">/ Convenio de Doble Imposición</span></div>
+                    <div class="definition" data-i18n="explainDoubleTax">
+                        The US-Spain tax treaty (Article 24) uses the <strong>foreign tax credit method</strong>:
+                        <ul style="margin: 8px 0; padding-left: 20px; line-height: 1.8;">
+                            <li><strong>US side:</strong> Claim FTC (Form 1116) for Spanish taxes paid on Spain-sourced income</li>
+                            <li><strong>Spain side:</strong> Under Beckham Law, US-sourced income isn't taxed in Spain, so no credit needed</li>
+                            <li><strong>California:</strong> Does <em>not</em> allow foreign tax credits — CA-sourced income is taxed regardless</li>
+                        </ul>
+                        The FTC prevents true double taxation, but you may still pay the higher of the two rates on overlapping income.
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-panel" style="margin-top: 20px;">
+                <h3 data-i18n="equityGuideTimeline">Key Dates & Filing</h3>
+
+                <div class="explanation-item">
+                    <div class="term">Annual Tax Filing <span class="term-es">/ Declaración Anual</span></div>
+                    <div class="definition" data-i18n="explainFilingTimeline">
+                        <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+                            <li><strong>Spain (Beckham):</strong> File Modelo 151 (April–June following the tax year)</li>
+                            <li><strong>US Federal:</strong> File Form 1040 + Form 1116 (FTC) by April 15 (automatic 2-month extension for expats to June 15)</li>
+                            <li><strong>California:</strong> File Form 540NR by April 15</li>
+                        </ul>
+                        Ensure your employer provides Modelo 190/296 summaries for Spanish filing, and W-2 for US filing.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     </div><!-- end payrollPage -->
 
     <!-- ON-CALL TRACKER PAGE -->
@@ -1408,6 +1548,7 @@
                 tabResults: 'Results',
                 tabConfig: 'Configuration',
                 tabGuide: 'Payslip Guide',
+                tabEquityGuide: 'Equity / US-ES',
                 uploadTitle: 'Upload Payslip PDFs',
                 uploadDesc: 'Upload your Spanish payslip PDFs. If password-protected, enter the password below (usually your DNI/NIE).',
                 passwordLabel: 'PDF Password (if encrypted)',
@@ -1462,6 +1603,7 @@
                 tabResults: 'Resultados',
                 tabConfig: 'Configuración',
                 tabGuide: 'Guía de Nómina',
+                tabEquityGuide: 'Equity / US-ES',
                 uploadTitle: 'Subir PDFs de Nómina',
                 uploadDesc: 'Sube tus PDFs de nómina. Si están protegidos con contraseña, introdúcela abajo (normalmente tu DNI/NIE).',
                 passwordLabel: 'Contraseña del PDF (si está cifrado)',
@@ -3423,12 +3565,11 @@
 
             html += '</tbody></table></div>';
 
-            // Explanation note
-            html += `<div style="margin-top: 12px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 11px; color: #0c5460;">
-                <strong>${es ? 'Nota:' : 'Note:'}</strong>
+            // Short note with link to full guide
+            html += `<div style="margin-top: 12px; padding: 8px 10px; background: #e7f3ff; border-radius: 4px; font-size: 11px; color: #0c5460;">
                 ${es
-                    ? 'La columna "US (no tributa ES)" muestra la parte de RSU que se atribuye a trabajo en EEUU y no tributa en España. "ES (tributa)" es la parte sujeta a IRPF español (Beckham 24% si aplica). Los meses futuros muestran solo porcentajes ya que el precio de la acción no se conoce aún.'
-                    : 'The "US-sourced" column shows the portion of RSU income attributed to US work — not taxable in Spain. "ES-sourced" is subject to Spanish IRPF (Beckham 24% if applicable). Future months show percentages only since share price is unknown.'}
+                    ? 'US = no tributa en España. ES = sujeto a IRPF (Beckham 24% si aplica). Meses futuros: solo %. <a href="#" onclick="document.querySelector(\'[data-tab=equity-guide]\').click(); return false;" style="color: #0c5460; font-weight: 600;">Ver guía completa →</a>'
+                    : 'US-sourced = not taxable in Spain. ES-sourced = Spanish IRPF (Beckham 24% if applicable). Future months: % only. <a href="#" onclick="document.querySelector(\'[data-tab=equity-guide]\').click(); return false;" style="color: #0c5460; font-weight: 600;">Full guide →</a>'}
             </div>`;
 
             html += '</div>';
@@ -3976,13 +4117,16 @@
                 const descriptions = {
                     'normal': 'RSU amounts (In-Kind Income, Tax Reported, Repercutidos) are included in all cross-validation formula checks.',
                     'exclude': 'RSU amounts are completely skipped from formula checks. Use this if RSU lines cause false mismatches and you want to validate everything else.',
-                    'us-es-transfer': 'For US→Spain transfers: RSU taxation is split between jurisdictions based on days worked in each country. Currently excludes RSUs from formula checks while the split-jurisdiction equation is being built.'
+                    'us-es-transfer': 'For US→Spain transfers: RSU taxation is split between jurisdictions based on days worked in each country. See the "Equity / US-ES" tab for a full guide.'
                 };
                 descEl.textContent = descriptions[mode] || '';
             }
             if (transferConfig) {
                 transferConfig.style.display = mode === 'us-es-transfer' ? 'block' : 'none';
             }
+            // Show/hide equity guide tab
+            const equityTab = document.getElementById('equityGuideTab');
+            if (equityTab) equityTab.style.display = mode === 'us-es-transfer' ? '' : 'none';
         }
 
         // ===== RSU Grant Table & Pro-Rata Calculation =====
