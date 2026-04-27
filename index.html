@@ -2530,8 +2530,10 @@
                 }
             }
             // Project: base salary + additional comp + future RSU ES
-            const avgMonthlyAdditionalForProjection = totalAdditionalComp / parsedMonthCount;
-            const projectedRemainingGross = (avgMonthlyBaseSalary * remainingMonths) + (avgMonthlyAdditionalForProjection * remainingMonths) + projectedRemainingRSU_ES;
+            // Additional comp average EXCLUDING RSU (RSU projected separately from grants)
+            const additionalCompExclRSU = totalAdditionalComp - rsuOnPayslips;
+            const avgMonthlyAdditionalExclRSU = additionalCompExclRSU / parsedMonthCount;
+            const projectedRemainingGross = (avgMonthlyBaseSalary * remainingMonths) + (avgMonthlyAdditionalExclRSU * remainingMonths) + projectedRemainingRSU_ES;
             const projectedYearGross = totalGross + projectedRemainingGross;
 
             // Expected annual total (what payslips should show over the full year)
@@ -2853,9 +2855,9 @@
                                             out += row(es2 ? 'Base esperado (contrato ÷12 × ' + parsedMonthCount + '):' : 'Expected base (contract ÷12 × ' + parsedMonthCount + '):', formatCurrency(expectedBaseForParsed));
                                             const baseDiffPct = expectedBaseForParsed > 0 ? (baseDiffForParsed / expectedBaseForParsed * 100) : 0;
                                             out += row(es2 ? 'Diferencia base:' : 'Base diff:', `<span style="color:${Math.abs(baseDiffPct) < 2 ? 'var(--success)' : 'var(--warning)'};">${baseDiffForParsed >= 0 ? '+' : ''}${formatCurrency(baseDiffForParsed)} (${baseDiffPct >= 0 ? '+' : ''}${baseDiffPct.toFixed(1)}%)</span>`);
-                                            const additionalCompExclRSU = totalAdditionalComp - rsuOnPayslips;
-                                            if (additionalCompExclRSU > 1) {
-                                                out += row(es2 ? 'Comp. adicional (Wallet, Seguros, etc.):' : 'Additional comp (Wallet, Insurance, etc.):', '+' + formatCurrency(additionalCompExclRSU), 'color:var(--text-muted);');
+                                            const addlCompDisplay = totalAdditionalComp - rsuOnPayslips;
+                                            if (addlCompDisplay > 1) {
+                                                out += row(es2 ? 'Comp. adicional (Wallet, Seguros, etc.):' : 'Additional comp (Wallet, Insurance, etc.):', '+' + formatCurrency(addlCompDisplay), 'color:var(--text-muted);');
                                             }
                                             // 2. RSU ES: actual on payslips vs expected ES for those months
                                             if (expectedRSU_ES_ForParsed > 0 || rsuOnPayslips > 0) {
