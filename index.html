@@ -1442,6 +1442,28 @@
                     </select>
                 </label>
             </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>Share Price (USD)</span>
+                    <div style="display: flex; gap: 4px;">
+                        <input type="number" id="incomeLetterSharePrice" placeholder="e.g. 64" step="0.01" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; flex: 1;">
+                        <button type="button" onclick="fetchSharePrice()" style="padding: 4px 10px; font-size: 11px; cursor: pointer; white-space: nowrap;" title="Fetch current AFRM price">AFRM ↻</button>
+                    </div>
+                    <span id="sharePriceStatus" style="font-size: 10px; color: var(--text-muted);"></span>
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>Stock Ticker</span>
+                    <input type="text" id="incomeLetterTicker" placeholder="AFRM" value="AFRM" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>EUR/USD Rate (for conversion)</span>
+                    <div style="display: flex; gap: 4px;">
+                        <input type="number" id="incomeLetterEurRate" step="0.01" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; flex: 1;">
+                        <button type="button" onclick="fetchLetterEurRate()" style="padding: 4px 10px; font-size: 11px; cursor: pointer; white-space: nowrap;" title="Fetch current EUR/USD rate">€/$ ↻</button>
+                    </div>
+                    <span id="eurRateLetterStatus" style="font-size: 10px; color: var(--text-muted);"></span>
+                </label>
+            </div>
             <button onclick="generateIncomeLetter()" style="background: #4caf50; font-size: 14px;">
                 Generate & Print Income Letter
             </button>
@@ -4192,26 +4214,17 @@
             for (const grant of grants) {
                 if (!grant.grantDate || !grant.totalShares) continue;
                 const grantDate = new Date(grant.grantDate);
-                const vestingMonths = (grant.vestingYears || 4) * 12;
+                // cliffMonths is actually the total vesting period in months (no cliff delay)
+                const vestingMonths = grant.cliffMonths || ((grant.vestingYears || 4) * 12);
                 const scheduleMonths = { monthly: 1, quarterly: 3, 'semi-annual': 6, annual: 12 }[grant.vestingSchedule] || 3;
-                const cliffMonths = grant.cliffMonths || 0;
                 const totalVestEvents = Math.floor(vestingMonths / scheduleMonths);
+                if (totalVestEvents <= 0) continue;
                 const sharesPerVest = grant.totalShares / totalVestEvents;
 
-                // Generate vest events
+                // Generate vest events — no cliff, vests start at first interval
                 const vestDates = [];
-                if (cliffMonths > 0) {
-                    const cliffDate = addMonths(grantDate, cliffMonths);
-                    const cliffVests = Math.floor(cliffMonths / scheduleMonths);
-                    vestDates.push({ date: cliffDate, shares: sharesPerVest * cliffVests });
-                    // Remaining vests after cliff
-                    for (let i = cliffVests + 1; i <= totalVestEvents; i++) {
-                        vestDates.push({ date: addMonths(grantDate, i * scheduleMonths), shares: sharesPerVest });
-                    }
-                } else {
-                    for (let i = 1; i <= totalVestEvents; i++) {
-                        vestDates.push({ date: addMonths(grantDate, i * scheduleMonths), shares: sharesPerVest });
-                    }
+                for (let i = 1; i <= totalVestEvents; i++) {
+                    vestDates.push({ date: addMonths(grantDate, i * scheduleMonths), shares: sharesPerVest });
                 }
 
                 // Fix rounding: ensure total shares match
@@ -4314,7 +4327,7 @@
             html += '<th style="padding: 4px 6px; text-align:left; width: 18%;">Grant Date</th>';
             html += '<th style="padding: 4px 6px; text-align:right; width: 12%;">Shares</th>';
             html += '<th style="padding: 4px 6px; text-align:left; width: 18%;">Schedule</th>';
-            html += '<th style="padding: 4px 6px; text-align:right; width: 10%;">Cliff</th>';
+            html += '<th style="padding: 4px 6px; text-align:right; width: 10%;">Period</th>';
             html += '<th style="padding: 4px 6px; text-align:right; width: 12%;">Vested</th>';
             html += '<th style="padding: 4px 6px; text-align:center; width: 5%;"></th>';
             html += '</tr></thead><tbody>';
@@ -4393,6 +4406,67 @@
         }
 
         // ===== Income Summary Letter Generator =====
+        async function fetchLetterEurRate() {
+            const statusEl = document.getElementById('eurRateLetterStatus');
+            const rateInput = document.getElementById('incomeLetterEurRate');
+            statusEl.textContent = 'Fetching...';
+            try {
+                const res = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                const data = await res.json();
+                if (data.rates?.USD) {
+                    rateInput.value = data.rates.USD.toFixed(4);
+                    statusEl.textContent = `1 EUR = $${data.rates.USD.toFixed(4)} (${new Date().toLocaleDateString()})`;
+                    statusEl.style.color = '#28a745';
+                } else { throw new Error('No data'); }
+            } catch (e) {
+                statusEl.textContent = 'Failed. Enter manually.';
+                statusEl.style.color = '#dc3545';
+            }
+        }
+
+        // Auto-fill EUR rate on page load
+        (function() {
+            const rateInput = document.getElementById('incomeLetterEurRate');
+            if (rateInput && !rateInput.value) rateInput.value = '1.14';
+        })();
+
+        async function fetchSharePrice() {
+            const ticker = document.getElementById('incomeLetterTicker')?.value || 'AFRM';
+            const statusEl = document.getElementById('sharePriceStatus');
+            const priceInput = document.getElementById('incomeLetterSharePrice');
+            statusEl.textContent = 'Fetching...';
+            statusEl.style.color = 'var(--text-muted)';
+            try {
+                // Try Yahoo Finance v8 API (no key required, public endpoint)
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                const data = await res.json();
+                const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+                if (price) {
+                    priceInput.value = price.toFixed(2);
+                    statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
+                    statusEl.style.color = '#28a745';
+                } else {
+                    throw new Error('No price data');
+                }
+            } catch (e) {
+                // Fallback: try finnhub free endpoint
+                try {
+                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
+                    const data2 = await res2.json();
+                    if (data2?.c > 0) {
+                        priceInput.value = data2.c.toFixed(2);
+                        statusEl.textContent = `${ticker}: $${data2.c.toFixed(2)} (${new Date().toLocaleTimeString()})`;
+                        statusEl.style.color = '#28a745';
+                    } else {
+                        throw new Error('No price');
+                    }
+                } catch (e2) {
+                    statusEl.textContent = 'Could not fetch price. Enter manually.';
+                    statusEl.style.color = '#dc3545';
+                }
+            }
+        }
+
         function generateIncomeLetter() {
             const name = document.getElementById('incomeLetterName')?.value || '[Your Name]';
             const employer = document.getElementById('incomeLetterEmployer')?.value || '[Employer]';
@@ -4431,32 +4505,24 @@
             const recentPayslips = [...parsedPayslips].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month).slice(-3);
             const avgNet = recentPayslips.length > 0 ? recentPayslips.reduce((s, p) => s + p.totals.netPay, 0) / recentPayslips.length : 0;
 
-            // RSU monthly average: use grant table projected vests (next 12 months) if available,
-            // fall back to payslip-based average if no grants configured
+            // RSU monthly average: use grant table + user-provided share price
+            const sharePriceUSD = parseFloat(document.getElementById('incomeLetterSharePrice')?.value) || 0;
+            const eurToUsdRate = parseFloat(document.getElementById('incomeLetterEurRate')?.value) || config.eurToUsdRate || 1.14;
+            const sharePriceEUR = sharePriceUSD > 0 ? sharePriceUSD / eurToUsdRate : 0;
+            const ticker = document.getElementById('incomeLetterTicker')?.value || 'AFRM';
+
             let avgMonthlyRSU = 0;
+            let annualRSU = 0;
             let rsuSource = 'none';
-            if (totalVestShares12mo > 0 && vestMonthCount > 0) {
-                // Use grant table: compute avg shares/month, then estimate EUR value from payslip RSU data
-                // Get EUR-per-share from most recent payslip that had RSU vesting
-                let eurPerShare = 0;
-                for (let pi = recentPayslips.length - 1; pi >= 0; pi--) {
-                    const ps = recentPayslips[pi];
-                    const rsuInKind = (ps.earnings.find(e => /especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)) || {});
-                    if (rsuInKind.amount > 0 && rsuInKind.cuantia > 0) {
-                        eurPerShare = rsuInKind.precio || (rsuInKind.amount / rsuInKind.cuantia);
-                        break;
-                    }
-                }
-                if (eurPerShare > 0) {
-                    avgMonthlyRSU = (totalVestShares12mo / 12) * eurPerShare;
-                    rsuSource = 'grants';
-                } else {
-                    // No price data — use shares only, note in letter
-                    avgMonthlyRSU = 0;
-                    rsuSource = 'grants-no-price';
-                }
+            if (totalVestShares12mo > 0 && sharePriceEUR > 0) {
+                // Grant table + share price: total shares over 12 months × EUR price per share
+                annualRSU = totalVestShares12mo * sharePriceEUR;
+                avgMonthlyRSU = annualRSU / 12;
+                rsuSource = 'grants';
+            } else if (totalVestShares12mo > 0) {
+                rsuSource = 'grants-no-price';
             }
-            // Fallback: average from payslips
+            // Fallback: average from payslips if no grant data
             if (rsuSource === 'none') {
                 let rsuPayslipTotal = 0, rsuPayslipCount = 0;
                 for (const ps of recentPayslips) {
@@ -4464,6 +4530,7 @@
                     if (rsuAmt > 0) { rsuPayslipTotal += rsuAmt; rsuPayslipCount++; }
                 }
                 avgMonthlyRSU = rsuPayslipCount > 0 ? rsuPayslipTotal / rsuPayslipCount : 0;
+                annualRSU = avgMonthlyRSU * 12;
                 rsuSource = 'payslips';
             }
 
@@ -4499,7 +4566,27 @@
             const rsuSpainTax = isBeckham ? rsuSpainSourced * 0.24 : 0;
             const estMonthlyPostTax = avgNet + rsuUSSourced + (rsuSpainSourced - rsuSpainTax);
 
-            const content = buildLetterContent(lang, { name, employer, jobTitle, annualGross, monthlyGross, avgNet, avgMonthlyRSU, avgTotalComp, dateStr, recentPayslips, monthlyVests, totalVestShares12mo, vestMonthCount, rsuSource, isBeckham, beckhamRate, avgWeightedESPct, rsuSpainSourced, rsuUSSourced, rsuSpainTax, estMonthlyPostTax, fmtEUR });
+            if (rsuSource === 'grants-no-price') {
+                alert(lang === 'es'
+                    ? 'Por favor, introduzca el precio de la acción (USD) para calcular el valor de las RSU.'
+                    : 'Please enter the share price (USD) to calculate RSU values.');
+                return;
+            }
+
+            // Detect if some months had non-Beckham rates
+            let hasNonBeckhamMonths = false;
+            let latestHasBeckham = false;
+            for (const ps of recentPayslips) {
+                const irpfDed = ps.deductions.find(d2 => /tributaci.*irpf|irpf.*tributaci/i.test(d2.nameEn + ' ' + d2.nameEs));
+                if (irpfDed && irpfDed.percent) {
+                    const r = parseFloat(irpfDed.percent);
+                    if (r > 24.5) hasNonBeckhamMonths = true;
+                    else latestHasBeckham = true;
+                }
+            }
+            const beckhamJustStarted = hasNonBeckhamMonths && latestHasBeckham;
+
+            const content = buildLetterContent(lang, { name, employer, jobTitle, annualGross, monthlyGross, avgNet, avgMonthlyRSU, annualRSU, avgTotalComp, dateStr, recentPayslips, monthlyVests, totalVestShares12mo, vestMonthCount, rsuSource, isBeckham, beckhamRate, avgWeightedESPct, rsuSpainSourced, rsuUSSourced, rsuSpainTax, estMonthlyPostTax, sharePriceUSD, sharePriceEUR, eurToUsdRate, ticker, allEvents, beckhamJustStarted, fmtEUR });
 
             // Open print window
             const printWindow = window.open('', '_blank');
@@ -4534,7 +4621,7 @@
 
             if (es) {
                 const rsuLabel = d.rsuSource === 'grants'
-                    ? `RSU (acciones, proyección próximos 12 meses: ${d.totalVestShares12mo.toFixed(0)} acciones en ${d.vestMonthCount} meses)`
+                    ? `RSU (${d.totalVestShares12mo.toFixed(0)} acciones en 12 meses a ${d.ticker} $${d.sharePriceUSD.toFixed(2)}/acción ≈ ${d.fmtEUR(d.sharePriceEUR)}/acción)`
                     : 'RSU (acciones consolidadas, media mensual)';
                 html += `
                 <h1>Certificado de Ingresos</h1>
@@ -4551,7 +4638,7 @@
                 <table>
                     <tr><th>Concepto</th><th class="amount">Mensual</th><th class="amount">Anual</th></tr>
                     <tr><td>Salario bruto (nómina)</td><td class="amount">${d.fmtEUR(d.monthlyGross)}</td><td class="amount">${d.fmtEUR(d.annualGross)}</td></tr>
-                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>${rsuLabel}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
+                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>${rsuLabel}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.annualRSU || d.avgMonthlyRSU * 12)}</td></tr>` : ''}
                     <tr class="total-row"><td>Compensación total estimada</td><td class="amount">${d.fmtEUR(d.avgTotalComp)}</td><td class="amount">${d.fmtEUR(d.avgTotalComp * 12)}</td></tr>
                     ${d.avgNet > 0 ? `<tr><td>Neto medio en nómina (últimos ${d.recentPayslips.length} meses)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td><td class="amount">${d.fmtEUR(d.avgNet * 12)}</td></tr>` : ''}
                 </table>
@@ -4576,8 +4663,13 @@
                 </ul>
                 <p>Ambas partes constituyen ingresos reales del empleado — la nómina española refleja solo parcialmente el valor total de las RSU consolidadas.</p>` : ''}
 
+                ${d.beckhamJustStarted ? `<h2>Nota sobre Cambio de Régimen Fiscal</h2>
+                <p>Las primeras nóminas del año reflejan una retención IRPF a tipo progresivo (≈${d.recentPayslips.length > 0 ? parseFloat(d.recentPayslips[0].deductions.find(dd => /irpf/i.test(dd.nameEn))?.percent || 0).toFixed(1) : '30'}%). A partir de la aplicación de la Ley Beckham, las nóminas futuras aplicarán el tipo fijo del <strong>24%</strong>, resultando en un neto mensual mayor. La diferencia retenida en exceso durante los primeros meses será reembolsada al presentar el Modelo 151.</p>` : ''}
+
+                ${d.allEvents?.length > 0 ? buildLetterEquityTable(d, true) : ''}
+
                 <div class="note">
-                    <strong>Nota:</strong> Este documento es un resumen informativo generado por el empleado. Los importes de nómina pueden verificarse con las nóminas oficiales. El valor de las RSU fluctúa según la cotización de las acciones en bolsa. Se pueden proporcionar los estados financieros de las concesiones de acciones para verificación adicional.
+                    <strong>Nota:</strong> Este documento es un resumen informativo generado por el empleado. Los importes de nómina pueden verificarse con las nóminas oficiales. El valor de las RSU fluctúa según la cotización de las acciones en bolsa (${d.ticker} a $${d.sharePriceUSD?.toFixed(2) || '?'} USD, tipo de cambio EUR/USD: ${d.eurToUsdRate?.toFixed(4) || '?'}). Se pueden proporcionar los estados financieros de las concesiones de acciones para verificación adicional.
                 </div>
 
                 `;
@@ -4589,7 +4681,7 @@
 
             if (en) {
                 const rsuLabelEn = d.rsuSource === 'grants'
-                    ? `RSU equity (projected next 12 months: ${d.totalVestShares12mo.toFixed(0)} shares across ${d.vestMonthCount} months)`
+                    ? `RSU equity (${d.totalVestShares12mo.toFixed(0)} shares over 12 months at ${d.ticker} $${d.sharePriceUSD.toFixed(2)}/share ≈ ${d.fmtEUR(d.sharePriceEUR)}/share)`
                     : 'RSU equity vesting (monthly average)';
                 html += `
                 <h1>Income Summary Certificate</h1>
@@ -4606,7 +4698,7 @@
                 <table>
                     <tr><th>Item</th><th class="amount">Monthly</th><th class="amount">Annual</th></tr>
                     <tr><td>Gross salary (on payslip)</td><td class="amount">${d.fmtEUR(d.monthlyGross)}</td><td class="amount">${d.fmtEUR(d.annualGross)}</td></tr>
-                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>${rsuLabelEn}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
+                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>${rsuLabelEn}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.annualRSU || d.avgMonthlyRSU * 12)}</td></tr>` : ''}
                     <tr class="total-row"><td>Estimated total compensation</td><td class="amount">${d.fmtEUR(d.avgTotalComp)}</td><td class="amount">${d.fmtEUR(d.avgTotalComp * 12)}</td></tr>
                     ${d.avgNet > 0 ? `<tr><td>Average net pay on payslip (last ${d.recentPayslips.length} months)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td><td class="amount">${d.fmtEUR(d.avgNet * 12)}</td></tr>` : ''}
                 </table>
@@ -4631,13 +4723,78 @@
                 </ul>
                 <p>Both portions represent real income to the employee — the Spanish payslip only partially reflects the total value of vested RSUs.</p>` : ''}
 
+                ${d.beckhamJustStarted ? `<h2>Note on Tax Regime Change</h2>
+                <p>Earlier payslips this year reflect IRPF withheld at the progressive rate (≈${d.recentPayslips.length > 0 ? parseFloat(d.recentPayslips[0].deductions.find(dd => /irpf/i.test(dd.nameEn))?.percent || 0).toFixed(1) : '30'}%). Following the application of the Beckham Law, future payslips will apply the flat <strong>24%</strong> rate, resulting in higher monthly net pay. The excess withheld during the initial months will be refunded upon filing Modelo 151.</p>` : ''}
+
+                ${d.allEvents?.length > 0 ? buildLetterEquityTable(d, false) : ''}
+
                 <div class="note">
-                    <strong>Note:</strong> This is an informational summary generated by the employee. Payslip amounts can be verified against official payslips. RSU values fluctuate with share price. Financial statements of the equity grants can be provided for additional verification.
+                    <strong>Note:</strong> This is an informational summary generated by the employee. Payslip amounts can be verified against official payslips. RSU values fluctuate with share price (${d.ticker} at $${d.sharePriceUSD?.toFixed(2) || '?'} USD, EUR/USD rate: ${d.eurToUsdRate?.toFixed(4) || '?'}). Financial statements of the equity grants can be provided for additional verification.
                 </div>
 
                 `;
             }
 
+            return html;
+        }
+
+        function buildLetterEquityTable(d, isSpanish) {
+            const events = d.allEvents || [];
+            if (events.length === 0) return '';
+            const now = new Date();
+            // Show next 12 months of vests
+            const futureEvents = events.filter(e => e.date >= now);
+            const monthBuckets = {};
+            const months = isSpanish
+                ? ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                : ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            for (const e of futureEvents) {
+                const key = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}`;
+                if (!monthBuckets[key]) monthBuckets[key] = { m: e.date.getMonth()+1, y: e.date.getFullYear(), shares: 0, usPctW: 0, esPctW: 0 };
+                monthBuckets[key].shares += e.shares;
+                monthBuckets[key].usPctW += e.shares * e.usPct;
+                monthBuckets[key].esPctW += e.shares * e.spainPct;
+            }
+            const rows = Object.values(monthBuckets).slice(0, 12);
+            for (const r of rows) { if (r.shares > 0) { r.usPctW /= r.shares; r.esPctW /= r.shares; } }
+
+            const priceEUR = d.sharePriceEUR || 0;
+            let html = `<h2 style="page-break-before: auto;">${isSpanish ? 'Anexo: Calendario de Vesting de RSU (próximos 12 meses)' : 'Addendum: RSU Vesting Schedule (next 12 months)'}</h2>`;
+            html += `<table><thead><tr>
+                <th>${isSpanish ? 'Mes' : 'Month'}</th>
+                <th class="amount">${isSpanish ? 'Acciones' : 'Shares'}</th>
+                <th class="amount">${isSpanish ? 'Valor est.' : 'Est. Value'}</th>
+                <th class="amount">US %</th>
+                <th class="amount">ES %</th>
+                <th class="amount">${isSpanish ? 'US (no trib. ES)' : 'US-sourced'}</th>
+                <th class="amount">${isSpanish ? 'ES (tributable)' : 'ES-sourced'}</th>
+            </tr></thead><tbody>`;
+
+            let totalShares = 0, totalValue = 0, totalUS = 0, totalES = 0;
+            for (const r of rows) {
+                const val = r.shares * priceEUR;
+                const usVal = val * r.usPctW;
+                const esVal = val * r.esPctW;
+                totalShares += r.shares; totalValue += val; totalUS += usVal; totalES += esVal;
+                html += `<tr>
+                    <td>${months[r.m]} ${r.y}</td>
+                    <td class="amount">${r.shares.toFixed(1)}</td>
+                    <td class="amount">${d.fmtEUR(val)}</td>
+                    <td class="amount">${(r.usPctW*100).toFixed(0)}%</td>
+                    <td class="amount">${(r.esPctW*100).toFixed(0)}%</td>
+                    <td class="amount">${d.fmtEUR(usVal)}</td>
+                    <td class="amount">${d.fmtEUR(esVal)}</td>
+                </tr>`;
+            }
+            html += `<tr class="total-row">
+                <td>Total</td>
+                <td class="amount">${totalShares.toFixed(1)}</td>
+                <td class="amount">${d.fmtEUR(totalValue)}</td>
+                <td colspan="2"></td>
+                <td class="amount">${d.fmtEUR(totalUS)}</td>
+                <td class="amount">${d.fmtEUR(totalES)}</td>
+            </tr></tbody></table>`;
             return html;
         }
 
