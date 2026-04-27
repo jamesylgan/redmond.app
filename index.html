@@ -5267,6 +5267,18 @@
                     <tr style="font-weight:700; border-top:2px solid #333;"><td style="padding:4px 6px;">Net federal tax liability</td><td style="text-align:right; padding:4px 6px;">${fmt(netFederalTax)}</td></tr>
                     <tr><td style="padding:4px 6px;">Already withheld${withheldSource === 'shares' ? ` (${usSharesSold} shares × $${(config.rsuSharePrice||0).toFixed(2)})` : withheldSource === 'direct' ? ' (from Schwab/vest data)' : ''}</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td></tr>
                     <tr style="font-weight:700; font-size:18px; border-top:2px solid #333;"><td style="padding:6px;">${balanceOwed >= 0 ? 'Balance owed' : 'Estimated refund'}</td><td style="text-align:right; padding:6px; color:${balanceOwed > 0 ? '#dc3545' : '#28a745'};">${balanceOwed >= 0 ? fmt(balanceOwed) : fmt(Math.abs(balanceOwed))}</td></tr>
+                    <tr style="border-top:1px solid #ddd; color: var(--text-muted); font-size: 12px;">
+                        <td style="padding:4px 6px;">Effective US tax rate (net liability / worldwide income)</td>
+                        <td style="text-align:right; padding:4px 6px;">${worldwideIncome > 0 ? pct(netFederalTax / worldwideIncome) : '—'}</td>
+                    </tr>
+                    <tr style="color: var(--text-muted); font-size: 12px;">
+                        <td style="padding:4px 6px;">Effective rate before FTC</td>
+                        <td style="text-align:right; padding:4px 6px;">${worldwideIncome > 0 ? pct(federalTax / worldwideIncome) : '—'}</td>
+                    </tr>
+                    <tr style="color: var(--text-muted); font-size: 12px;">
+                        <td style="padding:4px 6px;">Combined US + Spain effective rate</td>
+                        <td style="text-align:right; padding:4px 6px;">${worldwideIncome > 0 ? pct((netFederalTax + spanishTaxPaid) / worldwideIncome) : '—'}</td>
+                    </tr>
                 </table>
             </div>`;
 
