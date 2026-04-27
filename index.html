@@ -4659,6 +4659,25 @@
             });
         }
 
+        // Fetch stock price using multiple APIs with file:// fallbacks
+        async function fetchStockPrice(ticker) {
+            // Try Yahoo Finance (works from http://, blocked from file://)
+            try {
+                const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                if (r.ok) { const d = await r.json(); const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice; if (p) return p; }
+            } catch (e) {}
+            // Try Google Finance scrape via allorigins (works from file://)
+            try {
+                const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://www.google.com/finance/quote/${ticker}:NASDAQ`)}`);
+                if (r.ok) {
+                    const d = await r.json();
+                    const match = d.contents?.match(/data-last-price="([\d.]+)"/);
+                    if (match) return parseFloat(match[1]);
+                }
+            } catch (e) {}
+            return null;
+        }
+
         // Fetch EUR/USD rate using multiple fallback methods
         async function fetchEurUsdRate() {
             // Try fetch first (works from http:// origins)
@@ -4725,32 +4744,16 @@
             const ticker = document.getElementById('rsuTicker')?.value || 'AFRM';
             const statusEl = document.getElementById('rsuSharePriceStatus');
             const priceInput = document.getElementById('rsuSharePrice');
-            statusEl.textContent = 'Fetching current + historical...';
-            try {
-                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
-                const data = await res.json();
-                const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-                if (price) {
-                    priceInput.value = price.toFixed(2);
-                    statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
-                    statusEl.style.color = '#28a745';
-                    syncPriceInputs('grant');
-                    autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
-                    fetchHistoricalPrices();
-                } else { throw new Error('No data'); }
-            } catch (e) {
-                try {
-                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
-                    const data2 = await res2.json();
-                    if (data2?.c > 0) {
-                        priceInput.value = data2.c.toFixed(2);
-                        statusEl.textContent = `${ticker}: $${data2.c.toFixed(2)}`;
-                        statusEl.style.color = '#28a745';
-                        autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
-                        fetchHistoricalPrices();
-                    } else { throw new Error('No data'); }
-                } catch (e2) { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
-            }
+            statusEl.textContent = 'Fetching...';
+            const price = await fetchStockPrice(ticker);
+            if (price) {
+                priceInput.value = price.toFixed(2);
+                statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
+                statusEl.style.color = '#28a745';
+                syncPriceInputs('grant');
+                autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+                fetchHistoricalPrices();
+            } else { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
         }
 
         async function fetchRSUEurRate() {
@@ -4791,35 +4794,15 @@
             const statusEl = document.getElementById('sharePriceStatus');
             const priceInput = document.getElementById('incomeLetterSharePrice');
             statusEl.textContent = 'Fetching...';
-            statusEl.style.color = 'var(--text-muted)';
-            try {
-                // Try Yahoo Finance v8 API (no key required, public endpoint)
-                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
-                const data = await res.json();
-                const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-                if (price) {
-                    priceInput.value = price.toFixed(2);
-                    statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
-                    statusEl.style.color = '#28a745';
-                } else {
-                    throw new Error('No price data');
-                }
-            } catch (e) {
-                // Fallback: try finnhub free endpoint
-                try {
-                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
-                    const data2 = await res2.json();
-                    if (data2?.c > 0) {
-                        priceInput.value = data2.c.toFixed(2);
-                        statusEl.textContent = `${ticker}: $${data2.c.toFixed(2)} (${new Date().toLocaleTimeString()})`;
-                        statusEl.style.color = '#28a745';
-                    } else {
-                        throw new Error('No price');
-                    }
-                } catch (e2) {
-                    statusEl.textContent = 'Could not fetch price. Enter manually.';
-                    statusEl.style.color = '#dc3545';
-                }
+            const price = await fetchStockPrice(ticker);
+            if (price) {
+                priceInput.value = price.toFixed(2);
+                statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
+                statusEl.style.color = '#28a745';
+                syncPriceInputs('letter');
+            } else {
+                statusEl.textContent = 'Could not fetch price. Enter manually.';
+                statusEl.style.color = '#dc3545';
             }
         }
 
@@ -5194,6 +5177,7 @@
                 rsuSharePrice: parseFloat(document.getElementById('rsuSharePrice')?.value) || 0,
                 rsuEurRate: parseFloat(document.getElementById('rsuEurRate')?.value) || 0,
                 rsuGrants: config.rsuGrants || [],
+                rsuHistoricalPrices: config.rsuHistoricalPrices || {},
                 beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
 
