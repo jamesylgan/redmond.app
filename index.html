@@ -3626,11 +3626,12 @@
 
             // Table
             html += `<div style="overflow-x: auto; margin-top: 15px;">
-                ${hasPrice ? `<p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;">${es ? `Valores estimados a ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/acción)` : `Values estimated at ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/share)`}</p>` : ''}
+                ${hasPrice ? `<p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;">${es ? `Proyecciones futuras a ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/acción) a fecha ${new Date().toLocaleDateString('es-ES')}. Meses pasados usan precios del día de vesting si están disponibles.` : `Future projections at ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/share) as of ${new Date().toLocaleDateString('en-GB')}. Past months use vest-day prices where available.`}</p>` : ''}
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                     <thead><tr style="background: #f0f7ff;">
                         <th style="padding: 6px 8px; text-align:left;">${es ? 'Mes' : 'Month'}</th>
                         <th style="padding: 6px 8px; text-align:right;">${es ? 'Acciones' : 'Shares'}</th>
+                        ${hasPrice ? `<th style="padding: 6px 8px; text-align:right;">$/share</th>` : ''}
                         ${hasPrice ? `<th style="padding: 6px 8px; text-align:right;">${es ? 'Valor total' : 'Total Value'}</th>` : ''}
                         <th style="padding: 6px 8px; text-align:right; color: #1565c0;">${es ? 'US (no en nómina)' : 'US (not on nómina)'}</th>
                         <th style="padding: 6px 8px; text-align:right; color: #2e7d32;">${es ? 'ES (en nómina)' : 'ES (on nómina)'}</th>
@@ -3647,18 +3648,25 @@
                 const usValue = totalVestValue * sl.weightedUSPct;
                 const esValue = totalVestValue * sl.weightedESPct;
 
-                // Status: validate nómina RSU against expected ES-sourced value
+                // Get the price used for this slot (for display)
+                let slotPriceUSD = overviewPriceUSD;
+                if (sl.isPast && sl.monthVests.length > 0) {
+                    const vestPriceEUR = getVestPriceEUR(sl.monthVests[0].date);
+                    slotPriceUSD = vestPriceEUR * overviewEurRate;
+                }
+
+                // Status: validate nómina RSU total against expected ES-sourced value
                 let status = '';
                 if (sl.vestShares === 0) {
                     status = `<span style="color: var(--text-muted);">—</span>`;
-                } else if (sl.isPast && sl.payslipRSU > 0 && esValue > 0) {
-                    // Cross-validate: nómina RSU In-Kind should ≈ expected ES value
-                    const nominaDiff = Math.abs(sl.payslipRSU - esValue);
+                } else if (sl.isPast && sl.payslipTotal > 0 && esValue > 0) {
+                    // Compare payslip RSU total (In-Kind + Tax Reported) vs expected ES value
+                    const nominaDiff = Math.abs(sl.payslipTotal - esValue);
                     const nominaPctDiff = esValue > 0 ? (nominaDiff / esValue * 100) : 0;
-                    if (nominaPctDiff < 20) {
-                        status = `<span class="badge badge-success" title="${es ? 'Nómina' : 'Payslip'}: ${formatCurrency(sl.payslipRSU)} ≈ ES ${formatCurrency(esValue)}">✓</span>`;
+                    if (nominaPctDiff < 25) {
+                        status = `<span class="badge badge-success" title="${es ? 'Nómina' : 'Payslip'}: ${formatCurrency(sl.payslipTotal)} ≈ ${formatCurrency(esValue)}">~✓</span>`;
                     } else {
-                        status = `<span class="badge badge-warning" title="${es ? 'Nómina' : 'Payslip'}: ${formatCurrency(sl.payslipRSU)} vs ES ${formatCurrency(esValue)}">⚠ ${nominaPctDiff.toFixed(0)}%</span>`;
+                        status = `<span class="badge badge-warning" title="${es ? 'Nómina' : 'Payslip'}: ${formatCurrency(sl.payslipTotal)} vs est. ${formatCurrency(esValue)} (price may differ)">~${nominaPctDiff.toFixed(0)}%</span>`;
                     }
                 } else if (sl.isPast && sl.payslipTotal > 0) {
                     status = `<span class="badge badge-success">✓ ${es ? 'nómina' : 'payslip'}</span>`;
@@ -3676,6 +3684,7 @@
                 html += `<tr style="${rowBg} ${border} border-bottom: 1px solid #eee;" ${grantDetails ? `title="${grantDetails}"` : ''}>
                     <td style="padding: 6px 8px; font-weight: ${sl.isCurrent ? '700' : '400'};">${label}${sl.isCurrent ? (es ? ' ◀ actual' : ' ◀ current') : ''}</td>
                     <td style="padding: 6px 8px; text-align:right;">${sl.vestShares > 0 ? sl.vestShares.toFixed(0) : '—'}</td>
+                    ${hasPrice ? `<td style="padding: 6px 8px; text-align:right; font-size: 11px; color: var(--text-muted);">${sl.vestShares > 0 ? '$' + slotPriceUSD.toFixed(2) : '—'}</td>` : ''}
                     ${hasPrice ? `<td style="padding: 6px 8px; text-align:right; font-weight: 600;">${totalVestValue > 0 ? formatCurrency(totalVestValue) : '—'}</td>` : ''}
                     <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${usValue > 0 ? `${formatCurrency(usValue)} <span style="font-size:10px;">(${(sl.weightedUSPct*100).toFixed(0)}%)</span>` : '—'}</td>
                     <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${esValue > 0 ? `${formatCurrency(esValue)} <span style="font-size:10px;">(${(sl.weightedESPct*100).toFixed(0)}%)</span>` : '—'}</td>
@@ -3691,6 +3700,7 @@
             html += `<tr style="font-weight: 700; border-top: 2px solid #333; background: #f8f9fa;">
                 <td style="padding: 6px 8px;">Total (12mo)</td>
                 <td style="padding: 6px 8px; text-align:right;">${allShares.toFixed(0)}</td>
+                ${hasPrice ? `<td style="padding: 6px 8px;"></td>` : ''}
                 ${hasPrice ? `<td style="padding: 6px 8px; text-align:right;">${formatCurrency(allTotalValue)}</td>` : ''}
                 <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${allUSValue > 0 ? formatCurrency(allUSValue) : '—'}</td>
                 <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${allESValue > 0 ? formatCurrency(allESValue) : '—'}</td>
@@ -5086,32 +5096,38 @@
             const events = d.allEvents || [];
             if (events.length === 0) return '';
             const now = new Date();
-            const futureEvents = events.filter(e => e.date >= now);
-            const monthBuckets = {};
             const months = isSpanish
                 ? ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
                 : ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-            for (const e of futureEvents) {
+            const priceEUR = d.sharePriceEUR || 0;
+            const priceUSD = d.sharePriceUSD || 0;
+            const eurRate = d.eurToUsdRate || 1.14;
+            const hist = config.rsuHistoricalPrices || {};
+
+            // Include both past (with historical prices) and future events
+            const monthBuckets = {};
+            for (const e of events) {
                 const key = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}`;
-                if (!monthBuckets[key]) monthBuckets[key] = { m: e.date.getMonth()+1, y: e.date.getFullYear(), shares: 0, usPctW: 0, esPctW: 0 };
+                if (!monthBuckets[key]) monthBuckets[key] = { m: e.date.getMonth()+1, y: e.date.getFullYear(), shares: 0, usPctW: 0, esPctW: 0, value: 0, isPast: e.date < now };
+                const dateStr = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                const vestPriceUSD = hist[dateStr] || priceUSD;
+                const vestPriceEUR = vestPriceUSD / eurRate;
+                const eventValue = e.shares * vestPriceEUR;
                 monthBuckets[key].shares += e.shares;
                 monthBuckets[key].usPctW += e.shares * e.usPct;
                 monthBuckets[key].esPctW += e.shares * e.spainPct;
+                monthBuckets[key].value += eventValue;
+                monthBuckets[key].priceUSD = vestPriceUSD;
             }
-            const rows = Object.values(monthBuckets).slice(0, 12);
+            const rows = Object.values(monthBuckets).sort((a, b) => a.y !== b.y ? a.y - b.y : a.m - b.m).slice(0, 15);
             for (const r of rows) { if (r.shares > 0) { r.usPctW /= r.shares; r.esPctW /= r.shares; } }
 
-            const priceEUR = d.sharePriceEUR || 0;
-            let html = `<h2 style="page-break-before: auto;">${isSpanish ? 'Anexo: Calendario de Vesting de RSU (próximos 12 meses)' : 'Addendum: RSU Vesting Schedule (next 12 months)'}</h2>`;
-            if (priceEUR > 0) {
-                html += `<p style="font-size: 9pt; color: #666;">${isSpanish
-                    ? `Valores estimados a ${d.ticker} $${d.sharePriceUSD?.toFixed(2)} USD (${d.fmtEUR(priceEUR)}/acción, tipo EUR/USD: ${d.eurToUsdRate?.toFixed(4)})`
-                    : `Values at ${d.ticker} $${d.sharePriceUSD?.toFixed(2)} USD (${d.fmtEUR(priceEUR)}/share, EUR/USD rate: ${d.eurToUsdRate?.toFixed(4)})`}</p>`;
-            }
+            let html = `<h2 style="page-break-before: auto;">${isSpanish ? 'Anexo: Calendario de Vesting de RSU' : 'Addendum: RSU Vesting Schedule'}</h2>`;
             html += `<table><thead><tr>
                 <th>${isSpanish ? 'Mes' : 'Month'}</th>
                 <th class="amount">${isSpanish ? 'Acciones' : 'Shares'}</th>
+                <th class="amount">$/share</th>
                 ${priceEUR > 0 ? `<th class="amount">${isSpanish ? 'Valor total' : 'Total Value'}</th>` : ''}
                 <th class="amount">${isSpanish ? 'US (no en nómina)' : 'US (not on nómina)'}</th>
                 <th class="amount">${isSpanish ? 'ES (en nómina)' : 'ES (on nómina)'}</th>
@@ -5119,25 +5135,33 @@
 
             let totalShares = 0, totalValue = 0, totalUS = 0, totalES = 0;
             for (const r of rows) {
-                const val = r.shares * priceEUR;
-                const usVal = val * r.usPctW;
-                const esVal = val * r.esPctW;
-                totalShares += r.shares; totalValue += val; totalUS += usVal; totalES += esVal;
+                const usVal = r.value * r.usPctW;
+                const esVal = r.value * r.esPctW;
+                totalShares += r.shares; totalValue += r.value; totalUS += usVal; totalES += esVal;
+                const label = `${months[r.m]} ${r.y}${r.isPast ? '' : '*'}`;
                 html += `<tr>
-                    <td>${months[r.m]} ${r.y}</td>
+                    <td>${label}</td>
                     <td class="amount">${r.shares.toFixed(0)}</td>
-                    ${priceEUR > 0 ? `<td class="amount">${d.fmtEUR(val)}</td>` : ''}
-                    <td class="amount">${priceEUR > 0 ? `${d.fmtEUR(usVal)} (${(r.usPctW*100).toFixed(0)}%)` : `${(r.usPctW*100).toFixed(0)}%`}</td>
-                    <td class="amount">${priceEUR > 0 ? `${d.fmtEUR(esVal)} (${(r.esPctW*100).toFixed(0)}%)` : `${(r.esPctW*100).toFixed(0)}%`}</td>
+                    <td class="amount" style="font-size:9pt; color:#666;">$${r.priceUSD?.toFixed(2) || '?'}</td>
+                    ${r.value > 0 ? `<td class="amount">${d.fmtEUR(r.value)}</td>` : '<td class="amount">—</td>'}
+                    <td class="amount">${r.value > 0 ? `${d.fmtEUR(usVal)} (${(r.usPctW*100).toFixed(0)}%)` : `${(r.usPctW*100).toFixed(0)}%`}</td>
+                    <td class="amount">${r.value > 0 ? `${d.fmtEUR(esVal)} (${(r.esPctW*100).toFixed(0)}%)` : `${(r.esPctW*100).toFixed(0)}%`}</td>
                 </tr>`;
             }
             html += `<tr class="total-row">
                 <td>Total</td>
                 <td class="amount">${totalShares.toFixed(0)}</td>
-                ${priceEUR > 0 ? `<td class="amount">${d.fmtEUR(totalValue)}</td>` : ''}
-                <td class="amount">${priceEUR > 0 ? d.fmtEUR(totalUS) : ''}</td>
-                <td class="amount">${priceEUR > 0 ? d.fmtEUR(totalES) : ''}</td>
+                <td></td>
+                ${totalValue > 0 ? `<td class="amount">${d.fmtEUR(totalValue)}</td>` : '<td></td>'}
+                <td class="amount">${totalValue > 0 ? d.fmtEUR(totalUS) : ''}</td>
+                <td class="amount">${totalValue > 0 ? d.fmtEUR(totalES) : ''}</td>
             </tr></tbody></table>`;
+            const hasFuture = rows.some(r => !r.isPast);
+            html += `<p style="font-size: 8pt; color: #888; margin-top: 8px;">
+                ${hasFuture ? (isSpanish ? '* Meses proyectados.' : '* Projected months.') + ' ' : ''}${isSpanish
+                    ? 'Los precios exactos utilizados para la tributación y la generación de esta tabla, así como las fechas exactas de corte entre jurisdicciones, son aproximados en comparación con los valores reales utilizados en la declaración fiscal. Los valores de las acciones fluctúan diariamente.'
+                    : 'The exact share prices used for taxation and for generating this table, as well as the exact day cutoffs between jurisdictions, are approximate compared to the real numbers used for tax filing. Share values fluctuate daily.'}
+            </p>`;
             return html;
         }
 
