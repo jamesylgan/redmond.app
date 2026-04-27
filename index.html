@@ -4290,7 +4290,8 @@
                 config.rsuGrants[index][field] = value;
             }
             autoSaveConfig();
-            renderRSUGrantsTable();
+            // Only re-render the vest preview, not the table itself (avoids stealing focus from inputs)
+            renderVestPreview();
             if (parsedPayslips.length > 0) displayResults();
         }
 
