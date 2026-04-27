@@ -4578,24 +4578,35 @@
             </tr>`;
             html += '</tbody></table></div></details>';
 
-            // Historical prices editor
+            // Historical prices editor — shows all past vest dates with editable prices
             const hist = config.rsuHistoricalPrices || {};
-            const histKeys = Object.keys(hist).sort();
-            if (histKeys.length > 0) {
+            const now2 = new Date();
+            const pastVestDates = [...new Set(events.filter(e => e.date < now2).map(e => {
+                const d = e.date;
+                return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            }))].sort();
+            if (pastVestDates.length > 0 || Object.keys(hist).length > 0) {
+                const allDates = [...new Set([...pastVestDates, ...Object.keys(hist)])].sort();
+                const cachedCount = allDates.filter(k => hist[k]).length;
                 html += `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
                     <summary style="cursor: pointer; padding: 6px 10px; background: #f8f9fa; font-size: 11px; font-weight: 600;">
-                        Historical Prices (${histKeys.length} cached) <span style="font-weight: normal; color: var(--text-muted);">— click to view/edit</span>
+                        Historical Vest-Day Prices <span style="font-weight: normal; color: var(--text-muted);">(${cachedCount}/${allDates.length} filled — enter USD price per share on each vest date)</span>
                     </summary>
                     <div style="padding: 8px; max-height: 200px; overflow-y: auto;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-                            <thead><tr style="background: #f8f9fa;"><th style="padding: 2px 5px; text-align:left;">Date</th><th style="padding: 2px 5px; text-align:right;">Price (USD)</th></tr></thead>
-                            <tbody>${histKeys.map(k => `<tr style="border-bottom:1px solid #f0f0f0;">
-                                <td style="padding: 2px 5px;">${k}</td>
-                                <td style="padding: 2px 5px; text-align:right;">
-                                    <input type="number" value="${hist[k].toFixed(2)}" step="0.01" style="width:70px; padding:2px 4px; border:1px solid #ddd; border-radius:3px; font-size:11px; text-align:right;"
-                                        onblur="updateHistoricalPrice('${k}', this.value)">
-                                </td>
-                            </tr>`).join('')}</tbody>
+                            <thead><tr style="background: #f8f9fa;"><th style="padding: 2px 5px; text-align:left;">Vest Date</th><th style="padding: 2px 5px; text-align:right;">Price (USD)</th><th style="padding: 2px 5px; text-align:left;">Source</th></tr></thead>
+                            <tbody>${allDates.map(k => {
+                                const hasVal = hist[k] != null;
+                                const source = hasVal ? '<span style="color:#28a745;">cached</span>' : '<span style="color:#dc3545;">missing</span>';
+                                return `<tr style="border-bottom:1px solid #f0f0f0;">
+                                    <td style="padding: 2px 5px;">${k}</td>
+                                    <td style="padding: 2px 5px; text-align:right;">
+                                        <input type="number" value="${hasVal ? hist[k].toFixed(2) : ''}" placeholder="e.g. 64" step="0.01" style="width:70px; padding:2px 4px; border:1px solid ${hasVal ? '#ddd' : '#ffc107'}; border-radius:3px; font-size:11px; text-align:right;"
+                                            onblur="updateHistoricalPrice('${k}', this.value)">
+                                    </td>
+                                    <td style="padding: 2px 5px; font-size: 10px;">${source}</td>
+                                </tr>`;
+                            }).join('')}</tbody>
                         </table>
                     </div>
                 </details>`;
@@ -4634,13 +4645,33 @@
             }
         }
 
-        // Fetch with CORS proxy fallback for APIs that block file:// origins
-        async function corsFetch(url) {
-            // Try direct first
-            try { const r = await fetch(url); if (r.ok) return r; } catch (e) {}
-            // Proxy fallback
-            try { const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`); if (r.ok) return r; } catch (e) {}
-            throw new Error('Fetch failed');
+        // JSONP fetch for APIs that block file:// origins (all fetch() fails from file://)
+        function jsonpFetch(url) {
+            return new Promise((resolve, reject) => {
+                const cbName = '_jsonp_' + Date.now() + Math.random().toString(36).slice(2);
+                const script = document.createElement('script');
+                const separator = url.includes('?') ? '&' : '?';
+                script.src = `${url}${separator}callback=${cbName}`;
+                window[cbName] = (data) => { resolve(data); delete window[cbName]; script.remove(); };
+                script.onerror = () => { reject(new Error('JSONP failed')); delete window[cbName]; script.remove(); };
+                setTimeout(() => { if (window[cbName]) { reject(new Error('JSONP timeout')); delete window[cbName]; script.remove(); } }, 10000);
+                document.head.appendChild(script);
+            });
+        }
+
+        // Fetch EUR/USD rate using multiple fallback methods
+        async function fetchEurUsdRate() {
+            // Try fetch first (works from http:// origins)
+            try {
+                const r = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                if (r.ok) { const d = await r.json(); if (d.rates?.USD) return d.rates.USD; }
+            } catch (e) {}
+            // Try open.er-api.com (supports JSONP-like via callback)
+            try {
+                const r = await fetch('https://open.er-api.com/v6/latest/EUR');
+                if (r.ok) { const d = await r.json(); if (d.rates?.USD) return d.rates.USD; }
+            } catch (e) {}
+            return null; // caller should prompt manual entry
         }
 
         // Fetch historical close prices for past vest dates
@@ -4726,34 +4757,27 @@
             const statusEl = document.getElementById('rsuEurRateStatus');
             const rateInput = document.getElementById('rsuEurRate');
             statusEl.textContent = 'Fetching...';
-            try {
-                const res = await corsFetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
-                const data = await res.json();
-                if (data.rates?.USD) {
-                    rateInput.value = data.rates.USD.toFixed(4);
-                    statusEl.textContent = `1 EUR = $${data.rates.USD.toFixed(4)}`;
-                    statusEl.style.color = '#28a745';
-                    autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
-                } else { throw new Error('No data'); }
-            } catch (e) { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
+            const rate = await fetchEurUsdRate();
+            if (rate) {
+                rateInput.value = rate.toFixed(4);
+                statusEl.textContent = `1 EUR = $${rate.toFixed(4)}`;
+                statusEl.style.color = '#28a745';
+                syncPriceInputs('grant');
+                autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+            } else { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
         }
 
         async function fetchLetterEurRate() {
             const statusEl = document.getElementById('eurRateLetterStatus');
             const rateInput = document.getElementById('incomeLetterEurRate');
             statusEl.textContent = 'Fetching...';
-            try {
-                const res = await corsFetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
-                const data = await res.json();
-                if (data.rates?.USD) {
-                    rateInput.value = data.rates.USD.toFixed(4);
-                    statusEl.textContent = `1 EUR = $${data.rates.USD.toFixed(4)} (${new Date().toLocaleDateString()})`;
-                    statusEl.style.color = '#28a745';
-                } else { throw new Error('No data'); }
-            } catch (e) {
-                statusEl.textContent = 'Failed. Enter manually.';
-                statusEl.style.color = '#dc3545';
-            }
+            const rate = await fetchEurUsdRate();
+            if (rate) {
+                rateInput.value = rate.toFixed(4);
+                statusEl.textContent = `1 EUR = $${rate.toFixed(4)} (${new Date().toLocaleDateString()})`;
+                statusEl.style.color = '#28a745';
+                syncPriceInputs('letter');
+            } else { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
         }
 
         // Auto-fill EUR rate on page load
@@ -5250,40 +5274,17 @@
         async function fetchExchangeRate() {
             const statusEl = document.getElementById('rateStatus');
             const rateInput = document.getElementById('eurToUsdRate');
-
             statusEl.textContent = 'Fetching...';
             statusEl.style.color = 'var(--text-muted)';
-
-            try {
-                // Using exchangerate.host free API (no key required)
-                const response = await corsFetch('https://api.exchangerate.host/latest?base=EUR&symbols=USD');
-                const data = await response.json();
-
-                if (data.success && data.rates?.USD) {
-                    const rate = data.rates.USD;
-                    rateInput.value = rate.toFixed(4);
-                    statusEl.textContent = `Updated: ${new Date().toLocaleDateString()}`;
-                    statusEl.style.color = '#28a745';
-                    autoSaveConfig();
-                } else {
-                    // Fallback to frankfurter.app
-                    const fallbackResponse = await corsFetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
-                    const fallbackData = await fallbackResponse.json();
-
-                    if (fallbackData.rates?.USD) {
-                        const rate = fallbackData.rates.USD;
-                        rateInput.value = rate.toFixed(4);
-                        statusEl.textContent = `Updated: ${new Date().toLocaleDateString()}`;
-                        statusEl.style.color = '#28a745';
-                        autoSaveConfig();
-                    } else {
-                        throw new Error('No rate data');
-                    }
-                }
-            } catch (err) {
+            const rate = await fetchEurUsdRate();
+            if (rate) {
+                rateInput.value = rate.toFixed(4);
+                statusEl.textContent = `Updated: ${new Date().toLocaleDateString()}`;
+                statusEl.style.color = '#28a745';
+                autoSaveConfig();
+            } else {
                 statusEl.textContent = 'Failed to fetch rate';
                 statusEl.style.color = '#dc3545';
-                console.error('Exchange rate fetch error:', err);
             }
         }
 
