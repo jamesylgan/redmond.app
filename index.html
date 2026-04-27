@@ -4206,6 +4206,42 @@
             return count;
         }
 
+        // Fixed quarterly vest dates: Mar 1, Jun 1, Sep 1, Dec 1
+        const QUARTERLY_VEST_DATES = [
+            { month: 2, day: 1 },  // Mar 1
+            { month: 5, day: 1 },  // Jun 1
+            { month: 8, day: 1 },  // Sep 1
+            { month: 11, day: 1 }  // Dec 1
+        ];
+
+        function getFixedVestDates(grantDate, vestingMonths, schedule) {
+            const dates = [];
+            const start = new Date(grantDate);
+            const endDate = addMonths(start, vestingMonths);
+
+            if (schedule === 'quarterly') {
+                // Find the first quarterly vest date after the grant date
+                let year = start.getFullYear();
+                let found = false;
+                for (let y = year; y <= endDate.getFullYear() + 1; y++) {
+                    for (const qd of QUARTERLY_VEST_DATES) {
+                        const vestDate = new Date(y, qd.month, qd.day);
+                        if (vestDate <= start) continue;
+                        if (vestDate > endDate) { found = true; break; }
+                        dates.push(vestDate);
+                    }
+                    if (found) break;
+                }
+            } else {
+                // For non-quarterly schedules, use relative dates
+                const scheduleMonths = { monthly: 1, 'semi-annual': 6, annual: 12 }[schedule] || 3;
+                for (let i = 1; i <= Math.floor(vestingMonths / scheduleMonths); i++) {
+                    dates.push(addMonths(start, i * scheduleMonths));
+                }
+            }
+            return dates;
+        }
+
         function computeVestEvents(grants, transferDate) {
             const events = [];
             if (!transferDate) return events;
@@ -4214,18 +4250,14 @@
             for (const grant of grants) {
                 if (!grant.grantDate || !grant.totalShares) continue;
                 const grantDate = new Date(grant.grantDate);
-                // cliffMonths is actually the total vesting period in months (no cliff delay)
                 const vestingMonths = grant.cliffMonths || ((grant.vestingYears || 4) * 12);
-                const scheduleMonths = { monthly: 1, quarterly: 3, 'semi-annual': 6, annual: 12 }[grant.vestingSchedule] || 3;
-                const totalVestEvents = Math.floor(vestingMonths / scheduleMonths);
-                if (totalVestEvents <= 0) continue;
-                const sharesPerVest = grant.totalShares / totalVestEvents;
 
-                // Generate vest events — no cliff, vests start at first interval
-                const vestDates = [];
-                for (let i = 1; i <= totalVestEvents; i++) {
-                    vestDates.push({ date: addMonths(grantDate, i * scheduleMonths), shares: sharesPerVest });
-                }
+                // Generate fixed vest dates
+                const vestDateList = getFixedVestDates(grantDate, vestingMonths, grant.vestingSchedule || 'quarterly');
+                if (vestDateList.length === 0) continue;
+                const sharesPerVest = grant.totalShares / vestDateList.length;
+
+                const vestDates = vestDateList.map(d => ({ date: d, shares: sharesPerVest }));
 
                 // Fix rounding: ensure total shares match
                 const totalAllocated = vestDates.reduce((s, v) => s + v.shares, 0);
@@ -4233,7 +4265,7 @@
                     vestDates[vestDates.length - 1].shares += grant.totalShares - totalAllocated;
                 }
 
-                // Skip already-vested shares
+                // Skip already-vested shares (earliest vests first)
                 let toSkip = grant.sharesAlreadyVested || 0;
                 for (const vest of vestDates) {
                     if (toSkip <= 0) break;
