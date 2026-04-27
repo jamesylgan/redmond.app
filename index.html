@@ -4781,7 +4781,80 @@
                 </details>`;
             }
 
+            // US Vest Verification — confirm each past vest event
+            const usVestConfirmed = config.usVestConfirmed || {};
+            const pastEvents = events.filter(e => e.date < now2);
+            if (pastEvents.length > 0) {
+                const confirmedCount = pastEvents.filter(e => {
+                    const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
+                    return usVestConfirmed[dk];
+                }).length;
+                const months2 = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                html += `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
+                    <summary style="cursor: pointer; padding: 6px 10px; background: #f8f9fa; font-size: 11px; font-weight: 600;">
+                        US Vest Verification <span style="font-weight: normal; color: var(--text-muted);">(${confirmedCount}/${pastEvents.length} confirmed — check off vests as you see them in Schwab)</span>
+                    </summary>
+                    <div style="padding: 8px; max-height: 300px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead><tr style="background: #f8f9fa;">
+                                <th style="padding: 2px 5px; text-align:center; width: 30px;">✓</th>
+                                <th style="padding: 2px 5px; text-align:left;">Date</th>
+                                <th style="padding: 2px 5px; text-align:left;">Grant</th>
+                                <th style="padding: 2px 5px; text-align:right;">Shares</th>
+                                <th style="padding: 2px 5px; text-align:right;">US %</th>
+                                <th style="padding: 2px 5px; text-align:right;">US Shares</th>
+                            </tr></thead>
+                            <tbody>${pastEvents.map(e => {
+                                const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
+                                const checked = usVestConfirmed[dk] ? 'checked' : '';
+                                const usShares = (e.shares * e.usPct).toFixed(1);
+                                return `<tr style="border-bottom:1px solid #f0f0f0;">
+                                    <td style="padding: 2px 5px; text-align:center;"><input type="checkbox" ${checked} onchange="toggleUSVestConfirmed('${dk}', this.checked)" style="cursor:pointer;"></td>
+                                    <td style="padding: 2px 5px;">${months2[e.date.getMonth()+1]} ${e.date.getDate()}, ${e.date.getFullYear()}</td>
+                                    <td style="padding: 2px 5px;">${e.grantName}</td>
+                                    <td style="padding: 2px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
+                                    <td style="padding: 2px 5px; text-align:right;">${(e.usPct*100).toFixed(0)}%</td>
+                                    <td style="padding: 2px 5px; text-align:right; color: #1565c0;">${usShares}</td>
+                                </tr>`;
+                            }).join('')}</tbody>
+                        </table>
+                        <div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px;">
+                            <label style="display: flex; align-items: center; gap: 6px;">
+                                <span>W-2 / US Tax Form total (USD, for year-end cross-check):</span>
+                                <input type="number" id="usW2Total" value="${config.usW2Total || ''}" placeholder="e.g. 50000" step="0.01" style="width: 100px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"
+                                    onblur="config.usW2Total = parseFloat(this.value) || 0; autoSaveConfig();">
+                            </label>
+                            ${config.usW2Total > 0 ? (() => {
+                                const totalUSShares = pastEvents.reduce((s, e) => s + e.shares * e.usPct, 0);
+                                const totalUSValue = pastEvents.reduce((s, e) => {
+                                    const dk2 = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                                    const price = (config.rsuHistoricalPrices || {})[dk2] || (config.rsuSharePrice || 0);
+                                    return s + e.shares * e.usPct * price;
+                                }, 0);
+                                const w2Diff = config.usW2Total - totalUSValue;
+                                const w2Pct = totalUSValue > 0 ? Math.abs(w2Diff / totalUSValue * 100) : 0;
+                                return `<div style="margin-top: 6px; font-size: 11px;">
+                                    Computed US-sourced: $${totalUSValue.toFixed(2)} (${totalUSShares.toFixed(0)} shares × prices)
+                                    ${w2Pct < 15 ? `<span style="color: var(--success);"> ✓ within ${w2Pct.toFixed(0)}% of W-2</span>` : `<span style="color: var(--warning);"> ⚠ ${w2Pct.toFixed(0)}% diff from W-2 ($${w2Diff.toFixed(2)})</span>`}
+                                </div>`;
+                            })() : ''}
+                        </div>
+                    </div>
+                </details>`;
+            }
+
             container.innerHTML = html;
+        }
+
+        function toggleUSVestConfirmed(dateKey, confirmed) {
+            if (!config.usVestConfirmed) config.usVestConfirmed = {};
+            if (confirmed) {
+                config.usVestConfirmed[dateKey] = true;
+            } else {
+                delete config.usVestConfirmed[dateKey];
+            }
+            autoSaveConfig();
+            renderVestPreview();
         }
 
         function updateHistoricalPrice(dateKey, value) {
@@ -5381,6 +5454,8 @@
                 rsuEurRate: parseFloat(document.getElementById('rsuEurRate')?.value) || 0,
                 rsuGrants: config.rsuGrants || [],
                 rsuHistoricalPrices: config.rsuHistoricalPrices || {},
+                usVestConfirmed: config.usVestConfirmed || {},
+                usW2Total: config.usW2Total || 0,
                 beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
 
