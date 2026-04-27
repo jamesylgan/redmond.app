@@ -2644,23 +2644,29 @@
                         </tr>
                         ` : ''}
                         ${expectedAnnualRSU > 0 ? (() => {
-                            // RSU: show expected annual + "on track" status for parsed months
-                            let expectedRSUForParsed = 0;
+                            // Compare payslip RSU (Spain-sourced only) vs expected Spain portion
+                            let expectedESForParsed = 0;
+                            let expectedTotalForParsed = 0;
                             for (const ps of parsedPayslips) {
                                 const key = `${ps.month}/${ps.year}`;
-                                if (expectedRSUByMonth[key]) expectedRSUForParsed += expectedRSUByMonth[key].totalValue;
+                                if (expectedRSUByMonth[key]) { expectedESForParsed += expectedRSUByMonth[key].spainValue; expectedTotalForParsed += expectedRSUByMonth[key].totalValue; }
                             }
-                            const rsuTrackDiff = rsuOnPayslips - expectedRSUForParsed;
-                            const rsuTrackPct = expectedRSUForParsed > 0 ? Math.abs(rsuTrackDiff / expectedRSUForParsed * 100) : 0;
-                            const rsuTrackIcon = expectedRSUForParsed === 0 ? '' : (rsuTrackPct < 25 ? '<span style="color:var(--success);">✓ on track</span>' : `<span style="color:var(--warning);">~${rsuTrackPct.toFixed(0)}% diff (price varies)</span>`);
+                            const rsuTrackDiff = rsuOnPayslips - expectedESForParsed;
+                            const rsuTrackPct = expectedESForParsed > 0 ? Math.abs(rsuTrackDiff / expectedESForParsed * 100) : 0;
+                            const rsuTrackIcon = expectedESForParsed === 0 ? '' : (rsuTrackPct < 25 ? '<span style="color:var(--success);">✓ on track</span>' : `<span style="color:var(--warning);">~${rsuTrackPct.toFixed(0)}% diff (vest-day price varies)</span>`);
+                            const usNotOnPayslip = expectedTotalForParsed - expectedESForParsed;
                             return `<tr>
                                 <td>${currentLang === 'es' ? `RSU esperado año (${expectedRSULabel}):` : `Expected annual RSU (${expectedRSULabel}):`}</td>
                                 <td class="text-right" style="padding-left: 15px;">+${formatCurrency(expectedAnnualRSU)}</td>
                             </tr>
-                            ${expectedRSUForParsed > 0 ? `<tr style="font-size: 12px; color: var(--text-muted);">
-                                <td style="padding-left: 20px;">${currentLang === 'es' ? 'RSU en nóminas hasta ahora:' : 'RSU on payslips so far:'} ${formatCurrency(rsuOnPayslips)} ${currentLang === 'es' ? 'vs esperado' : 'vs expected'} ${formatCurrency(expectedRSUForParsed)}</td>
+                            ${expectedESForParsed > 0 ? `<tr style="font-size: 12px; color: var(--text-muted);">
+                                <td style="padding-left: 20px;">${currentLang === 'es' ? 'RSU en nóminas (parte ES):' : 'RSU on payslips (ES portion):'} ${formatCurrency(rsuOnPayslips)} vs ${currentLang === 'es' ? 'esperado ES' : 'expected ES'} ${formatCurrency(expectedESForParsed)}</td>
                                 <td class="text-right" style="padding-left: 15px;">${rsuTrackIcon}</td>
-                            </tr>` : ''}`;
+                            </tr>
+                            ${usNotOnPayslip > 0 ? `<tr style="font-size: 12px; color: #1565c0;">
+                                <td style="padding-left: 20px;">${currentLang === 'es' ? 'RSU NO en nóminas (parte US):' : 'RSU NOT on payslips (US portion):'}</td>
+                                <td class="text-right" style="padding-left: 15px;">${formatCurrency(usNotOnPayslip)}</td>
+                            </tr>` : ''}` : ''}`;
                         })() : ''}
                         <tr style="font-weight: 600; border-top: 1px solid var(--border);">
                             <td>${currentLang === 'es' ? `Total esperado (base${expectedAnnualAdditional > 0 ? ' + adicional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):` : `Expected total (base${expectedAnnualAdditional > 0 ? ' + additional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):`}</td>
@@ -2688,19 +2694,23 @@
                             </td>
                         </tr>
                         ${expectedAnnualRSU > 0 ? (() => {
-                            let expectedRSUForParsed2 = 0;
-                            for (const ps of parsedPayslips) { const key = `${ps.month}/${ps.year}`; if (expectedRSUByMonth[key]) expectedRSUForParsed2 += expectedRSUByMonth[key].totalValue; }
-                            const rsuTrackDiff2 = rsuOnPayslips - expectedRSUForParsed2;
-                            const rsuTrackPct2 = expectedRSUForParsed2 > 0 ? Math.abs(rsuTrackDiff2 / expectedRSUForParsed2 * 100) : 0;
-                            const rsuTrackIcon2 = expectedRSUForParsed2 === 0 ? '' : (rsuTrackPct2 < 25 ? '<span style="color:var(--success);">✓ on track</span>' : `<span style="color:var(--warning);">~${rsuTrackPct2.toFixed(0)}% diff</span>`);
+                            let expES2 = 0, expTotal2 = 0;
+                            for (const ps of parsedPayslips) { const key = `${ps.month}/${ps.year}`; if (expectedRSUByMonth[key]) { expES2 += expectedRSUByMonth[key].spainValue; expTotal2 += expectedRSUByMonth[key].totalValue; } }
+                            const diff2 = rsuOnPayslips - expES2;
+                            const pct2 = expES2 > 0 ? Math.abs(diff2 / expES2 * 100) : 0;
+                            const icon2 = expES2 === 0 ? '' : (pct2 < 25 ? '<span style="color:var(--success);">✓ on track</span>' : `<span style="color:var(--warning);">~${pct2.toFixed(0)}% diff</span>`);
                             return `<tr>
                                 <td>${currentLang === 'es' ? `RSU esperado año (${expectedRSULabel}):` : `Expected annual RSU (${expectedRSULabel}):`}</td>
                                 <td class="text-right" style="padding-left: 15px;">+${formatCurrency(expectedAnnualRSU)}</td>
                             </tr>
-                            ${expectedRSUForParsed2 > 0 ? `<tr style="font-size: 12px; color: var(--text-muted);">
-                                <td style="padding-left: 20px;">${currentLang === 'es' ? 'RSU en nóminas hasta ahora:' : 'RSU on payslips so far:'} ${formatCurrency(rsuOnPayslips)} vs ${formatCurrency(expectedRSUForParsed2)}</td>
-                                <td class="text-right" style="padding-left: 15px;">${rsuTrackIcon2}</td>
-                            </tr>` : ''}`;
+                            ${expES2 > 0 ? `<tr style="font-size: 12px; color: var(--text-muted);">
+                                <td style="padding-left: 20px;">${currentLang === 'es' ? 'RSU en nóminas (parte ES):' : 'RSU on payslips (ES portion):'} ${formatCurrency(rsuOnPayslips)} vs ${formatCurrency(expES2)}</td>
+                                <td class="text-right" style="padding-left: 15px;">${icon2}</td>
+                            </tr>
+                            ${(expTotal2 - expES2) > 0 ? `<tr style="font-size: 12px; color: #1565c0;">
+                                <td style="padding-left: 20px;">${currentLang === 'es' ? 'RSU NO en nóminas (parte US):' : 'RSU NOT on payslips (US portion):'}</td>
+                                <td class="text-right" style="padding-left: 15px;">${formatCurrency(expTotal2 - expES2)}</td>
+                            </tr>` : ''}` : ''}`;
                         })() : ''}
                         <tr style="font-weight: 600; border-top: 1px solid var(--border);">
                             <td>${currentLang === 'es' ? `Total esperado (base${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):` : `Expected total (base${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):`}</td>
@@ -2734,14 +2744,14 @@
                                             let applicableMonths = parsedPayslips.length;
 
                                             if (isRSUItem && Object.keys(expectedRSUByMonth).length > 0) {
-                                                // Sum expected RSU value across parsed payslip months
+                                                // Sum expected Spain-sourced RSU (that's what appears on the payslip)
                                                 for (const ps of parsedPayslips) {
                                                     const key = `${ps.month}/${ps.year}`;
                                                     const exp = expectedRSUByMonth[key];
-                                                    if (exp) expectedForParsed += exp.totalValue;
+                                                    if (exp) expectedForParsed += exp.spainValue;
                                                 }
                                                 hasExpected = expectedForParsed > 0;
-                                                monthLabel = `${parsedPayslips.length} mo (from grants)`;
+                                                monthLabel = `${parsedPayslips.length} mo (ES-sourced from grants)`;
                                             } else {
                                                 if (benefitStartMonth > 0) {
                                                     applicableMonths = parsedPayslips.filter(ps => ps.month >= benefitStartMonth).length;
