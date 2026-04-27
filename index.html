@@ -1547,9 +1547,14 @@
                     <div style="font-size: 10px; color: var(--text-muted);">Total IRPF + Repercutidos from payslips</div>
                 </div>
                 <div class="form-group">
-                    <label>Total US Taxes Withheld (USD)</label>
+                    <label>Shares Sold for Tax Withholding</label>
+                    <input type="number" id="usTaxSharesSold" placeholder="e.g. 450" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <div style="font-size: 10px; color: var(--text-muted);">Total shares sold at vest (uses share price to compute $)</div>
+                </div>
+                <div class="form-group">
+                    <label>— OR — Total US Taxes Withheld (USD)</label>
                     <input type="number" id="usTaxWithheld" placeholder="e.g. 53000" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
-                    <div style="font-size: 10px; color: var(--text-muted);">Total $ withheld from shares sold at vest (check Schwab statements)</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">If entered, overrides shares × price calculation</div>
                 </div>
                 <div class="form-group">
                     <label>Spouse Income (USD, for MFJ)</label>
@@ -5039,7 +5044,9 @@
             const rsuTotal = parseFloat(document.getElementById('usTaxRSU')?.value) || 0;
             const otherIncome = parseFloat(document.getElementById('usTaxOther')?.value) || 0;
             const spanishTaxPaid = parseFloat(document.getElementById('usTaxSpanishPaid')?.value) || 0;
-            const usWithheld = parseFloat(document.getElementById('usTaxWithheld')?.value) || 0;
+            const usWithheldDirect = parseFloat(document.getElementById('usTaxWithheld')?.value) || 0;
+            const usSharesSold = parseFloat(document.getElementById('usTaxSharesSold')?.value) || 0;
+            const usWithheld = usWithheldDirect > 0 ? usWithheldDirect : (usSharesSold > 0 ? usSharesSold * (config.rsuSharePrice || 0) : 0);
             const spouseIncome = parseFloat(document.getElementById('usTaxSpouseIncome')?.value) || 0;
 
             if (salary === 0 && rsuTotal === 0) { container.style.display = 'none'; return; }
@@ -5136,7 +5143,7 @@
                     <tr><td style="padding:4px 6px;">Federal tax</td><td style="text-align:right; padding:4px 6px;">${fmt(federalTax)}</td></tr>
                     <tr><td style="padding:4px 6px;">Foreign Tax Credit</td><td style="text-align:right; padding:4px 6px; color:#2e7d32;">-${fmt(ftcUsable)}</td></tr>
                     <tr style="font-weight:700; border-top:2px solid #333;"><td style="padding:4px 6px;">Net federal tax liability</td><td style="text-align:right; padding:4px 6px;">${fmt(netFederalTax)}</td></tr>
-                    <tr><td style="padding:4px 6px;">Already withheld (shares sold at vest)</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td></tr>
+                    <tr><td style="padding:4px 6px;">Already withheld${usWithheldDirect > 0 ? '' : usSharesSold > 0 ? ` (${usSharesSold} shares × $${(config.rsuSharePrice||0).toFixed(2)})` : ''}</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td></tr>
                     <tr style="font-weight:700; font-size:18px; border-top:2px solid #333;"><td style="padding:6px;">${balanceOwed >= 0 ? 'Balance owed' : 'Estimated refund'}</td><td style="text-align:right; padding:6px; color:${balanceOwed > 0 ? '#dc3545' : '#28a745'};">${balanceOwed >= 0 ? fmt(balanceOwed) : fmt(Math.abs(balanceOwed))}</td></tr>
                 </table>
             </div>`;
