@@ -4577,7 +4577,44 @@
                 ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0))}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0))}</td>` : ''}
             </tr>`;
             html += '</tbody></table></div></details>';
+
+            // Historical prices editor
+            const hist = config.rsuHistoricalPrices || {};
+            const histKeys = Object.keys(hist).sort();
+            if (histKeys.length > 0) {
+                html += `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
+                    <summary style="cursor: pointer; padding: 6px 10px; background: #f8f9fa; font-size: 11px; font-weight: 600;">
+                        Historical Prices (${histKeys.length} cached) <span style="font-weight: normal; color: var(--text-muted);">— click to view/edit</span>
+                    </summary>
+                    <div style="padding: 8px; max-height: 200px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead><tr style="background: #f8f9fa;"><th style="padding: 2px 5px; text-align:left;">Date</th><th style="padding: 2px 5px; text-align:right;">Price (USD)</th></tr></thead>
+                            <tbody>${histKeys.map(k => `<tr style="border-bottom:1px solid #f0f0f0;">
+                                <td style="padding: 2px 5px;">${k}</td>
+                                <td style="padding: 2px 5px; text-align:right;">
+                                    <input type="number" value="${hist[k].toFixed(2)}" step="0.01" style="width:70px; padding:2px 4px; border:1px solid #ddd; border-radius:3px; font-size:11px; text-align:right;"
+                                        onblur="updateHistoricalPrice('${k}', this.value)">
+                                </td>
+                            </tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                </details>`;
+            }
+
             container.innerHTML = html;
+        }
+
+        function updateHistoricalPrice(dateKey, value) {
+            if (!config.rsuHistoricalPrices) config.rsuHistoricalPrices = {};
+            const price = parseFloat(value);
+            if (price > 0) {
+                config.rsuHistoricalPrices[dateKey] = price;
+            } else {
+                delete config.rsuHistoricalPrices[dateKey];
+            }
+            autoSaveConfig();
+            renderVestPreview();
+            if (parsedPayslips.length > 0) displayResults();
         }
 
         // ===== Income Summary Letter Generator =====
@@ -4597,24 +4634,13 @@
             }
         }
 
-        // CORS-safe fetch — handles file:// origins via proxy
+        // Fetch with CORS proxy fallback for APIs that block file:// origins
         async function corsFetch(url) {
-            // Try direct first (works when served via http server)
-            try {
-                const direct = await fetch(url);
-                if (direct.ok) return direct;
-            } catch (e) { /* CORS blocked */ }
-            // Try corsproxy.io (supports file:// origins)
-            try {
-                const proxy1 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-                if (proxy1.ok) return proxy1;
-            } catch (e) { /* try next */ }
-            // Try thingproxy
-            try {
-                const proxy2 = await fetch(`https://thingproxy.freeboard.io/fetch/${url}`);
-                if (proxy2.ok) return proxy2;
-            } catch (e) { /* all failed */ }
-            throw new Error('All fetch methods failed (file:// CORS). Try opening via http server: python3 -m http.server');
+            // Try direct first
+            try { const r = await fetch(url); if (r.ok) return r; } catch (e) {}
+            // Proxy fallback
+            try { const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`); if (r.ok) return r; } catch (e) {}
+            throw new Error('Fetch failed');
         }
 
         // Fetch historical close prices for past vest dates
@@ -4639,7 +4665,7 @@
             const period1 = Math.floor((earliest.getTime() - 86400000 * 7) / 1000);
             const period2 = Math.floor(Date.now() / 1000);
             try {
-                const res = await corsFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d`);
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d`);
                 const data = await res.json();
                 const timestamps = data?.chart?.result?.[0]?.timestamp || [];
                 const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
@@ -4670,7 +4696,7 @@
             const priceInput = document.getElementById('rsuSharePrice');
             statusEl.textContent = 'Fetching current + historical...';
             try {
-                const res = await corsFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
                 const data = await res.json();
                 const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
                 if (price) {
@@ -4683,7 +4709,7 @@
                 } else { throw new Error('No data'); }
             } catch (e) {
                 try {
-                    const res2 = await corsFetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
+                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
                     const data2 = await res2.json();
                     if (data2?.c > 0) {
                         priceInput.value = data2.c.toFixed(2);
@@ -4744,7 +4770,7 @@
             statusEl.style.color = 'var(--text-muted)';
             try {
                 // Try Yahoo Finance v8 API (no key required, public endpoint)
-                const res = await corsFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
                 const data = await res.json();
                 const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
                 if (price) {
@@ -4757,7 +4783,7 @@
             } catch (e) {
                 // Fallback: try finnhub free endpoint
                 try {
-                    const res2 = await corsFetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
+                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
                     const data2 = await res2.json();
                     if (data2?.c > 0) {
                         priceInput.value = data2.c.toFixed(2);
