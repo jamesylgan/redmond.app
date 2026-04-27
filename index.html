@@ -1569,7 +1569,7 @@
                     <input type="number" id="usTaxSpouseIncome" placeholder="0" step="1" value="0" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
                 </div>
             </div>
-            <button onclick="prefillUSTaxFromConfig()" style="margin-top: 10px; font-size: 12px;" class="secondary">Auto-fill from payslip & grant data</button>
+            <button onclick="prefillUSTaxFromConfig(true)" style="margin-top: 10px; font-size: 12px;" class="secondary">Auto-fill from payslip & grant data (reset all fields)</button>
         </div>
 
         <div class="card" id="usTaxResults" style="display: none;"></div>
@@ -1921,12 +1921,18 @@
         }
 
         // Tab switching (scoped to payroll page)
+        let usTaxTabVisited = false;
         document.querySelectorAll('#payrollPage .tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('#payrollPage .tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('#payrollPage .tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById(tab.dataset.tab).classList.add('active');
+                // Auto-fill US tax tab on first visit
+                if (tab.dataset.tab === 'us-tax-estimate' && !usTaxTabVisited) {
+                    usTaxTabVisited = true;
+                    prefillUSTaxFromConfig();
+                }
             });
         });
 
@@ -5025,7 +5031,12 @@
             return tax;
         }
 
-        function prefillUSTaxFromConfig() {
+        function prefillUSTaxFromConfig(force) {
+            // Only set fields that are empty, unless force=true (button click)
+            const setField = (id, val) => {
+                const el = document.getElementById(id);
+                if (el && (force || !el.value)) el.value = val;
+            };
             const mode = document.getElementById('usTaxMode')?.value || 'ytd';
             const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
             const priceUSD = config.rsuSharePrice || 0;
@@ -5034,7 +5045,7 @@
 
             // Salary: always full year (it's an annual contract)
             const salaryUSD = Math.round((config.annualGross || 0) * eurRate);
-            document.getElementById('usTaxSalary').value = salaryUSD || '';
+            setField('usTaxSalary', salaryUSD || '');
 
             // RSU from grants
             if (priceUSD > 0 && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
@@ -5050,7 +5061,7 @@
                         const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
                         totalRSUusd += e.shares * (hist[dk] || priceUSD);
                     }
-                    document.getElementById('usTaxRSU').value = Math.round(totalRSUusd) || '';
+                    setField('usTaxRSU', Math.round(totalRSUusd) || '');
                 } else {
                     // YTD: only past vests
                     let totalRSUusd = 0;
@@ -5058,7 +5069,7 @@
                         const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
                         totalRSUusd += e.shares * (hist[dk] || priceUSD);
                     }
-                    document.getElementById('usTaxRSU').value = Math.round(totalRSUusd) || '';
+                    setField('usTaxRSU', Math.round(totalRSUusd) || '');
                 }
             }
 
@@ -5104,7 +5115,7 @@
                 }
 
                 const totalSpanishTaxEUR = projectedSalaryTaxEUR + projectedRSUSpainTaxEUR;
-                document.getElementById('usTaxSpanishPaid').value = Math.round(totalSpanishTaxEUR * eurRate) || '';
+                setField('usTaxSpanishPaid', Math.round(totalSpanishTaxEUR * eurRate) || '');
             } else {
                 // YTD: actual from payslips
                 if (parsedPayslips.length > 0) {
@@ -5116,7 +5127,7 @@
                             }
                         }
                     }
-                    document.getElementById('usTaxSpanishPaid').value = Math.round(totalSpanishTax * eurRate) || '';
+                    setField('usTaxSpanishPaid', Math.round(totalSpanishTax * eurRate) || '');
                 }
             }
 
@@ -5144,8 +5155,8 @@
                     }
                 }
 
-                document.getElementById('usTaxSharesSold').value = totalSold > 0 ? Math.round(totalSold) : '';
-                document.getElementById('usTaxWithheld').value = totalWithheld > 0 ? Math.round(totalWithheld) : '';
+                setField('usTaxSharesSold', totalSold > 0 ? Math.round(totalSold) : '');
+                setField('usTaxWithheld', totalWithheld > 0 ? Math.round(totalWithheld) : '');
             }
 
             computeUSTaxEstimate();
@@ -5282,11 +5293,96 @@
                 </table>
             </div>`;
 
-            // Strategy comparison
-            const otherStrategy = strategy === 'ftc-only' ? 'feie-ftc' : 'ftc-only';
-            const otherFiling = filing === 'mfj' ? 'mfs' : 'mfj';
-            html += `<div style="margin-top:15px; padding:10px; background:#f8f9fa; border-radius:6px; font-size:12px; color:var(--text-muted);">
-                <strong>Quick comparison:</strong> Try switching to "${otherStrategy === 'ftc-only' ? 'FTC Only' : 'FEIE+FTC'}" or "${otherFiling.toUpperCase()}" above to compare strategies. The research suggests <strong>FTC Only + MFJ</strong> may be optimal for high RSU income with low Spain-sourced %.
+            // Combined US + Spain tax summary
+            const eurRate2 = config.rsuEurRate || config.eurToUsdRate || 1.1706;
+            const spanishTaxPaidEUR = spanishTaxPaid / eurRate2;
+            // Spanish side: estimate what's been withheld on payslips vs what's owed
+            const beckhamRefundEstUSD = (() => {
+                if (!config.beckhamLawQualifies || parsedPayslips.length === 0) return 0;
+                let overWithheld = 0;
+                for (const ps of parsedPayslips) {
+                    const irpfDed = ps.deductions.find(d => /tributaci.*irpf|irpf/i.test(d.nameEn + ' ' + d.nameEs));
+                    if (irpfDed?.percent && parseFloat(irpfDed.percent) > 24.5) {
+                        const rate = parseFloat(irpfDed.percent) / 100;
+                        const cashEarnings = ps.earnings.filter(e => !/seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)).reduce((s, e2) => s + e2.amount, 0);
+                        overWithheld += (rate - 0.24) * cashEarnings;
+                    }
+                }
+                return overWithheld * eurRate2;
+            })();
+            // Project Spanish taxes for full year if in projected mode
+            const spanishWithheldYTD_USD = (() => {
+                if (parsedPayslips.length === 0) return 0;
+                let total = 0;
+                for (const ps of parsedPayslips) {
+                    for (const d of ps.deductions) {
+                        if (/irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs)) total += Math.abs(d.amount);
+                    }
+                }
+                return total * eurRate2;
+            })();
+
+            html += `<div style="margin-top:15px; padding:15px; background:#f0f7ff; border:2px solid var(--primary); border-radius:8px;">
+                <h3 style="margin:0 0 10px 0; font-size: 15px;">Combined US + Spain Tax Summary</h3>
+                <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <thead><tr style="background:#e7f3ff;"><th style="text-align:left; padding:6px;"></th><th style="text-align:right; padding:6px;">US (Federal)</th><th style="text-align:right; padding:6px;">Spain</th><th style="text-align:right; padding:6px;">Combined</th></tr></thead>
+                    <tbody>
+                        <tr><td style="padding:4px 6px;">Tax liability</td><td style="text-align:right; padding:4px 6px;">${fmt(federalTax)}</td><td style="text-align:right; padding:4px 6px;">${fmt(spanishTaxPaid)}</td><td style="text-align:right; padding:4px 6px; font-weight:600;">${fmt(federalTax + spanishTaxPaid)}</td></tr>
+                        <tr><td style="padding:4px 6px;">FTC / credits</td><td style="text-align:right; padding:4px 6px; color:#2e7d32;">-${fmt(ftcUsable)}</td><td style="text-align:right; padding:4px 6px; color:#2e7d32;">${beckhamRefundEstUSD > 0 ? '-' + fmt(beckhamRefundEstUSD) + ' (Beckham refund est.)' : '—'}</td><td style="text-align:right; padding:4px 6px; color:#2e7d32;">-${fmt(ftcUsable + beckhamRefundEstUSD)}</td></tr>
+                        <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:4px 6px;">Net tax owed</td><td style="text-align:right; padding:4px 6px;">${fmt(netFederalTax)}</td><td style="text-align:right; padding:4px 6px;">${fmt(Math.max(0, spanishTaxPaid - beckhamRefundEstUSD))}</td><td style="text-align:right; padding:4px 6px;">${fmt(netFederalTax + Math.max(0, spanishTaxPaid - beckhamRefundEstUSD))}</td></tr>
+                        <tr><td style="padding:4px 6px;">Already withheld / paid</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td><td style="text-align:right; padding:4px 6px;">-${fmt(mode === 'projected' ? spanishTaxPaid : spanishWithheldYTD_USD)} ${mode !== 'projected' ? '(YTD)' : ''}</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld + (mode === 'projected' ? spanishTaxPaid : spanishWithheldYTD_USD))}</td></tr>
+                        <tr style="font-weight:700; font-size:15px; border-top:2px solid #333;">
+                            <td style="padding:6px;">Balance owed / (refund)</td>
+                            <td style="text-align:right; padding:6px; color:${balanceOwed > 0 ? '#dc3545' : '#28a745'};">${balanceOwed >= 0 ? fmt(balanceOwed) : '(' + fmt(Math.abs(balanceOwed)) + ')'}</td>
+                            <td style="text-align:right; padding:6px; color:${beckhamRefundEstUSD > 0 ? '#28a745' : 'inherit'};">${beckhamRefundEstUSD > 0 ? '(' + fmt(beckhamRefundEstUSD) + ')' : '—'}</td>
+                            <td style="text-align:right; padding:6px; color:${(balanceOwed - beckhamRefundEstUSD) > 0 ? '#dc3545' : '#28a745'};">${(balanceOwed - beckhamRefundEstUSD) >= 0 ? fmt(balanceOwed - beckhamRefundEstUSD) : '(' + fmt(Math.abs(balanceOwed - beckhamRefundEstUSD)) + ')'}</td>
+                        </tr>
+                        <tr style="color:var(--text-muted); font-size:11px;"><td colspan="4" style="padding:4px 6px;">Combined effective rate: ${worldwideIncome > 0 ? pct((netFederalTax + Math.max(0, spanishTaxPaid - beckhamRefundEstUSD)) / worldwideIncome) : '—'} | Spain Beckham refund via Modelo 151 (if applicable)</td></tr>
+                    </tbody>
+                </table>
+            </div>`;
+
+            // Strategy recommendation: compute all 4 combos
+            const combos = [];
+            for (const f of ['mfj', 'mfs']) {
+                for (const s of ['ftc-only', 'feie-ftc']) {
+                    const b = US_TAX_BRACKETS_2026[f];
+                    const sd = US_STANDARD_DEDUCTION_2026[f];
+                    const ti = Math.max(0, worldwideIncome - sd);
+                    let feie = 0;
+                    if (s === 'feie-ftc') feie = Math.min(salary + rsuES, US_FEIE_LIMIT_2026);
+                    let tax;
+                    if (feie > 0) {
+                        tax = computeUSFederalTax(Math.max(0, worldwideIncome - sd), b) - computeUSFederalTax(feie, b);
+                    } else {
+                        tax = computeUSFederalTax(ti, b);
+                    }
+                    const fsi = s === 'feie-ftc' ? Math.max(0, (salary + rsuES) - feie) : salary + rsuES;
+                    const taxableForFTC = feie > 0 ? Math.max(0, ti - feie + sd) : ti; // approximate
+                    const ftcLim = taxableForFTC > 0 ? tax * (fsi / taxableForFTC) : 0;
+                    const ftc = Math.min(spanishTaxPaid, ftcLim);
+                    const net = Math.max(0, tax - ftc);
+                    const bal = net - usWithheld;
+                    combos.push({ filing: f.toUpperCase(), strategy: s === 'ftc-only' ? 'FTC Only' : 'FEIE+FTC', net, bal, tax, ftc });
+                }
+            }
+            combos.sort((a, b) => a.net - b.net);
+            const best = combos[0];
+            const current = combos.find(c => c.filing === filing.toUpperCase() && c.strategy === (strategy === 'ftc-only' ? 'FTC Only' : 'FEIE+FTC'));
+            const isBest = current && current.net === best.net;
+
+            html += `<div style="margin-top:15px; padding:12px; background:${isBest ? '#d4edda' : '#fff3cd'}; border-radius:6px; font-size:12px;">
+                <strong>${isBest ? '✓ You are using the optimal strategy' : '⚠ A better strategy may be available'}:</strong>
+                <table style="width:100%; margin-top:8px; border-collapse:collapse; font-size:11px;">
+                    <thead><tr><th style="text-align:left; padding:2px 6px;">Strategy</th><th style="text-align:right; padding:2px 6px;">Federal Tax</th><th style="text-align:right; padding:2px 6px;">FTC</th><th style="text-align:right; padding:2px 6px;">Net Tax</th><th style="text-align:right; padding:2px 6px;">After Withholding</th></tr></thead>
+                    <tbody>${combos.map(c => `<tr style="${c === best ? 'font-weight:600; background:#d4edda;' : ''} ${c === current ? 'border:2px solid var(--primary);' : ''}">
+                        <td style="padding:2px 6px;">${c.filing} / ${c.strategy}${c === best ? ' ★' : ''}</td>
+                        <td style="text-align:right; padding:2px 6px;">${fmt(c.tax)}</td>
+                        <td style="text-align:right; padding:2px 6px;">-${fmt(c.ftc)}</td>
+                        <td style="text-align:right; padding:2px 6px;">${fmt(c.net)}</td>
+                        <td style="text-align:right; padding:2px 6px; color:${c.bal > 0 ? '#dc3545' : '#28a745'};">${c.bal >= 0 ? fmt(c.bal) : '(' + fmt(Math.abs(c.bal)) + ')'}</td>
+                    </tr>`).join('')}</tbody>
+                </table>
             </div>`;
 
             // Forms needed
