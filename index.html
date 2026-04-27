@@ -860,6 +860,42 @@
                 </p>
             </div>
 
+            <details style="margin-top: 15px; padding: 15px; background: #f0f8e8; border: 1px solid #8bc34a; border-radius: 6px;" id="taxRegimeSection">
+                <summary style="cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    Tax Regime & Beckham Law
+                </summary>
+                <p style="color: var(--text-muted); font-size: 13px; margin: 10px 0;">
+                    Configure your tax regime. If you qualify for the Beckham Law (Régimen de Impatriados), IRPF should be withheld at a flat 24% instead of the progressive rate. This tool can detect over-withholding and estimate your expected refund.
+                </p>
+                <div style="display: grid; gap: 12px; margin-top: 12px;">
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: white; border-radius: 6px; cursor: pointer;">
+                        <input type="checkbox" id="beckhamLawQualifies" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();">
+                        <div>
+                            <strong>I qualify for Beckham Law (24% flat IRPF)</strong>
+                            <div style="font-size: 12px; color: var(--text-muted);">Check this if you have been granted Régimen de Impatriados status</div>
+                        </div>
+                    </label>
+                    <div id="beckhamLawDetails" style="display: none; padding: 10px; background: white; border-radius: 6px;">
+                        <p style="font-size: 13px; margin: 0 0 10px 0;">For each payslip, the tool will:</p>
+                        <ul style="font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                            <li>Check if the effective IRPF rate matches the 24% Beckham rate</li>
+                            <li>If the employer withheld at a higher progressive rate, calculate the over-withholding</li>
+                            <li>Show an accumulated estimated refund across all payslips</li>
+                        </ul>
+                        <div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px;">
+                            <strong>Note:</strong> The actual refund depends on your full tax return (Declaración de la Renta). This is an estimate based on the difference between what was withheld and what should have been withheld at 24%.
+                        </div>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: white; border-radius: 6px; cursor: pointer;">
+                        <input type="checkbox" id="showEstimatedTax" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();">
+                        <div>
+                            <strong>Show estimated progressive tax calculation</strong>
+                            <div style="font-size: 12px; color: var(--text-muted);">Compare your withholding against what the Spanish progressive brackets would compute (useful even if on Beckham Law, to see the difference)</div>
+                        </div>
+                    </label>
+                </div>
+            </details>
+
             <details style="margin-top: 20px; padding: 15px; background: var(--bg); border-radius: 6px;" open>
                 <summary style="cursor: pointer; font-weight: 600; margin-bottom: 10px;">
                     Additional Compensation Categories
@@ -1422,6 +1458,45 @@
         let pdfFiles = [];
         let parsedPayslips = [];
         let config = {};
+
+        // Known SS employee contribution rates by year
+        const SS_RATES = {
+            2025: { cc: 0.047, equity: 0.0013, fp: 0.001, unemployment: 0.0155 },
+            2026: { cc: 0.047, equity: 0.0015, fp: 0.001, unemployment: 0.0155 }
+        };
+
+        // Spanish progressive tax brackets (non-Beckham Law)
+        const SPANISH_TAX_BRACKETS = [
+            { min: 0, max: 12450, rate: 0.19 },
+            { min: 12450, max: 20200, rate: 0.24 },
+            { min: 20200, max: 35200, rate: 0.30 },
+            { min: 35200, max: 60000, rate: 0.37 },
+            { min: 60000, max: 300000, rate: 0.45 },
+            { min: 300000, max: Infinity, rate: 0.47 }
+        ];
+
+        const BECKHAM_LAW_RATE = 0.24;
+
+        // Compute estimated annual tax using progressive brackets
+        function computeProgressiveTax(taxableIncome) {
+            let tax = 0;
+            for (const bracket of SPANISH_TAX_BRACKETS) {
+                if (taxableIncome <= bracket.min) break;
+                const taxableInBracket = Math.min(taxableIncome, bracket.max) - bracket.min;
+                tax += taxableInBracket * bracket.rate;
+            }
+            return tax;
+        }
+
+        // Get expected SS rate for a deduction type and year
+        function getExpectedSSRate(nameEn, year) {
+            const rates = SS_RATES[year] || SS_RATES[2026]; // fallback to latest
+            if (nameEn.includes('Contingencies')) return { rate: rates.cc, name: 'Contingencias Comunes' };
+            if (nameEn.includes('Equity') || nameEn.includes('Intergenerational')) return { rate: rates.equity, name: 'Equidad Intergeneracional' };
+            if (nameEn.includes('Training')) return { rate: rates.fp, name: 'Formación Profesional' };
+            if (nameEn.includes('Unemployment')) return { rate: rates.unemployment, name: 'Desempleo' };
+            return null;
+        }
 
         // Map earnings nameEn to compensation category
         const earningToCategory = {
@@ -2323,6 +2398,117 @@
             }
             html += '</div>';
 
+            // ===== Beckham Law Accumulated Refund Estimate =====
+            if (config.beckhamLawQualifies) {
+                let totalOverWithholding = 0;
+                let monthsOverWithheld = 0;
+                let monthsCorrect = 0;
+                let monthsNotApplicable = 0;
+                const beckhamMonthDetails = [];
+
+                for (const ps of parsedPayslips) {
+                    const periodKey = `${ps.month}/${ps.year}`;
+                    const perPayslip = config.beckhamPerPayslip?.[periodKey] || {};
+                    const shouldApply = perPayslip.shouldApply !== undefined ? perPayslip.shouldApply : true;
+
+                    if (!shouldApply) { monthsNotApplicable++; continue; }
+
+                    // Find effective rate
+                    const irpfDed = ps.deductions.find(d => /tributaci.*irpf|irpf.*tributaci|^income tax.*irpf/i.test(d.nameEn + ' ' + d.nameEs));
+                    const effRate = irpfDed && irpfDed.percent ? parseFloat(irpfDed.percent) / 100 : 0;
+                    const wasApplied = effRate <= (BECKHAM_LAW_RATE + 0.005);
+
+                    if (wasApplied) { monthsCorrect++; continue; }
+
+                    // Calculate over-withholding
+                    const irpfAmt = irpfDed ? Math.abs(irpfDed.amount) : 0;
+                    const repDed = ps.deductions.find(d => /repercutidos|passed-on/i.test(d.nameEn + ' ' + d.nameEs));
+                    const repAmt = repDed ? Math.abs(repDed.amount) : 0;
+                    const actualTotal = irpfAmt + repAmt;
+
+                    // What it should have been at Beckham rate
+                    const cashEarnings = ps.earnings.filter(e => !/seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs));
+                    const especieEarnings = ps.earnings.filter(e => /seguros.*sujetos|taxable.*insurance|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs));
+                    const cashTotal = cashEarnings.reduce((s, e) => s + e.amount, 0);
+                    const especieTotal = especieEarnings.reduce((s, e) => s + e.amount, 0);
+                    const beckhamTotal = BECKHAM_LAW_RATE * (cashTotal + especieTotal);
+                    const monthOver = actualTotal - beckhamTotal;
+
+                    if (monthOver > 0) {
+                        totalOverWithholding += monthOver;
+                        monthsOverWithheld++;
+                        beckhamMonthDetails.push({
+                            period: periodKey,
+                            actualRate: effRate,
+                            actual: actualTotal,
+                            beckham: beckhamTotal,
+                            over: monthOver
+                        });
+                    }
+                }
+
+                if (totalOverWithholding > 0 || monthsCorrect > 0) {
+                    const monthNames = currentLang === 'es' ?
+                        ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] :
+                        ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                    html += `<div class="card" style="border: 2px solid #8bc34a;">
+                        <h2 style="color: #558b2f;">Beckham Law Refund Estimate</h2>
+                        <div class="summary-grid">
+                            <div class="summary-item" style="background: #f0f8e8;">
+                                <div class="value" style="color: #558b2f;">${formatCurrency(totalOverWithholding)}</div>
+                                <div class="label">Estimated Refund</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="value" style="color: var(--danger);">${monthsOverWithheld}</div>
+                                <div class="label">Months Over-Withheld</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="value" style="color: var(--success);">${monthsCorrect}</div>
+                                <div class="label">Months Correct (24%)</div>
+                            </div>
+                            ${monthsNotApplicable > 0 ? `
+                            <div class="summary-item">
+                                <div class="value" style="color: var(--text-muted);">${monthsNotApplicable}</div>
+                                <div class="label">Not Applicable</div>
+                            </div>` : ''}
+                        </div>
+                        ${beckhamMonthDetails.length > 0 ? `
+                        <details style="margin-top: 10px;">
+                            <summary style="cursor: pointer; font-size: 13px; color: var(--text-muted);">Monthly breakdown</summary>
+                            <table style="margin-top: 8px; font-size: 12px;">
+                                <thead><tr>
+                                    <th>Month</th>
+                                    <th class="text-right">Actual Rate</th>
+                                    <th class="text-right">Actual IRPF</th>
+                                    <th class="text-right">Beckham IRPF</th>
+                                    <th class="text-right">Over-Withheld</th>
+                                </tr></thead>
+                                <tbody>
+                                    ${beckhamMonthDetails.map(d => {
+                                        const [m, y] = d.period.split('/');
+                                        return `<tr>
+                                            <td>${monthNames[parseInt(m)]} ${y}</td>
+                                            <td class="text-right">${(d.actualRate * 100).toFixed(1)}%</td>
+                                            <td class="text-right">${formatCurrency(d.actual)}</td>
+                                            <td class="text-right">${formatCurrency(d.beckham)}</td>
+                                            <td class="text-right" style="color:var(--danger);">${formatCurrency(d.over)}</td>
+                                        </tr>`;
+                                    }).join('')}
+                                    <tr style="font-weight:600; border-top:2px solid var(--border);">
+                                        <td colspan="4">Total Estimated Refund</td>
+                                        <td class="text-right" style="color:#558b2f;">${formatCurrency(totalOverWithholding)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </details>` : ''}
+                        <div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px;">
+                            <strong>Note:</strong> This estimate assumes Beckham Law applies at a flat 24% rate. Your actual refund will be determined when you file your Declaración de la Renta. Per-month "Should apply" can be toggled in each payslip's Beckham Law Analysis section.
+                        </div>
+                    </div>`;
+                }
+            }
+
             // Monthly breakdown with net pay validation
             if (!config.expectedNetPay) config.expectedNetPay = {};
 
@@ -3010,6 +3196,8 @@
                                     <td style="padding-left:20px;">Base I.R.P.F.:</td><td class="text-right">${formatCurrency(ps.totals.baseIRPF)}</td></tr>
                             </table>
                         </div>
+
+                        ${buildCrossValidationPanel(ps)}
                     </div>
                 </div>`;
             }
@@ -3021,6 +3209,362 @@
             html += '</div>';
 
             container.innerHTML = html;
+        }
+
+        // ===== Cross-Validation Panel (spreadsheet-style checks) =====
+        function buildCrossValidationPanel(ps) {
+            const threshold = config.tolerance ? config.tolerance / 100 : 0.03;
+            const thresholdAbs = threshold * 100; // for display
+            const year = ps.year || 2026;
+            const rates = SS_RATES[year] || SS_RATES[2026];
+
+            // Helper: find earnings by name pattern
+            const findEarning = (pattern) => ps.earnings.find(e => pattern.test(e.nameEn) || pattern.test(e.nameEs));
+            const findEarningAmount = (pattern) => (findEarning(pattern) || {}).amount || 0;
+            const findDeduction = (pattern) => ps.deductions.find(d => pattern.test(d.nameEn) || pattern.test(d.nameEs));
+            const findDeductionAmount = (pattern) => Math.abs((findDeduction(pattern) || {}).amount || 0);
+
+            // Gather amounts from parsed earnings
+            const cashItems = ps.earnings.filter(e => {
+                // Especie items are: T.Restaurante, T.Transporte, Seguros, RSU In-Kind, Taxable Gain ESPP
+                const isEspecie = /seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs);
+                return !isEspecie;
+            });
+            const especieItems = ps.earnings.filter(e => {
+                return /seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs);
+            });
+
+            const totalCash = cashItems.reduce((s, e) => s + e.amount, 0);
+            const totalEspecie = especieItems.reduce((s, e) => s + e.amount, 0);
+
+            // Specific amounts for formulas
+            const esppRefund = findEarningAmount(/espp.*refund|devoluci.*espp/i);
+            const tRestaurante = findEarningAmount(/restaurante/i);
+            const tTransporte = findEarningAmount(/transporte/i);
+            const segExentos = findEarningAmount(/exentos|exempt.*insurance/i);
+            const segSujetos = findEarningAmount(/sujetos|taxable.*insurance/i);
+            const rsuEspecies = findEarningAmount(/especies.*rsu|rsu.*in-kind/i);
+            const taxGainESPP = findEarningAmount(/taxable.*gain.*espp/i);
+            const esppContribution = findDeductionAmount(/espp|aportaci.*espp/i);
+
+            // Get parsed totals
+            const baseCC = ps.totals.baseCC || 0;
+            const baseIRPF = ps.totals.baseIRPF || 0;
+            const tDevengado = ps.totals.tDevengado || 0;
+            const tDeducir = ps.totals.tDeducir || 0;
+            const netPay = ps.totals.netPay || 0;
+
+            // Find effective IRPF rate from deductions
+            const irpfDeduction = findDeduction(/tributaci.*irpf|irpf.*tributaci|^income tax.*irpf/i);
+            const effectiveRate = irpfDeduction && irpfDeduction.percent ? parseFloat(irpfDeduction.percent) / 100 : 0;
+            const irpfAmount = irpfDeduction ? Math.abs(irpfDeduction.amount) : 0;
+
+            const irpfEspecieDeduction = findDeduction(/repercutidos|passed-on/i);
+            const irpfEspecieAmount = irpfEspecieDeduction ? Math.abs(irpfEspecieDeduction.amount) : 0;
+
+            // SS deductions
+            const ssCC = findDeductionAmount(/contingencias.*comunes|common.*contingenc/i);
+            const ssEquity = findDeductionAmount(/equidad|equity|intergenerational/i);
+            const ssFP = findDeductionAmount(/formaci.*profesional|professional.*training/i);
+            const ssUnemployment = findDeductionAmount(/desempleo|unemployment/i);
+            const ssSolidarity = findDeductionAmount(/solidaridad|solidarity/i);
+            const totalSS = ssCC + ssEquity + ssFP + ssUnemployment + ssSolidarity;
+
+            // ===== Cross-validation formulas (from spreadsheet) =====
+            const checks = [];
+
+            // Check status helper
+            const checkStatus = (actual, expected, label) => {
+                if (expected === 0 && actual === 0) return { status: 'skip', diff: 0 };
+                const diff = actual - expected;
+                const absDiff = Math.abs(diff);
+                if (absDiff < 0.01) return { status: 'ok', diff };
+                if (expected !== 0 && (absDiff / Math.abs(expected)) <= threshold) return { status: 'ok', diff };
+                return { status: 'mismatch', diff };
+            };
+
+            // 1. SS Rate Verification
+            const ssChecks = [
+                { name: 'Contingencias Comunes', actual: ssCC, expectedRate: rates.cc, base: baseCC },
+                { name: 'Equidad Intergeneracional', actual: ssEquity, expectedRate: rates.equity, base: baseCC },
+                { name: 'Formación Profesional', actual: ssFP, expectedRate: rates.fp, base: baseCC },
+                { name: 'Desempleo', actual: ssUnemployment, expectedRate: rates.unemployment, base: baseCC }
+            ];
+
+            let ssRateHtml = '';
+            let ssRateIssues = 0;
+            if (baseCC > 0) {
+                for (const sc of ssChecks) {
+                    const expected = sc.base * sc.expectedRate;
+                    const result = checkStatus(sc.actual, expected, sc.name);
+                    const pdfRate = sc.base > 0 && sc.actual > 0 ? (sc.actual / sc.base * 100).toFixed(2) : '—';
+                    const knownRate = (sc.expectedRate * 100).toFixed(2);
+                    const icon = result.status === 'ok' ? '<span style="color:var(--success)">✓</span>' :
+                                 result.status === 'skip' ? '<span style="color:var(--text-muted)">—</span>' :
+                                 '<span style="color:var(--danger)">⚠</span>';
+                    if (result.status === 'mismatch') ssRateIssues++;
+                    ssRateHtml += `<tr>
+                        <td>${sc.name}</td>
+                        <td class="text-right">${knownRate}%</td>
+                        <td class="text-right">${pdfRate}%</td>
+                        <td class="text-right">${formatCurrency(expected)}</td>
+                        <td class="text-right">${formatCurrency(sc.actual)}</td>
+                        <td class="text-center">${icon}</td>
+                    </tr>`;
+                }
+                // Solidarity (not checked, just shown)
+                if (ssSolidarity > 0) {
+                    const solRate = baseCC > 0 ? (ssSolidarity / baseCC * 100).toFixed(2) : '—';
+                    ssRateHtml += `<tr style="color:var(--text-muted);">
+                        <td>Solidaridad</td>
+                        <td class="text-right">?</td>
+                        <td class="text-right">${solRate}%</td>
+                        <td class="text-right">—</td>
+                        <td class="text-right">${formatCurrency(ssSolidarity)}</td>
+                        <td class="text-center"><span title="Complex formula, not auto-checked">—</span></td>
+                    </tr>`;
+                }
+            }
+
+            // 2. Cross-validation checks
+            // Base IRPF expected: TotalCash - ESPPRefund + TotalEspecie - (T.Rest + T.Trans + SegExentos)
+            const expectedBaseIRPF = totalCash - esppRefund + totalEspecie - (tRestaurante + tTransporte + segExentos);
+            const baseIRPFCheck = checkStatus(baseIRPF, expectedBaseIRPF, 'Base IRPF');
+
+            // IRPF expected: EffectiveRate × (TotalCash - ESPPRefund)
+            const expectedIRPF = effectiveRate * (totalCash - esppRefund);
+            const irpfCheck = checkStatus(irpfAmount, expectedIRPF, 'IRPF');
+
+            // IRPF Especie expected: EffectiveRate × (SegSujetos + RSU Especies + TaxGainESPP)
+            const irpfEspecieBase = segSujetos + rsuEspecies + taxGainESPP;
+            const expectedIRPFEspecie = effectiveRate * irpfEspecieBase;
+            const irpfEspecieCheck = irpfEspecieBase > 0 ? checkStatus(irpfEspecieAmount, expectedIRPFEspecie, 'IRPF Especie') : { status: 'skip', diff: 0 };
+
+            // Total IRPF
+            const totalIRPF = irpfAmount + irpfEspecieAmount;
+            const expectedTotalIRPF = expectedIRPF + expectedIRPFEspecie;
+
+            // T. Devengado expected: TotalCash + TotalEspecie
+            const expectedTDevengado = totalCash + totalEspecie;
+            const tDevengadoCheck = tDevengado > 0 ? checkStatus(tDevengado, expectedTDevengado, 'T. Devengado') : { status: 'skip', diff: 0 };
+
+            // T. A Deducir expected: TotalEspecie + TotalSS + TotalIRPF + ESPPContribution
+            const expectedTDeducir = totalEspecie + totalSS + totalIRPF + esppContribution;
+            const tDeducirCheck = tDeducir > 0 ? checkStatus(tDeducir, expectedTDeducir, 'T. A Deducir') : { status: 'skip', diff: 0 };
+
+            // Net expected: T.Devengado - T.ADeducir
+            const expectedNet = tDevengado - tDeducir;
+            const netCheck = netPay > 0 && tDevengado > 0 ? checkStatus(netPay, expectedNet, 'Net') : { status: 'skip', diff: 0 };
+
+            // Status icon helper
+            const statusIcon = (result) => {
+                if (result.status === 'ok') return `<span style="color:var(--success)">✓</span>`;
+                if (result.status === 'skip') return `<span style="color:var(--text-muted)">—</span>`;
+                return `<span style="color:var(--danger)" title="Diff: ${result.diff.toFixed(2)}">⚠ ${result.diff >= 0 ? '+' : ''}${result.diff.toFixed(2)}</span>`;
+            };
+
+            // ===== Beckham Law Analysis =====
+            let beckhamHtml = '';
+            if (config.beckhamLawQualifies && effectiveRate > 0) {
+                const periodKey = `${ps.month}/${ps.year}`;
+                const perPayslip = config.beckhamPerPayslip?.[periodKey] || {};
+                const shouldApply = perPayslip.shouldApply !== undefined ? perPayslip.shouldApply : true;
+                const wasApplied = effectiveRate <= (BECKHAM_LAW_RATE + 0.005); // 24% ± 0.5% tolerance
+
+                // What IRPF should have been at 24%
+                const beckhamIRPF = BECKHAM_LAW_RATE * (totalCash - esppRefund);
+                const beckhamIRPFEspecie = irpfEspecieBase > 0 ? BECKHAM_LAW_RATE * irpfEspecieBase : 0;
+                const beckhamTotalIRPF = beckhamIRPF + beckhamIRPFEspecie;
+                const actualTotalIRPF = irpfAmount + irpfEspecieAmount;
+                const overWithholding = actualTotalIRPF - beckhamTotalIRPF;
+
+                const shouldApplyChecked = shouldApply ? 'checked' : '';
+                const wasAppliedBadge = wasApplied
+                    ? '<span class="badge badge-success">Yes (24%)</span>'
+                    : `<span class="badge badge-warning">No (${(effectiveRate * 100).toFixed(1)}%)</span>`;
+
+                beckhamHtml = `
+                <details style="margin-top: 12px; border: 2px solid #8bc34a; border-radius: 8px; overflow: hidden;">
+                    <summary style="cursor: pointer; padding: 10px 12px; background: #f0f8e8; font-weight: 600; font-size: 13px;">
+                        Beckham Law Analysis
+                        ${!wasApplied && shouldApply && overWithholding > 0 ? `<span class="badge badge-warning" style="margin-left: 8px;">Over-withheld: ${formatCurrency(overWithholding)}</span>` : ''}
+                        ${wasApplied && shouldApply ? '<span class="badge badge-success" style="margin-left: 8px;">Correctly applied</span>' : ''}
+                    </summary>
+                    <div style="padding: 12px; font-size: 13px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div style="padding: 8px; background: var(--bg); border-radius: 4px;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" ${shouldApplyChecked}
+                                        onchange="updateBeckhamPerPayslip('${periodKey}', 'shouldApply', this.checked)">
+                                    <span><strong>Should apply</strong> this month</span>
+                                </label>
+                            </div>
+                            <div style="padding: 8px; background: var(--bg); border-radius: 4px;">
+                                <span>Was applied: ${wasAppliedBadge}</span>
+                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                                    Effective rate: ${(effectiveRate * 100).toFixed(2)}% (Beckham: ${(BECKHAM_LAW_RATE * 100)}%)
+                                </div>
+                            </div>
+                        </div>
+                        ${shouldApply && !wasApplied && overWithholding > 0 ? `
+                        <div style="padding: 10px; background: #fff3cd; border-radius: 4px; margin-bottom: 8px;">
+                            <strong>Estimated over-withholding this month:</strong>
+                            <table style="font-size: 12px; margin-top: 8px; width: 100%;">
+                                <tr><td>Actual IRPF withheld (${(effectiveRate * 100).toFixed(1)}%):</td><td class="text-right">${formatCurrency(actualTotalIRPF)}</td></tr>
+                                <tr><td>Beckham IRPF (24%):</td><td class="text-right">${formatCurrency(beckhamTotalIRPF)}</td></tr>
+                                <tr style="font-weight:600; border-top: 1px solid var(--border);"><td>Over-withheld:</td><td class="text-right" style="color:var(--danger);">${formatCurrency(overWithholding)}</td></tr>
+                            </table>
+                        </div>` : ''}
+                        ${shouldApply && wasApplied ? `
+                        <div style="padding: 10px; background: #d4edda; border-radius: 4px;">
+                            Beckham Law rate was correctly applied at ~24%.
+                        </div>` : ''}
+                        ${!shouldApply ? `
+                        <div style="padding: 10px; background: var(--bg); border-radius: 4px; color: var(--text-muted);">
+                            Beckham Law marked as not applicable for this month.
+                        </div>` : ''}
+                    </div>
+                </details>`;
+            }
+
+            // ===== Estimated Tax Computation =====
+            let estimatedTaxHtml = '';
+            if (config.showEstimatedTax && config.annualGross > 0) {
+                const annualGross = config.annualGross;
+                // Rough annual SS (12 months of current SS)
+                const annualSS = totalSS * 12;
+                const minExempt = 5500;
+                const taxableIncome = Math.max(0, annualGross - annualSS - minExempt);
+                const estimatedTax = computeProgressiveTax(taxableIncome);
+                const estimatedRate = taxableIncome > 0 ? (estimatedTax / taxableIncome * 100).toFixed(1) : 0;
+                const effectiveOnGross = annualGross > 0 ? (estimatedTax / annualGross * 100).toFixed(1) : 0;
+
+                estimatedTaxHtml = `
+                <details style="margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <summary style="cursor: pointer; padding: 10px 12px; background: #f8f9fa; font-weight: 600; font-size: 13px;">
+                        Estimated Progressive Tax (${year})
+                    </summary>
+                    <div style="padding: 12px; font-size: 12px;">
+                        <table style="width: 100%;">
+                            <tr><td>Gross Annual Salary:</td><td class="text-right">${formatCurrency(annualGross)}</td></tr>
+                            <tr><td>Estimated Annual SS (×12):</td><td class="text-right">−${formatCurrency(annualSS)}</td></tr>
+                            <tr><td>Minimum Exempt:</td><td class="text-right">−${formatCurrency(minExempt)}</td></tr>
+                            <tr style="font-weight:600; border-top:1px solid var(--border);"><td>Taxable Income:</td><td class="text-right">${formatCurrency(taxableIncome)}</td></tr>
+                            <tr><td>Progressive Tax:</td><td class="text-right">${formatCurrency(estimatedTax)}</td></tr>
+                            <tr><td>Marginal Rate on Taxable:</td><td class="text-right">${estimatedRate}%</td></tr>
+                            <tr><td>Effective Rate on Gross:</td><td class="text-right">${effectiveOnGross}%</td></tr>
+                            <tr><td>Your Payslip Rate:</td><td class="text-right">${(effectiveRate * 100).toFixed(2)}%</td></tr>
+                        </table>
+                        <div style="margin-top: 8px; padding: 8px; background: #e7f3ff; border-radius: 4px; font-size: 11px;">
+                            This is an estimate. Actual taxes depend on personal deductions, regional rates, RSUs, and your full Declaración de la Renta.
+                        </div>
+                    </div>
+                </details>`;
+            }
+
+            // ===== Build the panel =====
+            let html = `
+            <details style="margin-top: 12px; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden;">
+                <summary style="cursor: pointer; padding: 10px 12px; background: #e7f3ff; font-weight: 600; font-size: 13px;">
+                    Cross-Validation (Spreadsheet Checks)
+                    ${ssRateIssues > 0 ? `<span class="badge badge-danger" style="margin-left: 8px;">⚠ ${ssRateIssues} SS rate issue${ssRateIssues > 1 ? 's' : ''}</span>` : ''}
+                    ${[baseIRPFCheck, irpfCheck, tDevengadoCheck, tDeducirCheck, netCheck].some(c => c.status === 'mismatch')
+                        ? '<span class="badge badge-danger" style="margin-left: 4px;">⚠ formula mismatch</span>'
+                        : '<span class="badge badge-success" style="margin-left: 4px;">✓</span>'}
+                </summary>
+                <div style="padding: 12px; font-size: 12px;">`;
+
+            // SS Rate Verification
+            if (ssRateHtml) {
+                html += `
+                    <div style="margin-bottom: 16px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 13px;">SS Rate Verification (${year})</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead><tr>
+                                <th style="text-align:left; padding: 4px 6px;">Concept</th>
+                                <th style="text-align:right; padding: 4px 6px;">Known Rate</th>
+                                <th style="text-align:right; padding: 4px 6px;">PDF Rate</th>
+                                <th style="text-align:right; padding: 4px 6px;">Expected</th>
+                                <th style="text-align:right; padding: 4px 6px;">Actual</th>
+                                <th style="text-align:center; padding: 4px 6px;">✓</th>
+                            </tr></thead>
+                            <tbody>${ssRateHtml}</tbody>
+                        </table>
+                    </div>`;
+            }
+
+            // Formula Cross-Checks
+            html += `
+                    <div style="margin-bottom: 16px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 13px;">Formula Cross-Checks</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead><tr>
+                                <th style="text-align:left; padding: 4px 6px;">Check</th>
+                                <th style="text-align:left; padding: 4px 6px; font-size: 11px; color: var(--text-muted);">Formula</th>
+                                <th style="text-align:right; padding: 4px 6px;">Expected</th>
+                                <th style="text-align:right; padding: 4px 6px;">Actual</th>
+                                <th style="text-align:center; padding: 4px 6px;">✓</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr>
+                                    <td>Base IRPF</td>
+                                    <td style="font-size:11px; color:var(--text-muted);">Cash−ESPPRef+Especie−(Rest+Trans+SegEx)</td>
+                                    <td class="text-right">${formatCurrency(expectedBaseIRPF)}</td>
+                                    <td class="text-right">${formatCurrency(baseIRPF)}</td>
+                                    <td class="text-center">${statusIcon(baseIRPFCheck)}</td>
+                                </tr>
+                                <tr>
+                                    <td>IRPF</td>
+                                    <td style="font-size:11px; color:var(--text-muted);">${(effectiveRate*100).toFixed(2)}% × (Cash−ESPPRef)</td>
+                                    <td class="text-right">${formatCurrency(expectedIRPF)}</td>
+                                    <td class="text-right">${formatCurrency(irpfAmount)}</td>
+                                    <td class="text-center">${statusIcon(irpfCheck)}</td>
+                                </tr>
+                                ${irpfEspecieBase > 0 ? `<tr>
+                                    <td>IRPF Especie</td>
+                                    <td style="font-size:11px; color:var(--text-muted);">${(effectiveRate*100).toFixed(2)}% × (SegSuj+RSU+ESPP)</td>
+                                    <td class="text-right">${formatCurrency(expectedIRPFEspecie)}</td>
+                                    <td class="text-right">${formatCurrency(irpfEspecieAmount)}</td>
+                                    <td class="text-center">${statusIcon(irpfEspecieCheck)}</td>
+                                </tr>` : ''}
+                                <tr>
+                                    <td>T. Devengado</td>
+                                    <td style="font-size:11px; color:var(--text-muted);">Cash + Especie</td>
+                                    <td class="text-right">${formatCurrency(expectedTDevengado)}</td>
+                                    <td class="text-right">${tDevengado > 0 ? formatCurrency(tDevengado) : '—'}</td>
+                                    <td class="text-center">${statusIcon(tDevengadoCheck)}</td>
+                                </tr>
+                                <tr>
+                                    <td>T. A Deducir</td>
+                                    <td style="font-size:11px; color:var(--text-muted);">Especie+SS+IRPF+ESPP</td>
+                                    <td class="text-right">${formatCurrency(expectedTDeducir)}</td>
+                                    <td class="text-right">${tDeducir > 0 ? formatCurrency(tDeducir) : '—'}</td>
+                                    <td class="text-center">${statusIcon(tDeducirCheck)}</td>
+                                </tr>
+                                <tr style="font-weight: 600; border-top: 2px solid var(--border);">
+                                    <td>Net (Líquido)</td>
+                                    <td style="font-size:11px; color:var(--text-muted);">T.Dev − T.Ded</td>
+                                    <td class="text-right">${tDevengado > 0 ? formatCurrency(expectedNet) : '—'}</td>
+                                    <td class="text-right">${formatCurrency(netPay)}</td>
+                                    <td class="text-center">${statusIcon(netCheck)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>`;
+
+            html += `</div></details>`;
+            html += beckhamHtml;
+            html += estimatedTaxHtml;
+            return html;
+        }
+
+        // Update Beckham Law per-payslip tracking
+        function updateBeckhamPerPayslip(periodKey, field, value) {
+            if (!config.beckhamPerPayslip) config.beckhamPerPayslip = {};
+            if (!config.beckhamPerPayslip[periodKey]) config.beckhamPerPayslip[periodKey] = {};
+            config.beckhamPerPayslip[periodKey][field] = value;
+            autoSaveConfig();
+            displayResults();
         }
 
         function togglePayslip(header) {
@@ -3083,6 +3627,14 @@
             const oncallToggle = document.getElementById('includeOncallComp');
             if (oncallToggle) oncallToggle.checked = config.includeOncallComp || false;
 
+            // Apply Beckham Law / tax settings
+            const beckhamCb = document.getElementById('beckhamLawQualifies');
+            if (beckhamCb) beckhamCb.checked = config.beckhamLawQualifies || false;
+            const estTaxCb = document.getElementById('showEstimatedTax');
+            if (estTaxCb) estTaxCb.checked = config.showEstimatedTax || false;
+            const beckhamDetails = document.getElementById('beckhamLawDetails');
+            if (beckhamDetails) beckhamDetails.style.display = config.beckhamLawQualifies ? 'block' : 'none';
+
             // Apply display settings
             if (config.displayCurrency) {
                 document.getElementById('displayCurrency').value = config.displayCurrency;
@@ -3133,8 +3685,15 @@
                 displayCurrency: document.getElementById('displayCurrency')?.value || 'EUR',
                 eurToUsdRate: parseFloat(document.getElementById('eurToUsdRate')?.value) || 1.08,
                 numberFormat: document.getElementById('numberFormat')?.value || 'es-ES',
-                includeOncallComp: document.getElementById('includeOncallComp')?.checked || false
+                includeOncallComp: document.getElementById('includeOncallComp')?.checked || false,
+                beckhamLawQualifies: document.getElementById('beckhamLawQualifies')?.checked || false,
+                showEstimatedTax: document.getElementById('showEstimatedTax')?.checked || false,
+                beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
+
+            // Toggle Beckham Law details visibility
+            const beckhamDetails = document.getElementById('beckhamLawDetails');
+            if (beckhamDetails) beckhamDetails.style.display = config.beckhamLawQualifies ? 'block' : 'none';
 
             // Update autosave slot's config if it exists
             const autosaveIdx = saveSlots.findIndex(s => s.id === 'autosave');
