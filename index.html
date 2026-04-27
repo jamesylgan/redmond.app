@@ -867,7 +867,7 @@
                     Tax Regime & Beckham Law
                 </summary>
                 <p style="color: var(--text-muted); font-size: 13px; margin: 10px 0;">
-                    Configure your tax regime. If you qualify for the Beckham Law (Régimen de Impatriados), IRPF should be withheld at a flat 24% instead of the progressive rate. This tool can detect over-withholding and estimate your expected refund.
+                    Configure your tax regime. If you qualify for the Beckham Law (Régimen de Impatriados), IRPF should be withheld at a flat 24% instead of the progressive rate.
                 </p>
                 <div style="display: grid; gap: 12px; margin-top: 12px;">
                     <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: white; border-radius: 6px; cursor: pointer;">
@@ -884,10 +884,22 @@
                             <li>If the employer withheld at a higher progressive rate, calculate the over-withholding</li>
                             <li>Show an accumulated estimated refund across all payslips</li>
                         </ul>
-                        <div style="margin-top: 12px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px;">
-                            <strong>Note:</strong> The actual refund depends on your full tax return (Declaración de la Renta). This is an estimate based on the difference between what was withheld and what should have been withheld at 24%.
-                        </div>
                     </div>
+                    <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: white; border-radius: 6px; cursor: pointer;">
+                        <input type="checkbox" id="showEstimatedTax" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();">
+                        <div>
+                            <strong>Show estimated progressive tax calculation</strong>
+                            <div style="font-size: 12px; color: var(--text-muted);">Compare your withholding against what the Spanish progressive brackets would compute</div>
+                        </div>
+                    </label>
+                </div>
+            </details>
+
+            <details style="margin-top: 15px; padding: 15px; background: #e8f4fd; border: 1px solid var(--primary); border-radius: 6px;" id="rsuEquitySection">
+                <summary style="cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    RSU / Equity Tracking
+                </summary>
+                <div style="display: grid; gap: 12px; margin-top: 12px;">
                     <div style="padding: 10px; background: white; border-radius: 6px;">
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
                             <strong>RSU Validation Mode</strong>
@@ -898,7 +910,7 @@
                             </select>
                         </div>
                         <div id="rsuModeDescription" style="font-size: 12px; color: var(--text-muted);"></div>
-                        <div id="rsuTransferConfig" style="display: none; margin-top: 10px; padding: 10px; background: #e8f4fd; border: 1px solid var(--primary); border-radius: 4px;">
+                        <div id="rsuTransferConfig" style="display: none; margin-top: 10px; padding: 10px; background: #f0f7ff; border: 1px solid #90caf9; border-radius: 4px;">
                             <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">US/ES Transfer Details</div>
                             <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; margin-bottom: 12px; max-width: 220px;">
                                 <span><strong>US → Spain transfer date</strong></span>
@@ -935,13 +947,6 @@
                             <div id="rsuVestPreview" style="margin-top: 12px;"></div>
                         </div>
                     </div>
-                    <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: white; border-radius: 6px; cursor: pointer;">
-                        <input type="checkbox" id="showEstimatedTax" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();">
-                        <div>
-                            <strong>Show estimated progressive tax calculation</strong>
-                            <div style="font-size: 12px; color: var(--text-muted);">Compare your withholding against what the Spanish progressive brackets would compute (useful even if on Beckham Law, to see the difference)</div>
-                        </div>
-                    </label>
                 </div>
             </details>
 
