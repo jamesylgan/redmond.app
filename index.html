@@ -4854,7 +4854,7 @@
                 delete config.usVestConfirmed[dateKey];
             }
             autoSaveConfig();
-            renderVestPreview();
+            // Don't re-render — checkbox already reflects new state, avoids collapsing the panel
         }
 
         function updateHistoricalPrice(dateKey, value) {
