@@ -2561,6 +2561,11 @@
                 }
             }
 
+            // ===== Equity Overview (US/ES Transfer Mode) =====
+            if (config.rsuValidationMode === 'us-es-transfer' && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                html += buildEquityOverview(parsedPayslips);
+            }
+
             // Monthly breakdown with net pay validation
             if (!config.expectedNetPay) config.expectedNetPay = {};
 
@@ -3261,6 +3266,173 @@
             html += '</div>';
 
             container.innerHTML = html;
+        }
+
+        // ===== Equity Overview (12-month rolling view) =====
+        function buildEquityOverview(payslips) {
+            const grants = config.rsuGrants || [];
+            const transferDate = config.rsuTransferDate;
+            if (!grants.length || !transferDate) return '';
+
+            const allEvents = computeVestEvents(grants, transferDate);
+            if (allEvents.length === 0) return '';
+
+            const es = currentLang === 'es';
+            const monthNamesLong = es
+                ? ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+                : ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const monthNamesShort = es
+                ? ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+                : ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            // Determine date range: 3 months back + 9 months forward from latest payslip
+            const sorted = [...payslips].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+            const latest = sorted[sorted.length - 1];
+            const now = new Date(latest.year, latest.month - 1, 15);
+            const rangeStart = addMonths(now, -3);
+            const rangeEnd = addMonths(now, 9);
+
+            // Build month slots
+            const slots = [];
+            const cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+            while (cursor <= rangeEnd) {
+                const m = cursor.getMonth() + 1;
+                const y = cursor.getFullYear();
+                const isPast = (y < latest.year) || (y === latest.year && m <= latest.month);
+                const isCurrent = (y === latest.year && m === latest.month);
+
+                // Find payslip for this month
+                const ps = payslips.find(p => p.month === m && p.year === y);
+
+                // Find vest events for this month
+                const monthVests = getVestEventsForMonth(allEvents, m, y);
+                const vestShares = monthVests.reduce((s, e) => s + e.shares, 0);
+                const weightedUSPct = vestShares > 0 ? monthVests.reduce((s, e) => s + e.shares * e.usPct, 0) / vestShares : 0;
+                const weightedESPct = 1 - weightedUSPct;
+
+                // RSU amounts from payslip
+                let payslipRSU = 0;
+                let payslipRSUTaxReported = 0;
+                if (ps) {
+                    payslipRSU = (ps.earnings.find(e => /especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
+                    payslipRSUTaxReported = (ps.earnings.find(e => /rsu.*tax.*reported/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
+                }
+                const payslipTotal = payslipRSU + payslipRSUTaxReported;
+
+                slots.push({ m, y, isPast, isCurrent, ps, monthVests, vestShares, weightedUSPct, weightedESPct, payslipRSU, payslipRSUTaxReported, payslipTotal });
+                cursor.setMonth(cursor.getMonth() + 1);
+            }
+
+            // Summary stats
+            const pastSlots = slots.filter(s => s.isPast);
+            const futureSlots = slots.filter(s => !s.isPast);
+            const pastTotalShares = pastSlots.reduce((s, sl) => s + sl.vestShares, 0);
+            const futureTotalShares = futureSlots.reduce((s, sl) => s + sl.vestShares, 0);
+            const pastOnNomina = pastSlots.reduce((s, sl) => s + sl.payslipTotal, 0);
+            const pastExpectedVests = pastSlots.filter(s => s.vestShares > 0).length;
+            const pastWithNomina = pastSlots.filter(s => s.payslipTotal > 0).length;
+
+            let html = `<div class="card" style="border: 2px solid #17a2b8;">
+                <h2 style="color: #0c5460;">${es ? 'Resumen de Equity — US/ES' : 'Equity Overview — US/ES Transfer'}</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                    ${es
+                        ? 'Vista de 12 meses de vesting de RSU: 3 meses anteriores comparados con las nóminas, y 9 meses proyectados.'
+                        : '12-month rolling view of RSU vesting: past 3 months cross-referenced with payslips, plus 9 months projected.'}
+                </p>
+
+                <div class="summary-grid">
+                    <div class="summary-item" style="background: #e8f4fd;">
+                        <div class="value" style="color: #1565c0;">${pastTotalShares.toFixed(1)}</div>
+                        <div class="label">${es ? 'Acciones pasadas (3m)' : 'Past Shares (3mo)'}</div>
+                    </div>
+                    <div class="summary-item" style="background: #e8f5e9;">
+                        <div class="value" style="color: #2e7d32;">${futureTotalShares.toFixed(1)}</div>
+                        <div class="label">${es ? 'Acciones futuras (9m)' : 'Upcoming Shares (9mo)'}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="value">${pastWithNomina}/${pastExpectedVests}</div>
+                        <div class="label">${es ? 'Meses con nómina' : 'Months on Nómina'}</div>
+                    </div>
+                    ${pastOnNomina > 0 ? `<div class="summary-item">
+                        <div class="value" style="color: var(--primary);">${formatCurrency(pastOnNomina)}</div>
+                        <div class="label">${es ? 'RSU en nóminas' : 'RSU on Payslips'}</div>
+                    </div>` : ''}
+                </div>`;
+
+            // Table
+            html += `<div style="overflow-x: auto; margin-top: 15px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                    <thead><tr style="background: #f0f7ff;">
+                        <th style="padding: 6px 8px; text-align:left;">${es ? 'Mes' : 'Month'}</th>
+                        <th style="padding: 6px 8px; text-align:right;">${es ? 'Acciones' : 'Shares'}</th>
+                        <th style="padding: 6px 8px; text-align:right;">US %</th>
+                        <th style="padding: 6px 8px; text-align:right;">ES %</th>
+                        <th style="padding: 6px 8px; text-align:right;">${es ? 'En nómina' : 'On Nómina'}</th>
+                        <th style="padding: 6px 8px; text-align:right;">${es ? 'US (no tributa ES)' : 'US-sourced'}</th>
+                        <th style="padding: 6px 8px; text-align:right;">${es ? 'ES (tributa)' : 'ES-sourced'}</th>
+                        <th style="padding: 6px 8px; text-align:center;">${es ? 'Estado' : 'Status'}</th>
+                    </tr></thead><tbody>`;
+
+            for (const sl of slots) {
+                const label = `${monthNamesShort[sl.m]} ${sl.y}`;
+                const rowBg = sl.isCurrent ? 'background: #fffde7;' : sl.isPast ? '' : 'background: #fafafa; color: var(--text-muted);';
+                const border = sl.isCurrent ? 'border: 2px solid #ffc107;' : '';
+
+                let status = '';
+                if (sl.vestShares === 0) {
+                    status = `<span style="color: var(--text-muted);">—</span>`;
+                } else if (sl.isPast && sl.payslipTotal > 0) {
+                    status = `<span class="badge badge-success">✓ ${es ? 'en nómina' : 'on payslip'}</span>`;
+                } else if (sl.isPast && sl.ps && sl.payslipTotal === 0) {
+                    status = `<span class="badge badge-warning">${es ? 'no en nómina' : 'not on payslip'}</span>`;
+                } else if (sl.isPast && !sl.ps) {
+                    status = `<span class="badge badge-info">${es ? 'sin nómina' : 'no payslip'}</span>`;
+                } else {
+                    status = `<span style="color: var(--text-muted); font-size: 11px;">${es ? 'proyectado' : 'projected'}</span>`;
+                }
+
+                const usAmt = sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal * sl.weightedUSPct) : (sl.vestShares > 0 && !sl.isPast ? `~${(sl.weightedUSPct * 100).toFixed(0)}%` : '—');
+                const esAmt = sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal * sl.weightedESPct) : (sl.vestShares > 0 && !sl.isPast ? `~${(sl.weightedESPct * 100).toFixed(0)}%` : '—');
+
+                // Grant details tooltip
+                const grantDetails = sl.monthVests.map(v => `${v.grantName}: ${v.shares.toFixed(1)} shares`).join(', ');
+
+                html += `<tr style="${rowBg} ${border} border-bottom: 1px solid #eee;" ${grantDetails ? `title="${grantDetails}"` : ''}>
+                    <td style="padding: 6px 8px; font-weight: ${sl.isCurrent ? '700' : '400'};">${label}${sl.isCurrent ? (es ? ' ◀ actual' : ' ◀ current') : ''}</td>
+                    <td style="padding: 6px 8px; text-align:right;">${sl.vestShares > 0 ? sl.vestShares.toFixed(1) : '—'}</td>
+                    <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${sl.vestShares > 0 ? (sl.weightedUSPct * 100).toFixed(1) + '%' : '—'}</td>
+                    <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${sl.vestShares > 0 ? (sl.weightedESPct * 100).toFixed(1) + '%' : '—'}</td>
+                    <td style="padding: 6px 8px; text-align:right;">${sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal) : '—'}</td>
+                    <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${usAmt}</td>
+                    <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${esAmt}</td>
+                    <td style="padding: 6px 8px; text-align:center;">${status}</td>
+                </tr>`;
+            }
+
+            // Totals row
+            const allShares = slots.reduce((s, sl) => s + sl.vestShares, 0);
+            const allOnNomina = slots.reduce((s, sl) => s + sl.payslipTotal, 0);
+            html += `<tr style="font-weight: 700; border-top: 2px solid #333; background: #f8f9fa;">
+                <td style="padding: 6px 8px;">Total (12mo)</td>
+                <td style="padding: 6px 8px; text-align:right;">${allShares.toFixed(1)}</td>
+                <td colspan="2"></td>
+                <td style="padding: 6px 8px; text-align:right;">${allOnNomina > 0 ? formatCurrency(allOnNomina) : '—'}</td>
+                <td colspan="2"></td>
+                <td></td>
+            </tr>`;
+
+            html += '</tbody></table></div>';
+
+            // Explanation note
+            html += `<div style="margin-top: 12px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 11px; color: #0c5460;">
+                <strong>${es ? 'Nota:' : 'Note:'}</strong>
+                ${es
+                    ? 'La columna "US (no tributa ES)" muestra la parte de RSU que se atribuye a trabajo en EEUU y no tributa en España. "ES (tributa)" es la parte sujeta a IRPF español (Beckham 24% si aplica). Los meses futuros muestran solo porcentajes ya que el precio de la acción no se conoce aún.'
+                    : 'The "US-sourced" column shows the portion of RSU income attributed to US work — not taxable in Spain. "ES-sourced" is subject to Spanish IRPF (Beckham 24% if applicable). Future months show percentages only since share price is unknown.'}
+            </div>`;
+
+            html += '</div>';
+            return html;
         }
 
         // ===== Cross-Validation Panel (spreadsheet-style checks) =====
