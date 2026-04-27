@@ -5142,7 +5142,8 @@
                 monthBuckets[key].value += eventValue;
                 monthBuckets[key].priceUSD = vestPriceUSD;
             }
-            const rows = Object.values(monthBuckets).sort((a, b) => a.y !== b.y ? a.y - b.y : a.m - b.m).slice(0, 15);
+            const currentYear = now.getFullYear();
+            const rows = Object.values(monthBuckets).filter(r => r.y <= currentYear).sort((a, b) => a.y !== b.y ? a.y - b.y : a.m - b.m);
             for (const r of rows) { if (r.shares > 0) { r.usPctW /= r.shares; r.esPctW /= r.shares; } }
 
             let html = `<h2 style="page-break-before: auto;">${isSpanish ? 'Anexo: Calendario de Vesting de RSU' : 'Addendum: RSU Vesting Schedule'}</h2>`;
