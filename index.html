@@ -1508,7 +1508,15 @@
 
         <div class="card">
             <h2>US Federal Tax Estimator</h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label><strong>Mode</strong></label>
+                    <select id="usTaxMode" onchange="prefillUSTaxFromConfig(); computeUSTaxEstimate();" style="width: 100%; padding: 8px;">
+                        <option value="ytd">Actual YTD (from payslips so far)</option>
+                        <option value="projected">Full Year Projected</option>
+                    </select>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Projected uses grant data + Beckham rate for full year estimate</div>
+                </div>
                 <div class="form-group">
                     <label><strong>Filing Status</strong></label>
                     <select id="usTaxFilingStatus" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
@@ -5018,63 +5026,126 @@
         }
 
         function prefillUSTaxFromConfig() {
+            const mode = document.getElementById('usTaxMode')?.value || 'ytd';
             const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
-            // Salary
+            const priceUSD = config.rsuSharePrice || 0;
+            const year = new Date().getFullYear();
+            const isProjected = mode === 'projected';
+
+            // Salary: always full year (it's an annual contract)
             const salaryUSD = Math.round((config.annualGross || 0) * eurRate);
             document.getElementById('usTaxSalary').value = salaryUSD || '';
 
             // RSU from grants
-            const priceUSD = config.rsuSharePrice || 0;
             if (priceUSD > 0 && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
                 const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
-                const year = new Date().getFullYear();
-                let totalRSUusd = 0;
-                for (const e of events) {
-                    if (e.date.getFullYear() === year) {
-                        const hist = config.rsuHistoricalPrices || {};
+                const yearEvents = events.filter(e => e.date.getFullYear() === year);
+                const now = new Date();
+                const hist = config.rsuHistoricalPrices || {};
+
+                if (isProjected) {
+                    // Full year: all vests, use historical for past + current price for future
+                    let totalRSUusd = 0;
+                    for (const e of yearEvents) {
                         const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
-                        const vestPrice = hist[dk] || priceUSD;
-                        totalRSUusd += e.shares * vestPrice;
+                        totalRSUusd += e.shares * (hist[dk] || priceUSD);
                     }
+                    document.getElementById('usTaxRSU').value = Math.round(totalRSUusd) || '';
+                } else {
+                    // YTD: only past vests
+                    let totalRSUusd = 0;
+                    for (const e of yearEvents.filter(ev => ev.date <= now)) {
+                        const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                        totalRSUusd += e.shares * (hist[dk] || priceUSD);
+                    }
+                    document.getElementById('usTaxRSU').value = Math.round(totalRSUusd) || '';
                 }
-                document.getElementById('usTaxRSU').value = Math.round(totalRSUusd) || '';
             }
 
-            // Spanish taxes from payslips
-            if (parsedPayslips.length > 0) {
-                let totalSpanishTax = 0;
-                for (const ps of parsedPayslips) {
-                    for (const d of ps.deductions) {
-                        if (/irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs)) {
-                            totalSpanishTax += Math.abs(d.amount);
+            // Spanish taxes
+            if (isProjected) {
+                // Projected: estimate full year Spanish taxes
+                // Salary IRPF: Beckham 24% on full salary (or use actual rate from payslips)
+                let salaryIRPFRate = config.beckhamLawQualifies ? 0.24 : 0.30;
+                // Get actual rate from most recent payslip if available
+                if (parsedPayslips.length > 0) {
+                    const lastPs = [...parsedPayslips].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month).pop();
+                    const irpfDed = lastPs.deductions.find(d => /tributaci.*irpf|irpf/i.test(d.nameEn + ' ' + d.nameEs));
+                    if (irpfDed?.percent) salaryIRPFRate = parseFloat(irpfDed.percent) / 100;
+                }
+                const annualSalaryEUR = config.annualGross || 0;
+                const projectedSalaryTaxEUR = annualSalaryEUR * salaryIRPFRate;
+
+                // RSU Spain tax: Beckham 24% on Spain-sourced RSU
+                let projectedRSUSpainTaxEUR = 0;
+                if (config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                    const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
+                    const yearEvents = events.filter(e => e.date.getFullYear() === year);
+                    const hist = config.rsuHistoricalPrices || {};
+                    for (const e of yearEvents) {
+                        const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                        const vestPriceEUR = (hist[dk] || priceUSD) / eurRate;
+                        projectedRSUSpainTaxEUR += e.shares * vestPriceEUR * e.spainPct * 0.24;
+                    }
+                }
+
+                // SS contributions (estimated from payslip average)
+                let projectedSSEUR = 0;
+                if (parsedPayslips.length > 0) {
+                    let totalSS = 0;
+                    for (const ps of parsedPayslips) {
+                        for (const d of ps.deductions) {
+                            if (/contingencias|equidad|solidaridad|formaci|desempleo/i.test(d.nameEn + ' ' + d.nameEs)) {
+                                totalSS += Math.abs(d.amount);
+                            }
                         }
                     }
+                    projectedSSEUR = totalSS * (12 / parsedPayslips.length);
                 }
-                // Convert to USD and project for full year
-                const monthsParsed = parsedPayslips.length;
-                const projectedAnnual = totalSpanishTax * (12 / monthsParsed);
-                document.getElementById('usTaxSpanishPaid').value = Math.round(projectedAnnual * eurRate) || '';
+
+                const totalSpanishTaxEUR = projectedSalaryTaxEUR + projectedRSUSpainTaxEUR;
+                document.getElementById('usTaxSpanishPaid').value = Math.round(totalSpanishTaxEUR * eurRate) || '';
+            } else {
+                // YTD: actual from payslips
+                if (parsedPayslips.length > 0) {
+                    let totalSpanishTax = 0;
+                    for (const ps of parsedPayslips) {
+                        for (const d of ps.deductions) {
+                            if (/irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs)) {
+                                totalSpanishTax += Math.abs(d.amount);
+                            }
+                        }
+                    }
+                    document.getElementById('usTaxSpanishPaid').value = Math.round(totalSpanishTax * eurRate) || '';
+                }
             }
 
-            // US withholding: sum from per-vest data in US Vest Verification
+            // US withholding from vest verification
             if (config.rsuGrants?.length > 0 && config.rsuTransferDate) {
                 const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
-                const year = new Date().getFullYear();
-                const pastEvts = events.filter(e => e.date < new Date() && e.date.getFullYear() === year);
+                const now = new Date();
+                const relevantEvts = isProjected
+                    ? events.filter(e => e.date.getFullYear() === year)
+                    : events.filter(e => e.date < now && e.date.getFullYear() === year);
                 const soldData = config.sharesSoldForTax || {};
                 const withheldData = config.usTaxWithheldPerVest || {};
-                const histPrices = config.rsuHistoricalPrices || {};
-                let totalSold = 0, totalWithheldFromVests = 0;
-                for (const e of pastEvts) {
+                const hist = config.rsuHistoricalPrices || {};
+                let totalSold = 0, totalWithheld = 0;
+
+                for (const e of relevantEvts) {
                     const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
                     const dateDk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
-                    if (withheldData[dk]) { totalWithheldFromVests += withheldData[dk]; }
-                    else if (soldData[dk]) { totalWithheldFromVests += soldData[dk] * (histPrices[dateDk] || priceUSD); totalSold += soldData[dk]; }
+                    if (withheldData[dk]) { totalWithheld += withheldData[dk]; }
+                    else if (soldData[dk]) { totalWithheld += soldData[dk] * (hist[dateDk] || priceUSD); totalSold += soldData[dk]; }
+                    else if (isProjected) {
+                        // For projected future vests with no data yet: estimate 22% supplemental withholding
+                        const vestValue = e.shares * (hist[dateDk] || priceUSD);
+                        totalWithheld += vestValue * 0.22;
+                    }
                 }
-                if (totalWithheldFromVests > 0) {
-                    document.getElementById('usTaxSharesSold').value = totalSold > 0 ? Math.round(totalSold) : '';
-                    document.getElementById('usTaxWithheld').value = Math.round(totalWithheldFromVests);
-                }
+
+                document.getElementById('usTaxSharesSold').value = totalSold > 0 ? Math.round(totalSold) : '';
+                document.getElementById('usTaxWithheld').value = totalWithheld > 0 ? Math.round(totalWithheld) : '';
             }
 
             computeUSTaxEstimate();
@@ -5154,7 +5225,12 @@
             const fmt = (v) => '$' + Math.round(v).toLocaleString('en-US');
             const pct = (v) => (v * 100).toFixed(1) + '%';
 
-            let html = `<h2>Estimated US Federal Tax — ${filing.toUpperCase()} / ${strategy === 'feie-ftc' ? 'FEIE+FTC' : 'FTC Only'}</h2>`;
+            const mode = document.getElementById('usTaxMode')?.value || 'ytd';
+            const modeLabel = mode === 'projected' ? 'FULL YEAR PROJECTED' : 'ACTUAL YTD';
+            let html = `<h2>Estimated US Federal Tax — ${modeLabel} — ${filing.toUpperCase()} / ${strategy === 'feie-ftc' ? 'FEIE+FTC' : 'FTC Only'}</h2>`;
+            if (mode === 'projected') {
+                html += `<div style="padding: 6px 10px; background: #e8f4fd; border-radius: 4px; margin-bottom: 12px; font-size: 11px; color: #0c5460;">Projected mode: salary is annual, RSU uses all ${new Date().getFullYear()} vests (historical prices for past, current price for future), Spanish taxes estimated at Beckham 24%, US withholding includes projected 22% on future vests.</div>`;
+            }
 
             // Income breakdown
             html += `<table style="width:100%; font-size:13px; border-collapse:collapse;">
