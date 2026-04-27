@@ -4307,31 +4307,32 @@
                 return;
             }
 
-            let html = '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            const inputStyle = 'width: 100%; box-sizing: border-box; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;';
+            let html = '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;">';
             html += '<thead><tr style="background: #f0f7ff;">';
-            html += '<th style="padding: 4px 6px; text-align:left;">Name</th>';
-            html += '<th style="padding: 4px 6px; text-align:left;">Grant Date</th>';
-            html += '<th style="padding: 4px 6px; text-align:right;">Total Shares</th>';
-            html += '<th style="padding: 4px 6px; text-align:left;">Schedule</th>';
-            html += '<th style="padding: 4px 6px; text-align:right;">Cliff (mo)</th>';
-            html += '<th style="padding: 4px 6px; text-align:right;">Already Vested</th>';
-            html += '<th style="padding: 4px 6px; text-align:center;"></th>';
+            html += '<th style="padding: 4px 6px; text-align:left; width: 15%;">Name</th>';
+            html += '<th style="padding: 4px 6px; text-align:left; width: 18%;">Grant Date</th>';
+            html += '<th style="padding: 4px 6px; text-align:right; width: 12%;">Shares</th>';
+            html += '<th style="padding: 4px 6px; text-align:left; width: 18%;">Schedule</th>';
+            html += '<th style="padding: 4px 6px; text-align:right; width: 10%;">Cliff</th>';
+            html += '<th style="padding: 4px 6px; text-align:right; width: 12%;">Vested</th>';
+            html += '<th style="padding: 4px 6px; text-align:center; width: 5%;"></th>';
             html += '</tr></thead><tbody>';
 
             for (let i = 0; i < grants.length; i++) {
                 const g = grants[i];
                 html += `<tr style="border-bottom: 1px solid #e5e7eb;">
-                    <td style="padding: 4px 3px;"><input type="text" value="${g.name || ''}" placeholder="Grant #${i+1}" onchange="updateRSUGrant(${i}, 'name', this.value)" style="width: 90px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;"></td>
-                    <td style="padding: 4px 3px;"><input type="date" value="${g.grantDate || ''}" onchange="updateRSUGrant(${i}, 'grantDate', this.value)" style="padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;"></td>
-                    <td style="padding: 4px 3px;"><input type="number" value="${g.totalShares || ''}" placeholder="0" onchange="updateRSUGrant(${i}, 'totalShares', this.value)" style="width: 65px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"></td>
-                    <td style="padding: 4px 3px;"><select onchange="updateRSUGrant(${i}, 'vestingSchedule', this.value)" style="padding: 3px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;">
+                    <td style="padding: 4px 3px;"><input type="text" value="${g.name || ''}" placeholder="Grant #${i+1}" onchange="updateRSUGrant(${i}, 'name', this.value)" style="${inputStyle}"></td>
+                    <td style="padding: 4px 3px;"><input type="date" value="${g.grantDate || ''}" onchange="updateRSUGrant(${i}, 'grantDate', this.value)" style="${inputStyle}"></td>
+                    <td style="padding: 4px 3px;"><input type="number" value="${g.totalShares || ''}" placeholder="0" onchange="updateRSUGrant(${i}, 'totalShares', this.value)" style="${inputStyle} text-align: right;"></td>
+                    <td style="padding: 4px 3px;"><select onchange="updateRSUGrant(${i}, 'vestingSchedule', this.value)" style="${inputStyle}">
                         <option value="monthly" ${g.vestingSchedule === 'monthly' ? 'selected' : ''}>Monthly</option>
                         <option value="quarterly" ${g.vestingSchedule === 'quarterly' ? 'selected' : ''}>Quarterly</option>
                         <option value="semi-annual" ${g.vestingSchedule === 'semi-annual' ? 'selected' : ''}>Semi-Annual</option>
                         <option value="annual" ${g.vestingSchedule === 'annual' ? 'selected' : ''}>Annual</option>
                     </select></td>
-                    <td style="padding: 4px 3px;"><input type="number" value="${g.cliffMonths || 0}" min="0" onchange="updateRSUGrant(${i}, 'cliffMonths', this.value)" style="width: 45px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"></td>
-                    <td style="padding: 4px 3px;"><input type="number" value="${g.sharesAlreadyVested || 0}" min="0" onchange="updateRSUGrant(${i}, 'sharesAlreadyVested', this.value)" style="width: 55px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"></td>
+                    <td style="padding: 4px 3px;"><input type="number" value="${g.cliffMonths || 0}" min="0" onchange="updateRSUGrant(${i}, 'cliffMonths', this.value)" style="${inputStyle} text-align: right;"></td>
+                    <td style="padding: 4px 3px;"><input type="number" value="${g.sharesAlreadyVested || 0}" min="0" onchange="updateRSUGrant(${i}, 'sharesAlreadyVested', this.value)" style="${inputStyle} text-align: right;"></td>
                     <td style="padding: 4px 3px; text-align: center;"><button onclick="removeRSUGrant(${i})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 14px; padding: 2px 6px; margin: 0;" title="Remove grant">×</button></td>
                 </tr>`;
             }
