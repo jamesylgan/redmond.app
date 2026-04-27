@@ -4407,24 +4407,21 @@
             const allEvents = (grants.length > 0 && transferDate) ? computeVestEvents(grants, transferDate) : [];
             const now = new Date();
             const monthsAhead = 12;
-            let totalVestShares = 0;
-            let vestMonths = 0;
+            let totalVestShares12mo = 0;
+            let vestMonthCount = 0;
             const monthlyVests = {};
 
             for (const e of allEvents) {
                 const diff = (e.date.getFullYear() - now.getFullYear()) * 12 + (e.date.getMonth() - now.getMonth());
-                if (diff >= -3 && diff <= monthsAhead) {
+                if (diff >= 0 && diff < monthsAhead) {
                     const key = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, '0')}`;
-                    if (!monthlyVests[key]) monthlyVests[key] = { shares: 0, usPct: 0, esPct: 0, count: 0 };
+                    if (!monthlyVests[key]) { monthlyVests[key] = { shares: 0, usPct: 0, esPct: 0 }; vestMonthCount++; }
                     monthlyVests[key].shares += e.shares;
                     monthlyVests[key].usPct += e.shares * e.usPct;
                     monthlyVests[key].esPct += e.shares * e.spainPct;
-                    monthlyVests[key].count++;
-                    totalVestShares += e.shares;
-                    vestMonths++;
+                    totalVestShares12mo += e.shares;
                 }
             }
-            // Weight the percentages
             for (const k of Object.keys(monthlyVests)) {
                 const mv = monthlyVests[k];
                 if (mv.shares > 0) { mv.usPct /= mv.shares; mv.esPct /= mv.shares; }
@@ -4434,23 +4431,75 @@
             const recentPayslips = [...parsedPayslips].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month).slice(-3);
             const avgNet = recentPayslips.length > 0 ? recentPayslips.reduce((s, p) => s + p.totals.netPay, 0) / recentPayslips.length : 0;
 
-            // Average monthly RSU vest value (from payslips that had RSUs)
-            let rsuPayslipTotal = 0;
-            let rsuPayslipCount = 0;
-            for (const ps of recentPayslips) {
-                const rsuAmt = ps.earnings.filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs)).reduce((s, e) => s + e.amount, 0);
-                if (rsuAmt > 0) { rsuPayslipTotal += rsuAmt; rsuPayslipCount++; }
+            // RSU monthly average: use grant table projected vests (next 12 months) if available,
+            // fall back to payslip-based average if no grants configured
+            let avgMonthlyRSU = 0;
+            let rsuSource = 'none';
+            if (totalVestShares12mo > 0 && vestMonthCount > 0) {
+                // Use grant table: compute avg shares/month, then estimate EUR value from payslip RSU data
+                // Get EUR-per-share from most recent payslip that had RSU vesting
+                let eurPerShare = 0;
+                for (let pi = recentPayslips.length - 1; pi >= 0; pi--) {
+                    const ps = recentPayslips[pi];
+                    const rsuInKind = (ps.earnings.find(e => /especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)) || {});
+                    if (rsuInKind.amount > 0 && rsuInKind.cuantia > 0) {
+                        eurPerShare = rsuInKind.precio || (rsuInKind.amount / rsuInKind.cuantia);
+                        break;
+                    }
+                }
+                if (eurPerShare > 0) {
+                    avgMonthlyRSU = (totalVestShares12mo / 12) * eurPerShare;
+                    rsuSource = 'grants';
+                } else {
+                    // No price data — use shares only, note in letter
+                    avgMonthlyRSU = 0;
+                    rsuSource = 'grants-no-price';
+                }
             }
-            const avgMonthlyRSU = rsuPayslipCount > 0 ? rsuPayslipTotal / rsuPayslipCount : 0;
+            // Fallback: average from payslips
+            if (rsuSource === 'none') {
+                let rsuPayslipTotal = 0, rsuPayslipCount = 0;
+                for (const ps of recentPayslips) {
+                    const rsuAmt = ps.earnings.filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs)).reduce((s, e) => s + e.amount, 0);
+                    if (rsuAmt > 0) { rsuPayslipTotal += rsuAmt; rsuPayslipCount++; }
+                }
+                avgMonthlyRSU = rsuPayslipCount > 0 ? rsuPayslipTotal / rsuPayslipCount : 0;
+                rsuSource = 'payslips';
+            }
 
             const avgTotalComp = monthlyGross + avgMonthlyRSU;
             const today = new Date();
             const dateStr = today.toLocaleDateString(lang === 'en' ? 'en-GB' : 'es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-
             const fmtEUR = (v) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(v);
 
+            // Detect Beckham Law status from payslips
+            let beckhamDetected = false;
+            let beckhamRate = 0;
+            for (const ps of recentPayslips) {
+                const irpfDed = ps.deductions.find(d => /tributaci.*irpf|irpf.*tributaci|^income tax.*irpf/i.test(d.nameEn + ' ' + d.nameEs));
+                if (irpfDed && irpfDed.percent) {
+                    const rate = parseFloat(irpfDed.percent);
+                    if (rate <= 24.5) { beckhamDetected = true; beckhamRate = rate; }
+                }
+            }
+            const isBeckham = config.beckhamLawQualifies || beckhamDetected;
+
             // Build letter content
-            const content = buildLetterContent(lang, { name, employer, jobTitle, annualGross, monthlyGross, avgNet, avgMonthlyRSU, avgTotalComp, dateStr, recentPayslips, monthlyVests, totalVestShares, fmtEUR });
+            // Compute post-tax projection using Beckham Law rate
+            const avgWeightedESPct = totalVestShares12mo > 0
+                ? Object.values(monthlyVests).reduce((s, mv) => s + mv.esPct * mv.shares, 0) / totalVestShares12mo
+                : 0;
+            // Salary deductions: approximate from recent payslips
+            const avgDeductions = recentPayslips.length > 0
+                ? recentPayslips.reduce((s, p) => s + (p.totals.tDeducir || 0), 0) / recentPayslips.length
+                : 0;
+            // RSU post-tax: Spain-sourced portion taxed at Beckham 24%, US-sourced not taxed in Spain
+            const rsuSpainSourced = avgMonthlyRSU * avgWeightedESPct;
+            const rsuUSSourced = avgMonthlyRSU * (1 - avgWeightedESPct);
+            const rsuSpainTax = isBeckham ? rsuSpainSourced * 0.24 : 0;
+            const estMonthlyPostTax = avgNet + rsuUSSourced + (rsuSpainSourced - rsuSpainTax);
+
+            const content = buildLetterContent(lang, { name, employer, jobTitle, annualGross, monthlyGross, avgNet, avgMonthlyRSU, avgTotalComp, dateStr, recentPayslips, monthlyVests, totalVestShares12mo, vestMonthCount, rsuSource, isBeckham, beckhamRate, avgWeightedESPct, rsuSpainSourced, rsuUSSourced, rsuSpainTax, estMonthlyPostTax, fmtEUR });
 
             // Open print window
             const printWindow = window.open('', '_blank');
@@ -4484,11 +4533,17 @@
             let html = '';
 
             if (es) {
+                const rsuLabel = d.rsuSource === 'grants'
+                    ? `RSU (acciones, proyección próximos 12 meses: ${d.totalVestShares12mo.toFixed(0)} acciones en ${d.vestMonthCount} meses)`
+                    : 'RSU (acciones consolidadas, media mensual)';
                 html += `
                 <h1>Certificado de Ingresos</h1>
                 <p class="header-meta">${d.dateStr}</p>
                 <p>A quien corresponda,</p>
                 <p>El presente documento detalla la compensación total de <strong>${d.name}</strong>, empleado/a de <strong>${d.employer}</strong> como <strong>${d.jobTitle}</strong>.</p>
+
+                ${d.isBeckham ? `<h2>Régimen Fiscal</h2>
+                <p>El empleado tributa bajo el <strong>Régimen Especial de Impatriados</strong> (Ley Beckham, Art. 93 LIRPF), con un tipo fijo del 24% sobre los rendimientos del trabajo de fuente española${d.beckhamRate > 0 ? `, tal como se refleja en las nóminas (tipo efectivo: ${d.beckhamRate}%)` : ''}.</p>` : ''}
 
                 <h2>Compensación Mensual</h2>
                 <p>La compensación total incluye tanto el salario en nómina como acciones (RSU — <em>Restricted Stock Units</em>) que se consolidan periódicamente. Las RSU representan una parte significativa del paquete retributivo pero <strong>no aparecen en su totalidad en la nómina española</strong>, ya que una parte corresponde a trabajo realizado en otro país y se tributa en esa jurisdicción.</p>
@@ -4496,10 +4551,22 @@
                 <table>
                     <tr><th>Concepto</th><th class="amount">Mensual</th><th class="amount">Anual</th></tr>
                     <tr><td>Salario bruto (nómina)</td><td class="amount">${d.fmtEUR(d.monthlyGross)}</td><td class="amount">${d.fmtEUR(d.annualGross)}</td></tr>
-                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>RSU (acciones consolidadas, media mensual)</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
+                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>${rsuLabel}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
                     <tr class="total-row"><td>Compensación total estimada</td><td class="amount">${d.fmtEUR(d.avgTotalComp)}</td><td class="amount">${d.fmtEUR(d.avgTotalComp * 12)}</td></tr>
                     ${d.avgNet > 0 ? `<tr><td>Neto medio en nómina (últimos ${d.recentPayslips.length} meses)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td><td class="amount">${d.fmtEUR(d.avgNet * 12)}</td></tr>` : ''}
                 </table>
+
+                ${d.avgMonthlyRSU > 0 && d.isBeckham ? `<h2>Ingreso Neto Estimado (con Ley Beckham)</h2>
+                <p>Proyección mensual incluyendo RSU, con la tributación bajo el régimen de Ley Beckham (24% tipo fijo sobre la parte de fuente española):</p>
+                <table>
+                    <tr><th>Concepto</th><th class="amount">Mensual</th></tr>
+                    <tr><td>Neto medio en nómina (salario)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td></tr>
+                    <tr><td>RSU parte EE.UU. (${((1 - d.avgWeightedESPct) * 100).toFixed(0)}%, no tributa en España)</td><td class="amount">${d.fmtEUR(d.rsuUSSourced)}</td></tr>
+                    <tr><td>RSU parte España (${(d.avgWeightedESPct * 100).toFixed(0)}%)</td><td class="amount">${d.fmtEUR(d.rsuSpainSourced)}</td></tr>
+                    <tr><td style="padding-left: 20px;">− IRPF Beckham (24%)</td><td class="amount">−${d.fmtEUR(d.rsuSpainTax)}</td></tr>
+                    <tr class="total-row"><td>Ingreso neto mensual estimado</td><td class="amount">${d.fmtEUR(d.estMonthlyPostTax)}</td></tr>
+                    <tr class="total-row"><td>Ingreso neto anual estimado</td><td class="amount">${d.fmtEUR(d.estMonthlyPostTax * 12)}</td></tr>
+                </table>` : ''}
 
                 ${d.avgMonthlyRSU > 0 ? `<h2>¿Por qué las RSU no aparecen completamente en la nómina?</h2>
                 <p>Las RSU son acciones de la empresa que se consolidan según un calendario establecido. Al tratarse de una transferencia internacional (EE.UU. → España), la tributación se reparte entre ambos países según los días trabajados en cada uno durante el período entre la fecha de concesión y la fecha de consolidación.</p>
@@ -4510,10 +4577,9 @@
                 <p>Ambas partes constituyen ingresos reales del empleado — la nómina española refleja solo parcialmente el valor total de las RSU consolidadas.</p>` : ''}
 
                 <div class="note">
-                    <strong>Nota:</strong> Este documento es un resumen informativo generado por el empleado. Los importes de nómina pueden verificarse con las nóminas oficiales. El valor de las RSU fluctúa según la cotización de las acciones en bolsa. Para verificación adicional, puede solicitarse una carta oficial del departamento de Recursos Humanos de ${d.employer}.
+                    <strong>Nota:</strong> Este documento es un resumen informativo generado por el empleado. Los importes de nómina pueden verificarse con las nóminas oficiales. El valor de las RSU fluctúa según la cotización de las acciones en bolsa. Se pueden proporcionar los estados financieros de las concesiones de acciones para verificación adicional.
                 </div>
 
-                <div class="signature-line">Firma del empleado</div>
                 `;
             }
 
@@ -4522,11 +4588,17 @@
             }
 
             if (en) {
+                const rsuLabelEn = d.rsuSource === 'grants'
+                    ? `RSU equity (projected next 12 months: ${d.totalVestShares12mo.toFixed(0)} shares across ${d.vestMonthCount} months)`
+                    : 'RSU equity vesting (monthly average)';
                 html += `
                 <h1>Income Summary Certificate</h1>
                 <p class="header-meta">${d.dateStr}</p>
                 <p>To whom it may concern,</p>
                 <p>This document outlines the total compensation of <strong>${d.name}</strong>, employed at <strong>${d.employer}</strong> as <strong>${d.jobTitle}</strong>.</p>
+
+                ${d.isBeckham ? `<h2>Tax Regime</h2>
+                <p>The employee is taxed under Spain's <strong>Special Expatriate Regime</strong> (Beckham Law, Art. 93 LIRPF), with a flat 24% rate on Spanish-sourced employment income${d.beckhamRate > 0 ? `, as reflected on payslips (effective rate: ${d.beckhamRate}%)` : ''}.</p>` : ''}
 
                 <h2>Monthly Compensation</h2>
                 <p>Total compensation includes both payroll salary and RSU (Restricted Stock Units) equity that vests periodically. RSUs are a significant part of the compensation package but <strong>do not fully appear on the Spanish payslip (nómina)</strong>, as a portion is attributed to work performed in another country and taxed in that jurisdiction.</p>
@@ -4534,10 +4606,22 @@
                 <table>
                     <tr><th>Item</th><th class="amount">Monthly</th><th class="amount">Annual</th></tr>
                     <tr><td>Gross salary (on payslip)</td><td class="amount">${d.fmtEUR(d.monthlyGross)}</td><td class="amount">${d.fmtEUR(d.annualGross)}</td></tr>
-                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>RSU equity vesting (monthly average)</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
+                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>${rsuLabelEn}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
                     <tr class="total-row"><td>Estimated total compensation</td><td class="amount">${d.fmtEUR(d.avgTotalComp)}</td><td class="amount">${d.fmtEUR(d.avgTotalComp * 12)}</td></tr>
                     ${d.avgNet > 0 ? `<tr><td>Average net pay on payslip (last ${d.recentPayslips.length} months)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td><td class="amount">${d.fmtEUR(d.avgNet * 12)}</td></tr>` : ''}
                 </table>
+
+                ${d.avgMonthlyRSU > 0 && d.isBeckham ? `<h2>Estimated Net Income (with Beckham Law)</h2>
+                <p>Monthly projection including RSU equity, taxed under the Beckham Law regime (24% flat rate on Spain-sourced portion):</p>
+                <table>
+                    <tr><th>Item</th><th class="amount">Monthly</th></tr>
+                    <tr><td>Average net pay on payslip (salary)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td></tr>
+                    <tr><td>RSU US-sourced (${((1 - d.avgWeightedESPct) * 100).toFixed(0)}%, not taxed in Spain)</td><td class="amount">${d.fmtEUR(d.rsuUSSourced)}</td></tr>
+                    <tr><td>RSU Spain-sourced (${(d.avgWeightedESPct * 100).toFixed(0)}%)</td><td class="amount">${d.fmtEUR(d.rsuSpainSourced)}</td></tr>
+                    <tr><td style="padding-left: 20px;">− Beckham IRPF (24%)</td><td class="amount">−${d.fmtEUR(d.rsuSpainTax)}</td></tr>
+                    <tr class="total-row"><td>Estimated monthly net income</td><td class="amount">${d.fmtEUR(d.estMonthlyPostTax)}</td></tr>
+                    <tr class="total-row"><td>Estimated annual net income</td><td class="amount">${d.fmtEUR(d.estMonthlyPostTax * 12)}</td></tr>
+                </table>` : ''}
 
                 ${d.avgMonthlyRSU > 0 ? `<h2>Why don't RSUs fully appear on the Spanish payslip?</h2>
                 <p>RSUs are company shares that vest on a set schedule. As an international transfer (US → Spain), the taxation is split between both countries based on workdays in each during the grant-to-vest period.</p>
@@ -4548,10 +4632,9 @@
                 <p>Both portions represent real income to the employee — the Spanish payslip only partially reflects the total value of vested RSUs.</p>` : ''}
 
                 <div class="note">
-                    <strong>Note:</strong> This is an informational summary generated by the employee. Payslip amounts can be verified against official payslips. RSU values fluctuate with share price. For additional verification, an official letter can be requested from ${d.employer}'s HR department.
+                    <strong>Note:</strong> This is an informational summary generated by the employee. Payslip amounts can be verified against official payslips. RSU values fluctuate with share price. Financial statements of the equity grants can be provided for additional verification.
                 </div>
 
-                <div class="signature-line">Employee signature</div>
                 `;
             }
 
