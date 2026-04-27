@@ -887,6 +887,31 @@
                             <strong>Note:</strong> The actual refund depends on your full tax return (Declaración de la Renta). This is an estimate based on the difference between what was withheld and what should have been withheld at 24%.
                         </div>
                     </div>
+                    <div style="padding: 10px; background: white; border-radius: 6px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                            <strong>RSU Validation Mode</strong>
+                            <select id="rsuValidationMode" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px;">
+                                <option value="normal">Normal (include in validation)</option>
+                                <option value="exclude">Exclude from validation</option>
+                                <option value="us-es-transfer">US/ES Transfer Mode</option>
+                            </select>
+                        </div>
+                        <div id="rsuModeDescription" style="font-size: 12px; color: var(--text-muted);"></div>
+                        <div id="rsuTransferConfig" style="display: none; margin-top: 10px; padding: 10px; background: #e8f4fd; border: 1px solid var(--primary); border-radius: 4px;">
+                            <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">US/ES Transfer Details</div>
+                            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; margin-bottom: 12px; max-width: 220px;">
+                                <span><strong>US → Spain transfer date</strong></span>
+                                <input type="date" id="rsuTransferDate" onchange="autoSaveConfig(); renderRSUGrantsTable(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                            </label>
+                            <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">RSU Grants</div>
+                            <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px 0;">
+                                Enter each grant. The tool computes vest events and splits them by US/Spain workdays using the pro-rata formula from IRS Memo 202327014 / Spain DGT V0425-25.
+                            </p>
+                            <div id="rsuGrantsContainer"></div>
+                            <button type="button" onclick="addRSUGrant()" style="font-size: 12px; padding: 6px 14px; margin-top: 6px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">+ Add Grant</button>
+                            <div id="rsuVestPreview" style="margin-top: 12px;"></div>
+                        </div>
+                    </div>
                     <label style="display: flex; align-items: center; gap: 8px; padding: 10px; background: white; border-radius: 6px; cursor: pointer;">
                         <input type="checkbox" id="showEstimatedTax" onchange="autoSaveConfig(); if (parsedPayslips.length > 0) displayResults();">
                         <div>
@@ -1316,7 +1341,7 @@
 
         // Storage schema with version control
         const payrollSaveSlotsSchema = StorageVersionManager.defineSchema('payrollCheckerSaveSlots', {
-            version: 1,
+            version: 2,
             default: [],
             migrations: {
                 // v1: Initial versioned schema - migrate from legacy unversioned data
@@ -1339,6 +1364,32 @@
                             totals: ps.totals || {}
                         }))
                     }));
+                },
+                // v2: Add rsuGrants array, migrate from single rsuGrantDate
+                2: (data) => {
+                    if (!Array.isArray(data)) return data;
+                    return data.map(slot => {
+                        const cfg = slot.config || {};
+                        if (!cfg.rsuGrants) {
+                            cfg.rsuGrants = [];
+                            // Migrate old single rsuGrantDate if present
+                            if (cfg.rsuGrantDate) {
+                                cfg.rsuGrants.push({
+                                    id: 'grant_migrated',
+                                    name: 'Migrated Grant',
+                                    grantDate: cfg.rsuGrantDate,
+                                    totalShares: 0,
+                                    vestingSchedule: 'quarterly',
+                                    vestingYears: 4,
+                                    cliffMonths: 12,
+                                    sharesAlreadyVested: 0,
+                                    notes: 'Auto-migrated from single grant date. Please fill in details.'
+                                });
+                                delete cfg.rsuGrantDate;
+                            }
+                        }
+                        return { ...slot, config: cfg };
+                    });
                 }
             }
         });
@@ -1844,7 +1895,7 @@
                             cuantia = parseSpanishNumber(preColumnNumbers[0].str);
                         }
 
-                        if (amount > 0) {
+                        if (amount !== 0) {
 
                             // Extract percentage if present
                             const percentMatch = rowText.match(/\((\d+,?\d*)\s*%\)/);
@@ -1999,13 +2050,13 @@
 
                 if (devengosAmounts.length > 0) {
                     const amount = parseSpanishNumber(devengosAmounts[0].str);
-                    if (amount > 0) {
+                    if (amount !== 0) {
                         payslip.unparsedEarnings.push({ name, amount, cuantia, precio });
                     }
                 }
                 if (deduccionesAmounts.length > 0) {
                     const amount = parseSpanishNumber(deduccionesAmounts[deduccionesAmounts.length - 1].str);
-                    if (amount > 0) {
+                    if (amount !== 0) {
                         payslip.unparsedDeductions.push({ name, amount });
                     }
                 }
@@ -3225,13 +3276,20 @@
             const findDeduction = (pattern) => ps.deductions.find(d => pattern.test(d.nameEn) || pattern.test(d.nameEs));
             const findDeductionAmount = (pattern) => Math.abs((findDeduction(pattern) || {}).amount || 0);
 
+            // RSU validation mode: 'normal', 'exclude', or 'us-es-transfer'
+            const rsuMode = config.rsuValidationMode || 'normal';
+            const excludeRSU = rsuMode === 'exclude' || rsuMode === 'us-es-transfer';
+            const isRSU = (e) => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs);
+
             // Gather amounts from parsed earnings
             const cashItems = ps.earnings.filter(e => {
+                if (excludeRSU && isRSU(e)) return false;
                 // Especie items are: T.Restaurante, T.Transporte, Seguros, RSU In-Kind, Taxable Gain ESPP
                 const isEspecie = /seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs);
                 return !isEspecie;
             });
             const especieItems = ps.earnings.filter(e => {
+                if (excludeRSU && isRSU(e)) return false;
                 return /seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs);
             });
 
@@ -3244,7 +3302,7 @@
             const tTransporte = findEarningAmount(/transporte/i);
             const segExentos = findEarningAmount(/exentos|exempt.*insurance/i);
             const segSujetos = findEarningAmount(/sujetos|taxable.*insurance/i);
-            const rsuEspecies = findEarningAmount(/especies.*rsu|rsu.*in-kind/i);
+            const rsuEspecies = excludeRSU ? 0 : findEarningAmount(/especies.*rsu|rsu.*in-kind/i);
             const taxGainESPP = findEarningAmount(/taxable.*gain.*espp/i);
             const esppContribution = findDeductionAmount(/espp|aportaci.*espp/i);
 
@@ -3261,7 +3319,7 @@
             const irpfAmount = irpfDeduction ? Math.abs(irpfDeduction.amount) : 0;
 
             const irpfEspecieDeduction = findDeduction(/repercutidos|passed-on/i);
-            const irpfEspecieAmount = irpfEspecieDeduction ? Math.abs(irpfEspecieDeduction.amount) : 0;
+            const irpfEspecieAmount = excludeRSU ? 0 : (irpfEspecieDeduction ? Math.abs(irpfEspecieDeduction.amount) : 0);
 
             // SS deductions
             const ssCC = findDeductionAmount(/contingencias.*comunes|common.*contingenc/i);
@@ -3468,12 +3526,16 @@
             <details style="margin-top: 12px; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden;">
                 <summary style="cursor: pointer; padding: 10px 12px; background: #e7f3ff; font-weight: 600; font-size: 13px;">
                     Cross-Validation (Spreadsheet Checks)
+                    ${rsuMode === 'us-es-transfer' ? '<span class="badge badge-info" style="margin-left: 8px;">US/ES Transfer</span>' : excludeRSU ? '<span class="badge badge-info" style="margin-left: 8px;">RSUs excluded</span>' : ''}
                     ${ssRateIssues > 0 ? `<span class="badge badge-danger" style="margin-left: 8px;">⚠ ${ssRateIssues} SS rate issue${ssRateIssues > 1 ? 's' : ''}</span>` : ''}
                     ${[baseIRPFCheck, irpfCheck, tDevengadoCheck, tDeducirCheck, netCheck].some(c => c.status === 'mismatch')
                         ? '<span class="badge badge-danger" style="margin-left: 4px;">⚠ formula mismatch</span>'
                         : '<span class="badge badge-success" style="margin-left: 4px;">✓</span>'}
                 </summary>
-                <div style="padding: 12px; font-size: 12px;">`;
+                <div style="padding: 12px; font-size: 12px;">
+                ${excludeRSU
+                    ? '<div style="padding: 6px 10px; background: #d1ecf1; border-radius: 4px; margin-bottom: 12px; font-size: 11px; color: #0c5460;">RSU amounts excluded from standard formula checks' + (rsuMode === 'us-es-transfer' ? ' (US/ES Transfer Mode — see pro-rata split below).' : '.') + '</div>'
+                    : ''}`;
 
             // SS Rate Verification
             if (ssRateHtml) {
@@ -3554,6 +3616,78 @@
                     </div>`;
 
             html += `</div></details>`;
+
+            // RSU Pro-Rata Split (US/ES Transfer Mode)
+            if (rsuMode === 'us-es-transfer' && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                const allVestEvents = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
+                const monthEvents = getVestEventsForMonth(allVestEvents, ps.month, ps.year);
+
+                // Get original (un-excluded) RSU amounts from payslip
+                const rsuInKind = (ps.earnings.find(e => /especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
+                const rsuTaxReported = (ps.earnings.find(e => /rsu.*tax.*reported/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
+                const rsuPayslipTotal = rsuInKind + rsuTaxReported;
+
+                if (monthEvents.length > 0) {
+                    const totalSharesThisMonth = monthEvents.reduce((s, e) => s + e.shares, 0);
+                    const weightedUSPct = monthEvents.reduce((s, e) => s + e.shares * e.usPct, 0) / totalSharesThisMonth;
+                    const weightedESPct = 1 - weightedUSPct;
+                    const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+                    html += `
+                    <details style="margin-top: 12px; border: 2px solid #17a2b8; border-radius: 8px; overflow: hidden;" open>
+                        <summary style="cursor: pointer; padding: 10px 12px; background: #e8f4fd; font-weight: 600; font-size: 13px;">
+                            RSU Pro-Rata Split (${months[ps.month]} ${ps.year})
+                            <span class="badge badge-info" style="margin-left: 8px;">${monthEvents.length} vest${monthEvents.length > 1 ? 's' : ''}, ${totalSharesThisMonth.toFixed(1)} shares</span>
+                        </summary>
+                        <div style="padding: 12px; font-size: 12px;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead><tr style="background: #f0f7ff;">
+                                    <th style="text-align:left; padding: 4px 6px;">Grant</th>
+                                    <th style="text-align:right; padding: 4px 6px;">Shares</th>
+                                    <th style="text-align:right; padding: 4px 6px;">US Days</th>
+                                    <th style="text-align:right; padding: 4px 6px;">ES Days</th>
+                                    <th style="text-align:right; padding: 4px 6px;">US %</th>
+                                    <th style="text-align:right; padding: 4px 6px;">ES %</th>
+                                </tr></thead>
+                                <tbody>
+                                    ${monthEvents.map(e => `<tr style="border-bottom: 1px solid #eee;">
+                                        <td style="padding: 4px 6px;">${e.grantName}</td>
+                                        <td style="padding: 4px 6px; text-align:right;">${e.shares.toFixed(2)}</td>
+                                        <td style="padding: 4px 6px; text-align:right;">${e.usWorkdays}</td>
+                                        <td style="padding: 4px 6px; text-align:right;">${e.spainWorkdays}</td>
+                                        <td style="padding: 4px 6px; text-align:right; color: #1565c0;">${(e.usPct * 100).toFixed(1)}%</td>
+                                        <td style="padding: 4px 6px; text-align:right; color: #2e7d32;">${(e.spainPct * 100).toFixed(1)}%</td>
+                                    </tr>`).join('')}
+                                    ${monthEvents.length > 1 ? `<tr style="font-weight: 600; border-top: 2px solid #ddd;">
+                                        <td style="padding: 4px 6px;">Weighted Total</td>
+                                        <td style="padding: 4px 6px; text-align:right;">${totalSharesThisMonth.toFixed(2)}</td>
+                                        <td colspan="2"></td>
+                                        <td style="padding: 4px 6px; text-align:right; color: #1565c0;">${(weightedUSPct * 100).toFixed(1)}%</td>
+                                        <td style="padding: 4px 6px; text-align:right; color: #2e7d32;">${(weightedESPct * 100).toFixed(1)}%</td>
+                                    </tr>` : ''}
+                                </tbody>
+                            </table>
+                            ${rsuPayslipTotal > 0 ? `
+                            <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                <strong>Payslip RSU: ${formatCurrency(rsuPayslipTotal)}</strong>
+                                <table style="width: 100%; margin-top: 6px;">
+                                    <tr><td>US-sourced (${(weightedUSPct * 100).toFixed(1)}%):</td><td class="text-right" style="color: #1565c0;">${formatCurrency(rsuPayslipTotal * weightedUSPct)}</td><td style="font-size:11px; color:var(--text-muted); padding-left:8px;">Not taxable in Spain</td></tr>
+                                    <tr><td>Spain-sourced (${(weightedESPct * 100).toFixed(1)}%):</td><td class="text-right" style="color: #2e7d32;">${formatCurrency(rsuPayslipTotal * weightedESPct)}</td><td style="font-size:11px; color:var(--text-muted); padding-left:8px;">${config.beckhamLawQualifies ? 'Beckham 24% flat rate' : 'Spanish IRPF rates'}</td></tr>
+                                </table>
+                            </div>` : `
+                            <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px;">
+                                ${totalSharesThisMonth.toFixed(1)} shares expected to vest this month but no RSU earnings found on payslip.
+                            </div>`}
+                        </div>
+                    </details>`;
+                } else if (rsuPayslipTotal > 0) {
+                    html += `<div style="margin-top: 12px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; font-size: 12px;">
+                        <strong>RSU on payslip (${formatCurrency(rsuPayslipTotal)}) but no computed vest events for this month.</strong>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Check your grant dates, schedules, and "already vested" values.</div>
+                    </div>`;
+                }
+            }
+
             html += beckhamHtml;
             html += estimatedTaxHtml;
             return html;
@@ -3633,6 +3767,14 @@
             if (beckhamCb) beckhamCb.checked = config.beckhamLawQualifies || false;
             const estTaxCb = document.getElementById('showEstimatedTax');
             if (estTaxCb) estTaxCb.checked = config.showEstimatedTax || false;
+            const rsuModeSelect = document.getElementById('rsuValidationMode');
+            if (rsuModeSelect) {
+                rsuModeSelect.value = config.rsuValidationMode || 'normal';
+                updateRSUModeUI();
+            }
+            const rsuTransferDate = document.getElementById('rsuTransferDate');
+            if (rsuTransferDate) rsuTransferDate.value = config.rsuTransferDate || '';
+            renderRSUGrantsTable();
             const beckhamDetails = document.getElementById('beckhamLawDetails');
             if (beckhamDetails) beckhamDetails.style.display = config.beckhamLawQualifies ? 'block' : 'none';
 
@@ -3652,6 +3794,251 @@
             if (config.baseline) {
                 showBaselineDetails();
             }
+        }
+
+        function updateRSUModeUI() {
+            const mode = document.getElementById('rsuValidationMode')?.value || 'normal';
+            const descEl = document.getElementById('rsuModeDescription');
+            const transferConfig = document.getElementById('rsuTransferConfig');
+            if (descEl) {
+                const descriptions = {
+                    'normal': 'RSU amounts (In-Kind Income, Tax Reported, Repercutidos) are included in all cross-validation formula checks.',
+                    'exclude': 'RSU amounts are completely skipped from formula checks. Use this if RSU lines cause false mismatches and you want to validate everything else.',
+                    'us-es-transfer': 'For US→Spain transfers: RSU taxation is split between jurisdictions based on days worked in each country. Currently excludes RSUs from formula checks while the split-jurisdiction equation is being built.'
+                };
+                descEl.textContent = descriptions[mode] || '';
+            }
+            if (transferConfig) {
+                transferConfig.style.display = mode === 'us-es-transfer' ? 'block' : 'none';
+            }
+        }
+
+        // ===== RSU Grant Table & Pro-Rata Calculation =====
+
+        function addMonths(date, months) {
+            const d = new Date(date);
+            d.setMonth(d.getMonth() + months);
+            // Handle month overflow (e.g. Jan 31 + 1 month = Feb 28)
+            if (d.getDate() < new Date(date).getDate()) d.setDate(0);
+            return d;
+        }
+
+        function countWeekdays(start, end) {
+            let count = 0;
+            const d = new Date(start);
+            const endDate = new Date(end);
+            while (d < endDate) {
+                const day = d.getDay();
+                if (day !== 0 && day !== 6) count++;
+                d.setDate(d.getDate() + 1);
+            }
+            return count;
+        }
+
+        function computeVestEvents(grants, transferDate) {
+            const events = [];
+            if (!transferDate) return events;
+            const transfer = new Date(transferDate);
+
+            for (const grant of grants) {
+                if (!grant.grantDate || !grant.totalShares) continue;
+                const grantDate = new Date(grant.grantDate);
+                const vestingMonths = (grant.vestingYears || 4) * 12;
+                const scheduleMonths = { monthly: 1, quarterly: 3, 'semi-annual': 6, annual: 12 }[grant.vestingSchedule] || 3;
+                const cliffMonths = grant.cliffMonths || 0;
+                const totalVestEvents = Math.floor(vestingMonths / scheduleMonths);
+                const sharesPerVest = grant.totalShares / totalVestEvents;
+
+                // Generate vest events
+                const vestDates = [];
+                if (cliffMonths > 0) {
+                    const cliffDate = addMonths(grantDate, cliffMonths);
+                    const cliffVests = Math.floor(cliffMonths / scheduleMonths);
+                    vestDates.push({ date: cliffDate, shares: sharesPerVest * cliffVests });
+                    // Remaining vests after cliff
+                    for (let i = cliffVests + 1; i <= totalVestEvents; i++) {
+                        vestDates.push({ date: addMonths(grantDate, i * scheduleMonths), shares: sharesPerVest });
+                    }
+                } else {
+                    for (let i = 1; i <= totalVestEvents; i++) {
+                        vestDates.push({ date: addMonths(grantDate, i * scheduleMonths), shares: sharesPerVest });
+                    }
+                }
+
+                // Fix rounding: ensure total shares match
+                const totalAllocated = vestDates.reduce((s, v) => s + v.shares, 0);
+                if (vestDates.length > 0 && Math.abs(totalAllocated - grant.totalShares) > 0.001) {
+                    vestDates[vestDates.length - 1].shares += grant.totalShares - totalAllocated;
+                }
+
+                // Skip already-vested shares
+                let toSkip = grant.sharesAlreadyVested || 0;
+                for (const vest of vestDates) {
+                    if (toSkip <= 0) break;
+                    if (vest.shares <= toSkip) { toSkip -= vest.shares; vest.shares = 0; }
+                    else { vest.shares -= toSkip; toSkip = 0; }
+                }
+
+                // Compute pro-rata for remaining vests
+                for (const vest of vestDates) {
+                    if (vest.shares <= 0) continue;
+                    const totalWd = countWeekdays(grantDate, vest.date);
+                    const usEnd = vest.date <= transfer ? vest.date : transfer;
+                    const usWd = usEnd > grantDate ? countWeekdays(grantDate, usEnd) : 0;
+                    const esWd = totalWd - usWd;
+
+                    events.push({
+                        grantId: grant.id,
+                        grantName: grant.name || `Grant`,
+                        date: vest.date,
+                        shares: Math.round(vest.shares * 100) / 100,
+                        totalWorkdays: totalWd,
+                        usWorkdays: usWd,
+                        spainWorkdays: esWd,
+                        usPct: totalWd > 0 ? usWd / totalWd : 0,
+                        spainPct: totalWd > 0 ? esWd / totalWd : 0
+                    });
+                }
+            }
+            events.sort((a, b) => a.date - b.date);
+            return events;
+        }
+
+        function getVestEventsForMonth(events, month, year) {
+            return events.filter(e => (e.date.getMonth() + 1) === month && e.date.getFullYear() === year);
+        }
+
+        function addRSUGrant() {
+            if (!config.rsuGrants) config.rsuGrants = [];
+            config.rsuGrants.push({
+                id: 'grant_' + Date.now(),
+                name: '',
+                grantDate: '',
+                totalShares: 0,
+                vestingSchedule: 'quarterly',
+                vestingYears: 4,
+                cliffMonths: 12,
+                sharesAlreadyVested: 0,
+                notes: ''
+            });
+            autoSaveConfig();
+            renderRSUGrantsTable();
+        }
+
+        function removeRSUGrant(index) {
+            if (!config.rsuGrants) return;
+            config.rsuGrants.splice(index, 1);
+            autoSaveConfig();
+            renderRSUGrantsTable();
+            if (parsedPayslips.length > 0) displayResults();
+        }
+
+        function updateRSUGrant(index, field, value) {
+            if (!config.rsuGrants || !config.rsuGrants[index]) return;
+            if (['totalShares', 'vestingYears', 'cliffMonths', 'sharesAlreadyVested'].includes(field)) {
+                config.rsuGrants[index][field] = parseFloat(value) || 0;
+            } else {
+                config.rsuGrants[index][field] = value;
+            }
+            autoSaveConfig();
+            renderRSUGrantsTable();
+            if (parsedPayslips.length > 0) displayResults();
+        }
+
+        function renderRSUGrantsTable() {
+            const container = document.getElementById('rsuGrantsContainer');
+            const previewContainer = document.getElementById('rsuVestPreview');
+            if (!container) return;
+            const grants = config.rsuGrants || [];
+
+            if (grants.length === 0) {
+                container.innerHTML = '<div style="padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 12px; color: var(--text-muted); text-align: center;">No grants added yet. Click "+ Add Grant" to start.</div>';
+                if (previewContainer) previewContainer.innerHTML = '';
+                return;
+            }
+
+            let html = '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+            html += '<thead><tr style="background: #f0f7ff;">';
+            html += '<th style="padding: 4px 6px; text-align:left;">Name</th>';
+            html += '<th style="padding: 4px 6px; text-align:left;">Grant Date</th>';
+            html += '<th style="padding: 4px 6px; text-align:right;">Total Shares</th>';
+            html += '<th style="padding: 4px 6px; text-align:left;">Schedule</th>';
+            html += '<th style="padding: 4px 6px; text-align:right;">Cliff (mo)</th>';
+            html += '<th style="padding: 4px 6px; text-align:right;">Already Vested</th>';
+            html += '<th style="padding: 4px 6px; text-align:center;"></th>';
+            html += '</tr></thead><tbody>';
+
+            for (let i = 0; i < grants.length; i++) {
+                const g = grants[i];
+                html += `<tr style="border-bottom: 1px solid #e5e7eb;">
+                    <td style="padding: 4px 3px;"><input type="text" value="${g.name || ''}" placeholder="Grant #${i+1}" onchange="updateRSUGrant(${i}, 'name', this.value)" style="width: 90px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;"></td>
+                    <td style="padding: 4px 3px;"><input type="date" value="${g.grantDate || ''}" onchange="updateRSUGrant(${i}, 'grantDate', this.value)" style="padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;"></td>
+                    <td style="padding: 4px 3px;"><input type="number" value="${g.totalShares || ''}" placeholder="0" onchange="updateRSUGrant(${i}, 'totalShares', this.value)" style="width: 65px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"></td>
+                    <td style="padding: 4px 3px;"><select onchange="updateRSUGrant(${i}, 'vestingSchedule', this.value)" style="padding: 3px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px;">
+                        <option value="monthly" ${g.vestingSchedule === 'monthly' ? 'selected' : ''}>Monthly</option>
+                        <option value="quarterly" ${g.vestingSchedule === 'quarterly' ? 'selected' : ''}>Quarterly</option>
+                        <option value="semi-annual" ${g.vestingSchedule === 'semi-annual' ? 'selected' : ''}>Semi-Annual</option>
+                        <option value="annual" ${g.vestingSchedule === 'annual' ? 'selected' : ''}>Annual</option>
+                    </select></td>
+                    <td style="padding: 4px 3px;"><input type="number" value="${g.cliffMonths || 0}" min="0" onchange="updateRSUGrant(${i}, 'cliffMonths', this.value)" style="width: 45px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"></td>
+                    <td style="padding: 4px 3px;"><input type="number" value="${g.sharesAlreadyVested || 0}" min="0" onchange="updateRSUGrant(${i}, 'sharesAlreadyVested', this.value)" style="width: 55px; padding: 3px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 11px; text-align: right;"></td>
+                    <td style="padding: 4px 3px; text-align: center;"><button onclick="removeRSUGrant(${i})" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 14px; padding: 2px 6px; margin: 0;" title="Remove grant">×</button></td>
+                </tr>`;
+            }
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            // Render vest preview
+            renderVestPreview();
+        }
+
+        function renderVestPreview() {
+            const container = document.getElementById('rsuVestPreview');
+            if (!container) return;
+            const grants = config.rsuGrants || [];
+            const transferDate = config.rsuTransferDate;
+            if (grants.length === 0 || !transferDate) { container.innerHTML = ''; return; }
+
+            const events = computeVestEvents(grants, transferDate);
+            if (events.length === 0) {
+                container.innerHTML = '<div style="padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px;">No upcoming vest events computed. Check grant dates and "already vested" values.</div>';
+                return;
+            }
+
+            const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            let html = `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
+                <summary style="cursor: pointer; padding: 8px 10px; background: #f8f9fa; font-size: 12px; font-weight: 600;">
+                    Vest Schedule Preview <span style="font-weight: normal; color: var(--text-muted);">(${events.length} events, ${events.reduce((s, e) => s + e.shares, 0).toFixed(1)} shares remaining)</span>
+                </summary>
+                <div style="padding: 8px; max-height: 300px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead><tr style="background: #f8f9fa;">
+                            <th style="padding: 3px 5px; text-align:left;">Date</th>
+                            <th style="padding: 3px 5px; text-align:left;">Grant</th>
+                            <th style="padding: 3px 5px; text-align:right;">Shares</th>
+                            <th style="padding: 3px 5px; text-align:right;">US Days</th>
+                            <th style="padding: 3px 5px; text-align:right;">ES Days</th>
+                            <th style="padding: 3px 5px; text-align:right;">US %</th>
+                            <th style="padding: 3px 5px; text-align:right;">ES %</th>
+                        </tr></thead><tbody>`;
+
+            for (const e of events) {
+                const d = e.date;
+                const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, ${d.getFullYear()}`;
+                const usBg = e.usPct > 0.5 ? 'color: #1565c0;' : '';
+                const esBg = e.spainPct > 0.5 ? 'color: #2e7d32;' : '';
+                html += `<tr style="border-bottom: 1px solid #f0f0f0;">
+                    <td style="padding: 3px 5px;">${dateStr}</td>
+                    <td style="padding: 3px 5px;">${e.grantName}</td>
+                    <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(2)}</td>
+                    <td style="padding: 3px 5px; text-align:right;">${e.usWorkdays}</td>
+                    <td style="padding: 3px 5px; text-align:right;">${e.spainWorkdays}</td>
+                    <td style="padding: 3px 5px; text-align:right; ${usBg}">${(e.usPct * 100).toFixed(1)}%</td>
+                    <td style="padding: 3px 5px; text-align:right; ${esBg}">${(e.spainPct * 100).toFixed(1)}%</td>
+                </tr>`;
+            }
+            html += '</tbody></table></div></details>';
+            container.innerHTML = html;
         }
 
         function calculateExpected() {
@@ -3689,8 +4076,14 @@
                 includeOncallComp: document.getElementById('includeOncallComp')?.checked || false,
                 beckhamLawQualifies: document.getElementById('beckhamLawQualifies')?.checked || false,
                 showEstimatedTax: document.getElementById('showEstimatedTax')?.checked || false,
+                rsuValidationMode: document.getElementById('rsuValidationMode')?.value || 'normal',
+                rsuTransferDate: document.getElementById('rsuTransferDate')?.value || '',
+                rsuGrants: config.rsuGrants || [],
                 beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
+
+            // Toggle RSU mode UI
+            updateRSUModeUI();
 
             // Toggle Beckham Law details visibility
             const beckhamDetails = document.getElementById('beckhamLawDetails');
