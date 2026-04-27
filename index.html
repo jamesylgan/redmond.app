@@ -4283,6 +4283,7 @@
             const rsuEurRate = document.getElementById('rsuEurRate');
             if (rsuEurRate) rsuEurRate.value = config.rsuEurRate || '';
             renderRSUGrantsTable();
+            populateLetterFromConfig();
             const beckhamDetails = document.getElementById('beckhamLawDetails');
             if (beckhamDetails) beckhamDetails.style.display = config.beckhamLawQualifies ? 'block' : 'none';
 
@@ -4644,6 +4645,16 @@
         }
 
         // ===== Income Summary Letter Generator =====
+
+        // Populate letter form fields from RSU tracker cached config
+        function populateLetterFromConfig() {
+            const lPrice = document.getElementById('incomeLetterSharePrice');
+            const lRate = document.getElementById('incomeLetterEurRate');
+            const lTicker = document.getElementById('incomeLetterTicker');
+            if (lPrice && !lPrice.value && config.rsuSharePrice) lPrice.value = config.rsuSharePrice;
+            if (lRate && !lRate.value && config.rsuEurRate) lRate.value = config.rsuEurRate;
+            if (lTicker && config.rsuTicker) lTicker.value = config.rsuTicker;
+        }
 
         // Sync share price and EUR rate between grant panel and income letter
         function syncPriceInputs(source) {
