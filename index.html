@@ -913,7 +913,7 @@
                                     <span><strong>Share Price (USD)</strong></span>
                                     <div style="display: flex; gap: 4px;">
                                         <input type="number" id="rsuSharePrice" placeholder="e.g. 64" step="0.01" onchange="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; flex: 1;">
-                                        <button type="button" onclick="fetchRSUSharePrice()" style="padding: 4px 8px; font-size: 11px; cursor: pointer;" title="Fetch current price">↻</button>
+                                        <button type="button" onclick="fetchRSUSharePrice()" style="padding: 4px 8px; font-size: 11px; cursor: pointer;" title="Fetch current + historical vest-day prices">↻</button>
                                     </div>
                                     <span id="rsuSharePriceStatus" style="font-size: 10px; color: var(--text-muted);"></span>
                                 </label>
@@ -4581,30 +4581,116 @@
         }
 
         // ===== Income Summary Letter Generator =====
+
+        // Sync share price and EUR rate between grant panel and income letter
+        function syncPriceInputs(source) {
+            const grantPrice = document.getElementById('rsuSharePrice');
+            const letterPrice = document.getElementById('incomeLetterSharePrice');
+            const grantRate = document.getElementById('rsuEurRate');
+            const letterRate = document.getElementById('incomeLetterEurRate');
+            if (source === 'grant') {
+                if (letterPrice && grantPrice?.value) letterPrice.value = grantPrice.value;
+                if (letterRate && grantRate?.value) letterRate.value = grantRate.value;
+            } else {
+                if (grantPrice && letterPrice?.value) grantPrice.value = letterPrice.value;
+                if (grantRate && letterRate?.value) grantRate.value = letterRate.value;
+            }
+        }
+
+        // CORS-safe fetch — handles file:// origins via proxy
+        async function corsFetch(url) {
+            // Try direct first (works when served via http server)
+            try {
+                const direct = await fetch(url);
+                if (direct.ok) return direct;
+            } catch (e) { /* CORS blocked */ }
+            // Try corsproxy.io (supports file:// origins)
+            try {
+                const proxy1 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+                if (proxy1.ok) return proxy1;
+            } catch (e) { /* try next */ }
+            // Try thingproxy
+            try {
+                const proxy2 = await fetch(`https://thingproxy.freeboard.io/fetch/${url}`);
+                if (proxy2.ok) return proxy2;
+            } catch (e) { /* all failed */ }
+            throw new Error('All fetch methods failed (file:// CORS). Try opening via http server: python3 -m http.server');
+        }
+
+        // Fetch historical close prices for past vest dates
+        async function fetchHistoricalPrices() {
+            const ticker = config.rsuTicker || 'AFRM';
+            const grants = config.rsuGrants || [];
+            const transferDate = config.rsuTransferDate;
+            if (!grants.length || !transferDate) return;
+
+            const allEvents = computeVestEvents(grants, transferDate);
+            const now = new Date();
+            const pastDates = allEvents
+                .filter(e => e.date < now)
+                .map(e => { const d = e.date; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
+            const uniqueDates = [...new Set(pastDates)].sort();
+            if (uniqueDates.length === 0) return;
+
+            const statusEl = document.getElementById('rsuSharePriceStatus');
+            if (statusEl) { statusEl.textContent += ' + historical...'; }
+
+            const earliest = new Date(uniqueDates[0]);
+            const period1 = Math.floor((earliest.getTime() - 86400000 * 7) / 1000);
+            const period2 = Math.floor(Date.now() / 1000);
+            try {
+                const res = await corsFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d`);
+                const data = await res.json();
+                const timestamps = data?.chart?.result?.[0]?.timestamp || [];
+                const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+                if (timestamps.length === 0) throw new Error('No data');
+
+                if (!config.rsuHistoricalPrices) config.rsuHistoricalPrices = {};
+                for (const targetDate of uniqueDates) {
+                    const target = new Date(targetDate + 'T16:00:00Z').getTime() / 1000;
+                    let bestIdx = 0, bestDiff = Infinity;
+                    for (let i = 0; i < timestamps.length; i++) {
+                        const diff = Math.abs(timestamps[i] - target);
+                        if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+                    }
+                    if (closes[bestIdx] != null) config.rsuHistoricalPrices[targetDate] = closes[bestIdx];
+                }
+                autoSaveConfig();
+                if (statusEl) { statusEl.textContent = `${ticker}: current + ${Object.keys(config.rsuHistoricalPrices).length} historical prices`; statusEl.style.color = '#28a745'; }
+                if (parsedPayslips.length > 0) displayResults();
+            } catch (e) {
+                console.error('Historical price fetch error:', e);
+                if (statusEl) { statusEl.textContent += ' (historical failed)'; }
+            }
+        }
+
         async function fetchRSUSharePrice() {
             const ticker = document.getElementById('rsuTicker')?.value || 'AFRM';
             const statusEl = document.getElementById('rsuSharePriceStatus');
             const priceInput = document.getElementById('rsuSharePrice');
-            statusEl.textContent = 'Fetching...';
+            statusEl.textContent = 'Fetching current + historical...';
             try {
-                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                const res = await corsFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
                 const data = await res.json();
                 const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
                 if (price) {
                     priceInput.value = price.toFixed(2);
                     statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
                     statusEl.style.color = '#28a745';
+                    syncPriceInputs('grant');
                     autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+                    fetchHistoricalPrices();
                 } else { throw new Error('No data'); }
             } catch (e) {
                 try {
-                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
+                    const res2 = await corsFetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
                     const data2 = await res2.json();
                     if (data2?.c > 0) {
                         priceInput.value = data2.c.toFixed(2);
                         statusEl.textContent = `${ticker}: $${data2.c.toFixed(2)}`;
                         statusEl.style.color = '#28a745';
                         autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+                        fetchHistoricalPrices();
                     } else { throw new Error('No data'); }
                 } catch (e2) { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
             }
@@ -4615,7 +4701,7 @@
             const rateInput = document.getElementById('rsuEurRate');
             statusEl.textContent = 'Fetching...';
             try {
-                const res = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                const res = await corsFetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
                 const data = await res.json();
                 if (data.rates?.USD) {
                     rateInput.value = data.rates.USD.toFixed(4);
@@ -4631,7 +4717,7 @@
             const rateInput = document.getElementById('incomeLetterEurRate');
             statusEl.textContent = 'Fetching...';
             try {
-                const res = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                const res = await corsFetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
                 const data = await res.json();
                 if (data.rates?.USD) {
                     rateInput.value = data.rates.USD.toFixed(4);
@@ -4658,7 +4744,7 @@
             statusEl.style.color = 'var(--text-muted)';
             try {
                 // Try Yahoo Finance v8 API (no key required, public endpoint)
-                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                const res = await corsFetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
                 const data = await res.json();
                 const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
                 if (price) {
@@ -4671,7 +4757,7 @@
             } catch (e) {
                 // Fallback: try finnhub free endpoint
                 try {
-                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
+                    const res2 = await corsFetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
                     const data2 = await res2.json();
                     if (data2?.c > 0) {
                         priceInput.value = data2.c.toFixed(2);
@@ -4962,7 +5048,6 @@
             const events = d.allEvents || [];
             if (events.length === 0) return '';
             const now = new Date();
-            // Show next 12 months of vests
             const futureEvents = events.filter(e => e.date >= now);
             const monthBuckets = {};
             const months = isSpanish
@@ -4981,14 +5066,17 @@
 
             const priceEUR = d.sharePriceEUR || 0;
             let html = `<h2 style="page-break-before: auto;">${isSpanish ? 'Anexo: Calendario de Vesting de RSU (próximos 12 meses)' : 'Addendum: RSU Vesting Schedule (next 12 months)'}</h2>`;
+            if (priceEUR > 0) {
+                html += `<p style="font-size: 9pt; color: #666;">${isSpanish
+                    ? `Valores estimados a ${d.ticker} $${d.sharePriceUSD?.toFixed(2)} USD (${d.fmtEUR(priceEUR)}/acción, tipo EUR/USD: ${d.eurToUsdRate?.toFixed(4)})`
+                    : `Values at ${d.ticker} $${d.sharePriceUSD?.toFixed(2)} USD (${d.fmtEUR(priceEUR)}/share, EUR/USD rate: ${d.eurToUsdRate?.toFixed(4)})`}</p>`;
+            }
             html += `<table><thead><tr>
                 <th>${isSpanish ? 'Mes' : 'Month'}</th>
                 <th class="amount">${isSpanish ? 'Acciones' : 'Shares'}</th>
-                <th class="amount">${isSpanish ? 'Valor est.' : 'Est. Value'}</th>
-                <th class="amount">US %</th>
-                <th class="amount">ES %</th>
-                <th class="amount">${isSpanish ? 'US (no trib. ES)' : 'US-sourced'}</th>
-                <th class="amount">${isSpanish ? 'ES (tributable)' : 'ES-sourced'}</th>
+                ${priceEUR > 0 ? `<th class="amount">${isSpanish ? 'Valor total' : 'Total Value'}</th>` : ''}
+                <th class="amount">${isSpanish ? 'US (no en nómina)' : 'US (not on nómina)'}</th>
+                <th class="amount">${isSpanish ? 'ES (en nómina)' : 'ES (on nómina)'}</th>
             </tr></thead><tbody>`;
 
             let totalShares = 0, totalValue = 0, totalUS = 0, totalES = 0;
@@ -4999,21 +5087,18 @@
                 totalShares += r.shares; totalValue += val; totalUS += usVal; totalES += esVal;
                 html += `<tr>
                     <td>${months[r.m]} ${r.y}</td>
-                    <td class="amount">${r.shares.toFixed(1)}</td>
-                    <td class="amount">${d.fmtEUR(val)}</td>
-                    <td class="amount">${(r.usPctW*100).toFixed(0)}%</td>
-                    <td class="amount">${(r.esPctW*100).toFixed(0)}%</td>
-                    <td class="amount">${d.fmtEUR(usVal)}</td>
-                    <td class="amount">${d.fmtEUR(esVal)}</td>
+                    <td class="amount">${r.shares.toFixed(0)}</td>
+                    ${priceEUR > 0 ? `<td class="amount">${d.fmtEUR(val)}</td>` : ''}
+                    <td class="amount">${priceEUR > 0 ? `${d.fmtEUR(usVal)} (${(r.usPctW*100).toFixed(0)}%)` : `${(r.usPctW*100).toFixed(0)}%`}</td>
+                    <td class="amount">${priceEUR > 0 ? `${d.fmtEUR(esVal)} (${(r.esPctW*100).toFixed(0)}%)` : `${(r.esPctW*100).toFixed(0)}%`}</td>
                 </tr>`;
             }
             html += `<tr class="total-row">
                 <td>Total</td>
-                <td class="amount">${totalShares.toFixed(1)}</td>
-                <td class="amount">${d.fmtEUR(totalValue)}</td>
-                <td colspan="2"></td>
-                <td class="amount">${d.fmtEUR(totalUS)}</td>
-                <td class="amount">${d.fmtEUR(totalES)}</td>
+                <td class="amount">${totalShares.toFixed(0)}</td>
+                ${priceEUR > 0 ? `<td class="amount">${d.fmtEUR(totalValue)}</td>` : ''}
+                <td class="amount">${priceEUR > 0 ? d.fmtEUR(totalUS) : ''}</td>
+                <td class="amount">${priceEUR > 0 ? d.fmtEUR(totalES) : ''}</td>
             </tr></tbody></table>`;
             return html;
         }
@@ -5145,7 +5230,7 @@
 
             try {
                 // Using exchangerate.host free API (no key required)
-                const response = await fetch('https://api.exchangerate.host/latest?base=EUR&symbols=USD');
+                const response = await corsFetch('https://api.exchangerate.host/latest?base=EUR&symbols=USD');
                 const data = await response.json();
 
                 if (data.success && data.rates?.USD) {
@@ -5156,7 +5241,7 @@
                     autoSaveConfig();
                 } else {
                     // Fallback to frankfurter.app
-                    const fallbackResponse = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                    const fallbackResponse = await corsFetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
                     const fallbackData = await fallbackResponse.json();
 
                     if (fallbackData.rates?.USD) {
