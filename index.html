@@ -754,6 +754,7 @@
         <button class="tab" data-tab="saves" data-i18n="tabSaves">Save Slots</button>
         <button class="tab" data-tab="guide" data-i18n="tabGuide">Payslip Guide</button>
         <button class="tab" data-tab="equity-guide" data-i18n="tabEquityGuide" id="equityGuideTab" style="display:none;">Equity / US-ES</button>
+        <button class="tab" data-tab="us-tax-estimate" data-i18n="tabUSTaxEst" id="usTaxTab" style="display:none;">US Tax Estimate</button>
     </div>
 
     <!-- Save Slots Tab -->
@@ -1498,6 +1499,69 @@
         </div>
     </div>
 
+    <!-- US Tax Estimation Tab -->
+    <div id="us-tax-estimate" class="tab-content">
+        <div style="padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; margin-bottom: 20px;">
+            <strong style="font-size: 16px;">⚠ WORK IN PROGRESS — NOT TAX ADVICE</strong>
+            <p style="margin: 8px 0 0 0; font-size: 13px;">This is a rough estimation tool for reference purposes only. It is not a substitute for professional tax advice. Consult a CPA or tax attorney specializing in US expat taxation (e.g., Greenback, Bright!Tax, or a Big 4 international tax group) to prepare your actual return. Tax brackets are estimated for 2026 and may differ from final IRS figures.</p>
+        </div>
+
+        <div class="card">
+            <h2>US Federal Tax Estimator</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label><strong>Filing Status</strong></label>
+                    <select id="usTaxFilingStatus" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                        <option value="mfj">Married Filing Jointly (MFJ)</option>
+                        <option value="mfs">Married Filing Separately (MFS)</option>
+                    </select>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">MFJ requires spouse ITIN + consent. Usually better brackets.</div>
+                </div>
+                <div class="form-group">
+                    <label><strong>Tax Strategy</strong></label>
+                    <select id="usTaxStrategy" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                        <option value="ftc-only">FTC Only (Foreign Tax Credit)</option>
+                        <option value="feie-ftc">FEIE + FTC (Foreign Earned Income Exclusion)</option>
+                    </select>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">⚠ Once FEIE is elected, can't revoke for 5 years without IRS permission.</div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 15px;">
+                <div class="form-group">
+                    <label>Salary (USD)</label>
+                    <input type="number" id="usTaxSalary" placeholder="auto from config" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                </div>
+                <div class="form-group">
+                    <label>RSU Income (USD)</label>
+                    <input type="number" id="usTaxRSU" placeholder="auto from grants" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                </div>
+                <div class="form-group">
+                    <label>Other US Income (USD)</label>
+                    <input type="number" id="usTaxOther" placeholder="0" step="1" value="0" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 10px;">
+                <div class="form-group">
+                    <label>Spanish Taxes Paid (USD)</label>
+                    <input type="number" id="usTaxSpanishPaid" placeholder="auto from payslips" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <div style="font-size: 10px; color: var(--text-muted);">Total IRPF + Repercutidos from payslips</div>
+                </div>
+                <div class="form-group">
+                    <label>US Withholding at Vest (USD)</label>
+                    <input type="number" id="usTaxWithheld" placeholder="from shares sold" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <div style="font-size: 10px; color: var(--text-muted);">Shares sold × price at each vest</div>
+                </div>
+                <div class="form-group">
+                    <label>Spouse Income (USD, for MFJ)</label>
+                    <input type="number" id="usTaxSpouseIncome" placeholder="0" step="1" value="0" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                </div>
+            </div>
+            <button onclick="prefillUSTaxFromConfig()" style="margin-top: 10px; font-size: 12px;" class="secondary">Auto-fill from payslip & grant data</button>
+        </div>
+
+        <div class="card" id="usTaxResults" style="display: none;"></div>
+    </div>
+
     </div><!-- end payrollPage -->
 
     <!-- ON-CALL TRACKER PAGE -->
@@ -1631,6 +1695,7 @@
                 tabConfig: 'Configuration',
                 tabGuide: 'Payslip Guide',
                 tabEquityGuide: 'Equity / US-ES',
+                tabUSTaxEst: 'US Tax Estimate',
                 uploadTitle: 'Upload Payslip PDFs',
                 uploadDesc: 'Upload your Spanish payslip PDFs. If password-protected, enter the password below (usually your DNI/NIE).',
                 passwordLabel: 'PDF Password (if encrypted)',
@@ -1686,6 +1751,7 @@
                 tabConfig: 'Configuración',
                 tabGuide: 'Guía de Nómina',
                 tabEquityGuide: 'Equity / US-ES',
+                tabUSTaxEst: 'US Tax Estimate',
                 uploadTitle: 'Subir PDFs de Nómina',
                 uploadDesc: 'Sube tus PDFs de nómina. Si están protegidos con contraseña, introdúcela abajo (normalmente tu DNI/NIE).',
                 passwordLabel: 'Contraseña del PDF (si está cifrado)',
@@ -4476,6 +4542,8 @@
             // Show/hide equity guide tab
             const equityTab = document.getElementById('equityGuideTab');
             if (equityTab) equityTab.style.display = mode === 'us-es-transfer' ? '' : 'none';
+            const usTaxTab = document.getElementById('usTaxTab');
+            if (usTaxTab) usTaxTab.style.display = mode === 'us-es-transfer' ? '' : 'none';
         }
 
         // ===== RSU Grant Table & Pro-Rata Calculation =====
@@ -4803,11 +4871,13 @@
                                 <th style="padding: 2px 5px; text-align:right;">Shares</th>
                                 <th style="padding: 2px 5px; text-align:right;">US %</th>
                                 <th style="padding: 2px 5px; text-align:right;">US Shares</th>
+                                <th style="padding: 2px 5px; text-align:right;">Sold for Tax</th>
                             </tr></thead>
-                            <tbody>${pastEvents.map(e => {
+                            <tbody>${(() => { const soldData = config.sharesSoldForTax || {}; return pastEvents.map(e => {
                                 const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
                                 const checked = usVestConfirmed[dk] ? 'checked' : '';
                                 const usShares = (e.shares * e.usPct).toFixed(1);
+                                const soldShares = soldData[dk] || '';
                                 return `<tr style="border-bottom:1px solid #f0f0f0;">
                                     <td style="padding: 2px 5px; text-align:center;"><input type="checkbox" ${checked} onchange="toggleUSVestConfirmed('${dk}', this.checked)" style="cursor:pointer;"></td>
                                     <td style="padding: 2px 5px;">${months2[e.date.getMonth()+1]} ${e.date.getDate()}, ${e.date.getFullYear()}</td>
@@ -4815,8 +4885,9 @@
                                     <td style="padding: 2px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
                                     <td style="padding: 2px 5px; text-align:right;">${(e.usPct*100).toFixed(0)}%</td>
                                     <td style="padding: 2px 5px; text-align:right; color: #1565c0;">${usShares}</td>
+                                    <td style="padding: 2px 5px; text-align:right;"><input type="number" value="${soldShares}" placeholder="0" step="1" style="width:50px; padding:1px 3px; border:1px solid #ddd; border-radius:3px; font-size:10px; text-align:right;" onblur="updateSharesSoldForTax('${dk}', this.value)"></td>
                                 </tr>`;
-                            }).join('')}</tbody>
+                            }).join(''); })()}</tbody>
                         </table>
                         <div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px;">
                             <label style="display: flex; align-items: center; gap: 6px;">
@@ -4846,6 +4917,17 @@
             container.innerHTML = html;
         }
 
+        function updateSharesSoldForTax(dateKey, value) {
+            if (!config.sharesSoldForTax) config.sharesSoldForTax = {};
+            const shares = parseFloat(value) || 0;
+            if (shares > 0) {
+                config.sharesSoldForTax[dateKey] = shares;
+            } else {
+                delete config.sharesSoldForTax[dateKey];
+            }
+            autoSaveConfig();
+        }
+
         function toggleUSVestConfirmed(dateKey, confirmed) {
             if (!config.usVestConfirmed) config.usVestConfirmed = {};
             if (confirmed) {
@@ -4873,6 +4955,233 @@
         // ===== Income Summary Letter Generator =====
 
         // Populate letter form fields from RSU tracker cached config
+        // ===== US Tax Estimation =====
+        const US_TAX_BRACKETS_2026 = {
+            mfs: [
+                { min: 0, max: 11925, rate: 0.10 },
+                { min: 11925, max: 48475, rate: 0.12 },
+                { min: 48475, max: 103350, rate: 0.22 },
+                { min: 103350, max: 197300, rate: 0.24 },
+                { min: 197300, max: 250525, rate: 0.32 },
+                { min: 250525, max: 626350, rate: 0.35 },
+                { min: 626350, max: Infinity, rate: 0.37 }
+            ],
+            mfj: [
+                { min: 0, max: 23850, rate: 0.10 },
+                { min: 23850, max: 96950, rate: 0.12 },
+                { min: 96950, max: 206700, rate: 0.22 },
+                { min: 206700, max: 394600, rate: 0.24 },
+                { min: 394600, max: 501050, rate: 0.32 },
+                { min: 501050, max: 751600, rate: 0.35 },
+                { min: 751600, max: Infinity, rate: 0.37 }
+            ]
+        };
+        const US_STANDARD_DEDUCTION_2026 = { mfs: 15700, mfj: 31400 };
+        const US_FEIE_LIMIT_2026 = 130000;
+        const US_SS_CAP_2026 = 176100;
+
+        function computeUSFederalTax(taxableIncome, brackets) {
+            let tax = 0;
+            for (const b of brackets) {
+                if (taxableIncome <= b.min) break;
+                tax += (Math.min(taxableIncome, b.max) - b.min) * b.rate;
+            }
+            return tax;
+        }
+
+        function prefillUSTaxFromConfig() {
+            const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
+            // Salary
+            const salaryUSD = Math.round((config.annualGross || 0) * eurRate);
+            document.getElementById('usTaxSalary').value = salaryUSD || '';
+
+            // RSU from grants
+            const priceUSD = config.rsuSharePrice || 0;
+            if (priceUSD > 0 && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
+                const year = new Date().getFullYear();
+                let totalRSUusd = 0;
+                for (const e of events) {
+                    if (e.date.getFullYear() === year) {
+                        const hist = config.rsuHistoricalPrices || {};
+                        const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                        const vestPrice = hist[dk] || priceUSD;
+                        totalRSUusd += e.shares * vestPrice;
+                    }
+                }
+                document.getElementById('usTaxRSU').value = Math.round(totalRSUusd) || '';
+            }
+
+            // Spanish taxes from payslips
+            if (parsedPayslips.length > 0) {
+                let totalSpanishTax = 0;
+                for (const ps of parsedPayslips) {
+                    for (const d of ps.deductions) {
+                        if (/irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs)) {
+                            totalSpanishTax += Math.abs(d.amount);
+                        }
+                    }
+                }
+                // Convert to USD and project for full year
+                const monthsParsed = parsedPayslips.length;
+                const projectedAnnual = totalSpanishTax * (12 / monthsParsed);
+                document.getElementById('usTaxSpanishPaid').value = Math.round(projectedAnnual * eurRate) || '';
+            }
+
+            // US withholding from shares sold
+            const sharesSold = config.sharesSoldForTax || {};
+            const hist = config.rsuHistoricalPrices || {};
+            let totalWithheld = 0;
+            for (const [dk, shares] of Object.entries(sharesSold)) {
+                if (shares > 0) {
+                    const dateKey = dk.replace(/-grant_.*$/, '');
+                    const price = hist[dateKey] || (config.rsuSharePrice || 0);
+                    totalWithheld += shares * price;
+                }
+            }
+            if (totalWithheld > 0) document.getElementById('usTaxWithheld').value = Math.round(totalWithheld);
+
+            computeUSTaxEstimate();
+        }
+
+        function computeUSTaxEstimate() {
+            const container = document.getElementById('usTaxResults');
+            const filing = document.getElementById('usTaxFilingStatus')?.value || 'mfj';
+            const strategy = document.getElementById('usTaxStrategy')?.value || 'ftc-only';
+            const salary = parseFloat(document.getElementById('usTaxSalary')?.value) || 0;
+            const rsuTotal = parseFloat(document.getElementById('usTaxRSU')?.value) || 0;
+            const otherIncome = parseFloat(document.getElementById('usTaxOther')?.value) || 0;
+            const spanishTaxPaid = parseFloat(document.getElementById('usTaxSpanishPaid')?.value) || 0;
+            const usWithheld = parseFloat(document.getElementById('usTaxWithheld')?.value) || 0;
+            const spouseIncome = parseFloat(document.getElementById('usTaxSpouseIncome')?.value) || 0;
+
+            if (salary === 0 && rsuTotal === 0) { container.style.display = 'none'; return; }
+            container.style.display = 'block';
+
+            const brackets = US_TAX_BRACKETS_2026[filing];
+            const stdDeduction = US_STANDARD_DEDUCTION_2026[filing];
+            const feieLimit = US_FEIE_LIMIT_2026;
+
+            // Compute RSU sourcing from grant data
+            let rsuUSPct = 0.85, rsuESPct = 0.15; // defaults
+            if (config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
+                const yearEvents = events.filter(e => e.date.getFullYear() === new Date().getFullYear());
+                const totalShares = yearEvents.reduce((s, e) => s + e.shares, 0);
+                if (totalShares > 0) {
+                    rsuUSPct = yearEvents.reduce((s, e) => s + e.shares * e.usPct, 0) / totalShares;
+                    rsuESPct = 1 - rsuUSPct;
+                }
+            }
+
+            const rsuUS = rsuTotal * rsuUSPct;
+            const rsuES = rsuTotal * rsuESPct;
+            const worldwideIncome = salary + rsuTotal + otherIncome + spouseIncome;
+
+            // FEIE
+            let feieExclusion = 0;
+            if (strategy === 'feie-ftc') {
+                // FEIE: exclude salary + Spain-sourced RSU (foreign earned), up to limit
+                const foreignEarned = salary + rsuES;
+                feieExclusion = Math.min(foreignEarned, feieLimit);
+            }
+
+            const agi = worldwideIncome - feieExclusion;
+            const taxableIncome = Math.max(0, agi - stdDeduction);
+
+            // Tax with stacking rule: compute tax on full income, subtract tax on excluded
+            let federalTax;
+            if (feieExclusion > 0) {
+                const taxOnFull = computeUSFederalTax(worldwideIncome - stdDeduction, brackets);
+                const taxOnExcluded = computeUSFederalTax(feieExclusion, brackets);
+                federalTax = taxOnFull - taxOnExcluded;
+            } else {
+                federalTax = computeUSFederalTax(taxableIncome, brackets);
+            }
+
+            // FTC: credit for Spanish taxes, limited by formula
+            const foreignSourceIncome = strategy === 'feie-ftc'
+                ? Math.max(0, (salary + rsuES) - feieExclusion) // only non-excluded foreign source
+                : salary + rsuES; // all foreign source
+            const ftcLimit = taxableIncome > 0 ? federalTax * (foreignSourceIncome / (taxableIncome || 1)) : 0;
+            const ftcUsable = Math.min(spanishTaxPaid, ftcLimit);
+            const ftcCarryforward = spanishTaxPaid > ftcLimit ? spanishTaxPaid - ftcLimit : 0;
+
+            const netFederalTax = Math.max(0, federalTax - ftcUsable);
+            const balanceOwed = netFederalTax - usWithheld;
+
+            // Format
+            const fmt = (v) => '$' + Math.round(v).toLocaleString('en-US');
+            const pct = (v) => (v * 100).toFixed(1) + '%';
+
+            let html = `<h2>Estimated US Federal Tax — ${filing.toUpperCase()} / ${strategy === 'feie-ftc' ? 'FEIE+FTC' : 'FTC Only'}</h2>`;
+
+            // Income breakdown
+            html += `<table style="width:100%; font-size:13px; border-collapse:collapse;">
+                <tr style="background:#f8f9fa;"><th style="text-align:left; padding:6px;">Item</th><th style="text-align:right; padding:6px;">Amount</th><th style="text-align:right; padding:6px;">Notes</th></tr>
+                <tr><td style="padding:4px 6px;">Salary</td><td style="text-align:right; padding:4px 6px;">${fmt(salary)}</td><td style="text-align:right; padding:4px 6px; font-size:11px; color:var(--text-muted);">Foreign earned (Spain)</td></tr>
+                <tr><td style="padding:4px 6px;">RSU — US-sourced (${pct(rsuUSPct)})</td><td style="text-align:right; padding:4px 6px;">${fmt(rsuUS)}</td><td style="text-align:right; padding:4px 6px; font-size:11px; color:#1565c0;">No FTC available</td></tr>
+                <tr><td style="padding:4px 6px;">RSU — Spain-sourced (${pct(rsuESPct)})</td><td style="text-align:right; padding:4px 6px;">${fmt(rsuES)}</td><td style="text-align:right; padding:4px 6px; font-size:11px; color:#2e7d32;">FTC eligible</td></tr>
+                ${otherIncome > 0 ? `<tr><td style="padding:4px 6px;">Other income</td><td style="text-align:right; padding:4px 6px;">${fmt(otherIncome)}</td><td></td></tr>` : ''}
+                ${spouseIncome > 0 ? `<tr><td style="padding:4px 6px;">Spouse income</td><td style="text-align:right; padding:4px 6px;">${fmt(spouseIncome)}</td><td></td></tr>` : ''}
+                <tr style="font-weight:600; border-top:2px solid #333;"><td style="padding:4px 6px;">Worldwide income</td><td style="text-align:right; padding:4px 6px;">${fmt(worldwideIncome)}</td><td></td></tr>
+                ${feieExclusion > 0 ? `<tr style="color:#2e7d32;"><td style="padding:4px 6px;">FEIE exclusion</td><td style="text-align:right; padding:4px 6px;">-${fmt(feieExclusion)}</td><td style="text-align:right; padding:4px 6px; font-size:11px;">Cap: ${fmt(feieLimit)}</td></tr>` : ''}
+                <tr><td style="padding:4px 6px;">Standard deduction (${filing.toUpperCase()})</td><td style="text-align:right; padding:4px 6px;">-${fmt(stdDeduction)}</td><td></td></tr>
+                <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:4px 6px;">Taxable income</td><td style="text-align:right; padding:4px 6px;">${fmt(taxableIncome)}</td><td></td></tr>
+                <tr style="font-weight:600;"><td style="padding:4px 6px;">Federal tax</td><td style="text-align:right; padding:4px 6px;">${fmt(federalTax)}</td><td style="text-align:right; padding:4px 6px; font-size:11px;">${taxableIncome > 0 ? 'Effective: ' + pct(federalTax / taxableIncome) : ''}</td></tr>
+            </table>`;
+
+            // FTC section
+            html += `<div style="margin-top:15px; padding:12px; background:#e8f4fd; border-radius:6px;">
+                <strong>Foreign Tax Credit (Form 1116)</strong>
+                <table style="width:100%; font-size:12px; margin-top:8px; border-collapse:collapse;">
+                    <tr><td style="padding:3px 6px;">Spanish taxes paid (projected annual)</td><td style="text-align:right; padding:3px 6px;">${fmt(spanishTaxPaid)}</td></tr>
+                    <tr><td style="padding:3px 6px;">Foreign source income (non-excluded)</td><td style="text-align:right; padding:3px 6px;">${fmt(foreignSourceIncome)}</td></tr>
+                    <tr><td style="padding:3px 6px;">FTC limitation formula</td><td style="text-align:right; padding:3px 6px;">${fmt(federalTax)} × ${fmt(foreignSourceIncome)} / ${fmt(taxableIncome)} = ${fmt(ftcLimit)}</td></tr>
+                    <tr style="font-weight:600;"><td style="padding:3px 6px;">Usable FTC</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(ftcUsable)}</td></tr>
+                    ${ftcCarryforward > 0 ? `<tr><td style="padding:3px 6px; color:var(--text-muted);">Excess FTC (carries forward 10 years)</td><td style="text-align:right; padding:3px 6px; color:var(--text-muted);">${fmt(ftcCarryforward)}</td></tr>` : ''}
+                </table>
+            </div>`;
+
+            // Bottom line
+            html += `<div style="margin-top:15px; padding:15px; background:${balanceOwed > 1000 ? '#f8d7da' : '#d4edda'}; border-radius:8px;">
+                <table style="width:100%; font-size:14px; border-collapse:collapse;">
+                    <tr><td style="padding:4px 6px;">Federal tax</td><td style="text-align:right; padding:4px 6px;">${fmt(federalTax)}</td></tr>
+                    <tr><td style="padding:4px 6px;">Foreign Tax Credit</td><td style="text-align:right; padding:4px 6px; color:#2e7d32;">-${fmt(ftcUsable)}</td></tr>
+                    <tr style="font-weight:700; border-top:2px solid #333;"><td style="padding:4px 6px;">Net federal tax liability</td><td style="text-align:right; padding:4px 6px;">${fmt(netFederalTax)}</td></tr>
+                    <tr><td style="padding:4px 6px;">Already withheld (shares sold at vest)</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td></tr>
+                    <tr style="font-weight:700; font-size:18px; border-top:2px solid #333;"><td style="padding:6px;">${balanceOwed >= 0 ? 'Balance owed' : 'Estimated refund'}</td><td style="text-align:right; padding:6px; color:${balanceOwed > 0 ? '#dc3545' : '#28a745'};">${balanceOwed >= 0 ? fmt(balanceOwed) : fmt(Math.abs(balanceOwed))}</td></tr>
+                </table>
+            </div>`;
+
+            // Strategy comparison
+            const otherStrategy = strategy === 'ftc-only' ? 'feie-ftc' : 'ftc-only';
+            const otherFiling = filing === 'mfj' ? 'mfs' : 'mfj';
+            html += `<div style="margin-top:15px; padding:10px; background:#f8f9fa; border-radius:6px; font-size:12px; color:var(--text-muted);">
+                <strong>Quick comparison:</strong> Try switching to "${otherStrategy === 'ftc-only' ? 'FTC Only' : 'FEIE+FTC'}" or "${otherFiling.toUpperCase()}" above to compare strategies. The research suggests <strong>FTC Only + MFJ</strong> may be optimal for high RSU income with low Spain-sourced %.
+            </div>`;
+
+            // Forms needed
+            html += `<details style="margin-top:15px; border:1px solid #ddd; border-radius:6px; overflow:hidden;">
+                <summary style="padding:8px 12px; background:#f8f9fa; cursor:pointer; font-size:13px; font-weight:600;">Forms you'll likely need to file</summary>
+                <div style="padding:12px; font-size:12px;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tr><td style="padding:3px 6px; font-weight:600;">Form 1040</td><td style="padding:3px 6px;">Main US tax return</td></tr>
+                        ${strategy === 'feie-ftc' ? '<tr><td style="padding:3px 6px; font-weight:600;">Form 2555</td><td style="padding:3px 6px;">Foreign Earned Income Exclusion</td></tr>' : ''}
+                        <tr><td style="padding:3px 6px; font-weight:600;">Form 1116</td><td style="padding:3px 6px;">Foreign Tax Credit</td></tr>
+                        <tr><td style="padding:3px 6px; font-weight:600;">Schedule D / 8949</td><td style="padding:3px 6px;">Shares sold at vest (even if $0 gain)</td></tr>
+                        <tr><td style="padding:3px 6px; font-weight:600;">Form 8938</td><td style="padding:3px 6px;">FATCA — foreign financial assets</td></tr>
+                        <tr><td style="padding:3px 6px; font-weight:600;">FBAR (FinCEN 114)</td><td style="padding:3px 6px;">Foreign bank accounts >$10k aggregate</td></tr>
+                    </table>
+                    <div style="margin-top:8px; padding:6px; background:#fff3cd; border-radius:4px; font-size:11px;">
+                        <strong>Filing deadline:</strong> June 15, 2027 (auto 2-month extension for expats). But interest accrues from April 15, 2027 on any unpaid balance. File Form 4868 for extension to October 15.
+                    </div>
+                </div>
+            </details>`;
+
+            container.innerHTML = html;
+        }
+
         function populateLetterFromConfig() {
             const lPrice = document.getElementById('incomeLetterSharePrice');
             const lRate = document.getElementById('incomeLetterEurRate');
@@ -5456,6 +5765,7 @@
                 rsuHistoricalPrices: config.rsuHistoricalPrices || {},
                 usVestConfirmed: config.usVestConfirmed || {},
                 usW2Total: config.usW2Total || 0,
+                sharesSoldForTax: config.sharesSoldForTax || {},
                 beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
 
