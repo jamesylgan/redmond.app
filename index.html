@@ -4265,12 +4265,11 @@
                     vestDates[vestDates.length - 1].shares += grant.totalShares - totalAllocated;
                 }
 
-                // Skip already-vested shares (earliest vests first)
-                let toSkip = grant.sharesAlreadyVested || 0;
-                for (const vest of vestDates) {
-                    if (toSkip <= 0) break;
-                    if (vest.shares <= toSkip) { toSkip -= vest.shares; vest.shares = 0; }
-                    else { vest.shares -= toSkip; toSkip = 0; }
+                // Skip already-vested shares by whole vest count to avoid fractional remainders
+                const alreadyVested = grant.sharesAlreadyVested || 0;
+                const vestsToSkip = Math.round(alreadyVested / sharesPerVest);
+                for (let vi = 0; vi < Math.min(vestsToSkip, vestDates.length); vi++) {
+                    vestDates[vi].shares = 0;
                 }
 
                 // Compute pro-rata for remaining vests
