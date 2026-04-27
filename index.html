@@ -2464,9 +2464,9 @@
                 }
             }
 
-            // Calculate expected RSU compensation from grant table (Spain-sourced portion only,
-            // since that's what appears on the payslip)
-            let expectedAnnualRSU = 0;
+            // Calculate expected RSU: Spain-sourced for payslip projection, total for optional full tracking
+            let expectedAnnualRSU_ES = 0; // Spain portion (what appears on payslips)
+            let expectedAnnualRSU_Total = 0; // Full value (ES + US)
             let expectedRSULabel = '';
             if (config.rsuValidationMode === 'us-es-transfer' && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
                 const rsuPriceUSD = config.rsuSharePrice || 0;
@@ -2474,20 +2474,22 @@
                 const rsuPriceEUR = rsuPriceUSD > 0 ? rsuPriceUSD / rsuEurRate : 0;
                 if (rsuPriceEUR > 0) {
                     const vestEvents = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
-                    // Sum vest values that fall within the payslip year range
                     for (const evt of vestEvents) {
                         const evtMonth = evt.date.getMonth() + 1;
                         const evtYear = evt.date.getFullYear();
                         if (evtYear === firstPayslip.year && evtMonth >= startMonth && evtMonth <= 12) {
-                            // Full vest value appears on payslip (both In-Kind + Tax Reported)
-                            expectedAnnualRSU += evt.shares * rsuPriceEUR;
+                            const val = evt.shares * rsuPriceEUR;
+                            expectedAnnualRSU_Total += val;
+                            expectedAnnualRSU_ES += val * evt.spainPct;
                         }
                     }
-                    if (expectedAnnualRSU > 0) {
+                    if (expectedAnnualRSU_Total > 0) {
                         expectedRSULabel = `RSU (${config.rsuTicker || 'AFRM'} @$${rsuPriceUSD.toFixed(0)})`;
                     }
                 }
             }
+            // Default: use Spain-sourced only (matches what payslips show)
+            const expectedAnnualRSU = expectedAnnualRSU_ES;
 
             // Calculate averages and projections
             const avgMonthlyGross = totalGross / parsedPayslips.length;
@@ -2730,27 +2732,50 @@
                                         <span style="padding-left: 15px;">+${formatCurrency(totalAdditionalComp)}</span>
                                     </summary>
                                     <div style="padding: 8px 0 0 20px; font-size: 13px;">
-                                        ${Object.entries(additionalCompBreakdown).map(([name, amount]) => {
+                                        ${(() => {
+                                            // Pre-sum all RSU line items to compare combined total against expected
+                                            const rsuItems = Object.entries(additionalCompBreakdown).filter(([n]) => /rsu|RSU/i.test(n));
+                                            const rsuCombinedActual = rsuItems.reduce((s, [, a]) => s + a, 0);
+                                            let rsuExpectedES = 0;
+                                            if (Object.keys(expectedRSUByMonth).length > 0) {
+                                                for (const ps of parsedPayslips) { const k = `${ps.month}/${ps.year}`; if (expectedRSUByMonth[k]) rsuExpectedES += expectedRSUByMonth[k].spainValue; }
+                                            }
+                                            let rsuShownCombined = false;
+                                            return Object.entries(additionalCompBreakdown).map(([name, amount]) => {
                                             const category = earningToCategory[name];
                                             const catConfig = category && config.compCategories?.[category];
                                             const expectedMonthly = catConfig?.expectedMonthly || 0;
                                             const benefitStartMonth = catConfig?.startMonth || 0;
                                             const isRSUItem = /rsu|RSU/i.test(name);
 
-                                            // For RSU items in US/ES mode, compute expected from grant table
                                             let expectedForParsed = 0;
                                             let hasExpected = false;
                                             let monthLabel = '';
                                             let applicableMonths = parsedPayslips.length;
 
-                                            if (isRSUItem && Object.keys(expectedRSUByMonth).length > 0) {
-                                                // Sum expected Spain-sourced RSU (that's what appears on the payslip)
-                                                for (const ps of parsedPayslips) {
-                                                    const key = `${ps.month}/${ps.year}`;
-                                                    const exp = expectedRSUByMonth[key];
-                                                    if (exp) expectedForParsed += exp.spainValue;
+                                            if (isRSUItem && rsuExpectedES > 0) {
+                                                // Show combined RSU comparison on the first RSU line only
+                                                if (!rsuShownCombined) {
+                                                    rsuShownCombined = true;
+                                                    expectedForParsed = rsuExpectedES;
+                                                    hasExpected = true;
+                                                    // Show as combined: actual is sum of all RSU lines
+                                                    const combinedDiff = rsuCombinedActual - rsuExpectedES;
+                                                    const combinedPct = rsuExpectedES > 0 ? Math.abs(combinedDiff / rsuExpectedES * 100) : 0;
+                                                    const combinedIcon = combinedPct < 25 ? '✓' : '~';
+                                                    const combinedColor = combinedPct < 25 ? 'var(--success)' : 'var(--warning)';
+                                                    return `<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--border);">
+                                                        <span><span style="color: ${combinedColor};">${combinedIcon}</span> ${currentLang === 'es' ? 'RSU combinado (In-Kind + Tax Reported):' : 'RSU combined (In-Kind + Tax Reported):'}</span>
+                                                        <span>${formatCurrency(rsuCombinedActual)} <span style="color: var(--text-muted); font-size: 11px;">(exp ES: ${formatCurrency(rsuExpectedES)}, ${combinedDiff >= 0 ? '+' : ''}${formatCurrency(combinedDiff)})</span></span>
+                                                    </div>
+                                                    ${rsuItems.map(([n, a]) => `<div style="display: flex; justify-content: space-between; padding: 1px 0 1px 15px; font-size: 12px; color: var(--text-muted);">
+                                                        <span>↳ ${n}:</span><span>${formatCurrency(a)}</span>
+                                                    </div>`).join('')}`;
+                                                } else {
+                                                    return ''; // Already shown as combined above
                                                 }
-                                                hasExpected = expectedForParsed > 0;
+                                            } else if (isRSUItem && Object.keys(expectedRSUByMonth).length > 0) {
+                                                hasExpected = false;
                                                 monthLabel = `${parsedPayslips.length} mo (ES-sourced from grants)`;
                                             } else {
                                                 if (benefitStartMonth > 0) {
@@ -2776,7 +2801,7 @@
                                                 <span><span style="color: ${statusColor};">${statusIcon}</span> ${name}${hasExpected ? '' : ' (no expected set)'}:</span>
                                                 <span>${formatCurrency(amount)}${hasExpected && expectedForParsed > 0 ? ' <span style="color: var(--text-muted); font-size: 11px;">(exp: ' + formatCurrency(expectedForParsed) + ' for ' + monthLabel + ', ' + diffStr + rsuNote + ')</span>' : ''}</span>
                                             </div>`;
-                                        }).join('')}
+                                        }).join(''); })()}
                                     </div>
                                 </details>
                             </td>
@@ -2795,8 +2820,36 @@
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(projectedYearGross)}</td>
                         </tr>
                         <tr style="font-weight: 600;">
-                            <td>${currentLang === 'es' ? 'Diferencia:' : 'Difference:'}</td>
-                            <td class="text-right" style="padding-left: 15px;">${annualDiff >= 0 ? '+' : ''}${formatCurrency(annualDiff)} (${percentDiff.toFixed(1)}%)</td>
+                            <td colspan="2">
+                                <details style="margin: 0;" class="expandable-row">
+                                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Diferencia:' : 'Difference:'}</span>
+                                        <span style="padding-left: 15px; color: ${Math.abs(percentDiff) <= (config.tolerance || 2) ? 'var(--success)' : 'var(--warning)'};">${annualDiff >= 0 ? '+' : ''}${formatCurrency(annualDiff)} (${percentDiff.toFixed(1)}%)</span>
+                                    </summary>
+                                    <div style="padding: 8px 0 0 10px; font-size: 12px; color: var(--text-muted);">
+                                        ${(() => {
+                                            const lines = [];
+                                            const baseDiff = totalBaseSalary - proratedAnnualGross;
+                                            if (Math.abs(baseDiff) > 1) lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'Salario base vs contrato:' : 'Base salary vs contract:'}</span><span>${baseDiff >= 0 ? '+' : ''}${formatCurrency(baseDiff)}</span></div>`);
+                                            if (rsuOnPayslips > 0 && expectedAnnualRSU_ES > 0) {
+                                                const rsuDiffParsed = rsuOnPayslips - expectedAnnualRSU_ES * (parsedPayslips.length / monthsInYear);
+                                                lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'RSU en nóminas (ES) vs esperado:' : 'RSU on payslips (ES) vs expected:'}</span><span>${rsuDiffParsed >= 0 ? '+' : ''}${formatCurrency(rsuDiffParsed)} <span style="font-size:10px;">(${currentLang === 'es' ? 'diferencia de precio' : 'price diff'})</span></span></div>`);
+                                            }
+                                            if (expectedAnnualRSU_Total > expectedAnnualRSU_ES) {
+                                                const usAnnual = expectedAnnualRSU_Total - expectedAnnualRSU_ES;
+                                                lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0; color: #1565c0;"><span>${currentLang === 'es' ? 'RSU parte US (no en nóminas, no en proyección):' : 'RSU US portion (not on payslips, excluded from projection):'}</span><span>${formatCurrency(usAnnual)}/yr</span></div>`);
+                                            }
+                                            if (projectedRemainingRSU > 0) {
+                                                lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'RSU proyectado restante (meses futuros, ES):' : 'Projected remaining RSU (future months, ES):'}</span><span>${formatCurrency(projectedRemainingRSU)}</span></div>`);
+                                            }
+                                            const compDiff = totalAdditionalComp - expectedAnnualAdditional;
+                                            if (Math.abs(compDiff) > 1) lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'Compensación adicional vs esperado:' : 'Additional comp vs expected:'}</span><span>${compDiff >= 0 ? '+' : ''}${formatCurrency(compDiff)}</span></div>`);
+                                            lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0; font-style:italic; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px;"><span>${currentLang === 'es' ? 'Nota: La proyección excluye RSU de fuente US ya que no aparece en nóminas.' : 'Note: Projection excludes US-sourced RSU as it does not appear on payslips.'}</span></div>`);
+                                            return lines.join('');
+                                        })()}
+                                    </div>
+                                </details>
+                            </td>
                         </tr>
                     </table>
                 </div>`;
