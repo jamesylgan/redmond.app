@@ -2440,6 +2440,31 @@
                 }
             }
 
+            // Calculate expected RSU compensation from grant table (Spain-sourced portion only,
+            // since that's what appears on the payslip)
+            let expectedAnnualRSU = 0;
+            let expectedRSULabel = '';
+            if (config.rsuValidationMode === 'us-es-transfer' && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                const rsuPriceUSD = config.rsuSharePrice || 0;
+                const rsuEurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
+                const rsuPriceEUR = rsuPriceUSD > 0 ? rsuPriceUSD / rsuEurRate : 0;
+                if (rsuPriceEUR > 0) {
+                    const vestEvents = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
+                    // Sum vest values that fall within the payslip year range
+                    for (const evt of vestEvents) {
+                        const evtMonth = evt.date.getMonth() + 1;
+                        const evtYear = evt.date.getFullYear();
+                        if (evtYear === firstPayslip.year && evtMonth >= startMonth && evtMonth <= 12) {
+                            // Full vest value appears on payslip (both In-Kind + Tax Reported)
+                            expectedAnnualRSU += evt.shares * rsuPriceEUR;
+                        }
+                    }
+                    if (expectedAnnualRSU > 0) {
+                        expectedRSULabel = `RSU (${config.rsuTicker || 'AFRM'} @$${rsuPriceUSD.toFixed(0)})`;
+                    }
+                }
+            }
+
             // Calculate averages and projections
             const avgMonthlyGross = totalGross / parsedPayslips.length;
             const avgMonthlyBase = totalBaseSalary / parsedPayslips.length;
@@ -2447,7 +2472,7 @@
 
             // Prorate annual salary
             const proratedAnnualGross = config.annualGross > 0 ? (config.annualGross / 12) * monthsInYear : 0;
-            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional + totalOncallComp;
+            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional + totalOncallComp + expectedAnnualRSU;
 
             // Extrapolate to end of year based on average from parsed payslips
             const monthsUntilYearEnd = 13 - lastPayslip.month; // remaining months including last parsed
@@ -2576,8 +2601,12 @@
                             </td>
                         </tr>
                         ` : ''}
+                        ${expectedAnnualRSU > 0 ? `<tr>
+                            <td>${currentLang === 'es' ? `RSU esperado (${expectedRSULabel}):` : `Expected RSU (${expectedRSULabel}):`}</td>
+                            <td class="text-right" style="padding-left: 15px;">+${formatCurrency(expectedAnnualRSU)}</td>
+                        </tr>` : ''}
                         <tr style="font-weight: 600; border-top: 1px solid var(--border);">
-                            <td>${currentLang === 'es' ? `Total esperado (base${expectedAnnualAdditional > 0 ? ' + adicional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}):` : `Expected total (base${expectedAnnualAdditional > 0 ? ' + additional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}):`}</td>
+                            <td>${currentLang === 'es' ? `Total esperado (base${expectedAnnualAdditional > 0 ? ' + adicional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):` : `Expected total (base${expectedAnnualAdditional > 0 ? ' + additional' : ''}${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):`}</td>
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(expectedTotal)}</td>
                         </tr>
                         ` : `${totalOncallComp > 0 ? `
@@ -2601,8 +2630,12 @@
                                 </details>
                             </td>
                         </tr>
+                        ${expectedAnnualRSU > 0 ? `<tr>
+                            <td>${currentLang === 'es' ? `RSU esperado (${expectedRSULabel}):` : `Expected RSU (${expectedRSULabel}):`}</td>
+                            <td class="text-right" style="padding-left: 15px;">+${formatCurrency(expectedAnnualRSU)}</td>
+                        </tr>` : ''}
                         <tr style="font-weight: 600; border-top: 1px solid var(--border);">
-                            <td>${currentLang === 'es' ? 'Total esperado (base + on-call):' : 'Expected total (base + on-call):'}</td>
+                            <td>${currentLang === 'es' ? `Total esperado (base${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):` : `Expected total (base${totalOncallComp > 0 ? ' + on-call' : ''}${expectedAnnualRSU > 0 ? ' + RSU' : ''}):`}</td>
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(proratedPlusAdditional)}</td>
                         </tr>
                         ` : ''}`}
@@ -3503,7 +3536,7 @@
 
             // Share price for EUR value display
             const overviewPriceUSD = config.rsuSharePrice || 0;
-            const overviewEurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+            const overviewEurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
             const overviewPriceEUR = overviewPriceUSD > 0 ? overviewPriceUSD / overviewEurRate : 0;
             const overviewTicker = config.rsuTicker || 'AFRM';
             const histPrices = config.rsuHistoricalPrices || {};
@@ -4127,7 +4160,7 @@
                             ${(() => {
                                 // Full reconciliation: grants vs nómina
                                 const cvPriceUSD = config.rsuSharePrice || 0;
-                                const cvEurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+                                const cvEurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
                                 const cvPriceEUR = cvPriceUSD > 0 ? cvPriceUSD / cvEurRate : 0;
                                 const cvTicker = config.rsuTicker || 'AFRM';
                                 const totalVestValue = cvPriceEUR > 0 ? totalSharesThisMonth * cvPriceEUR : 0;
@@ -4544,7 +4577,7 @@
             }
 
             const sharePriceUSD = config.rsuSharePrice || 0;
-            const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+            const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
             const ticker = config.rsuTicker || 'AFRM';
             const priceEUR = sharePriceUSD > 0 ? sharePriceUSD / eurRate : 0;
             const totalShares = events.reduce((s, e) => s + e.shares, 0);
@@ -4873,7 +4906,7 @@
             // RSU monthly average: use grant table + user-provided share price
             // Use letter inputs, fall back to grant panel / config values
             const sharePriceUSD = parseFloat(document.getElementById('incomeLetterSharePrice')?.value) || config.rsuSharePrice || 0;
-            const eurToUsdRate = parseFloat(document.getElementById('incomeLetterEurRate')?.value) || config.rsuEurRate || config.eurToUsdRate || 1.14;
+            const eurToUsdRate = parseFloat(document.getElementById('incomeLetterEurRate')?.value) || config.rsuEurRate || config.eurToUsdRate || 1.1706;
             const sharePriceEUR = sharePriceUSD > 0 ? sharePriceUSD / eurToUsdRate : 0;
             const ticker = document.getElementById('incomeLetterTicker')?.value || config.rsuTicker || 'AFRM';
 
@@ -5122,7 +5155,7 @@
 
             const priceEUR = d.sharePriceEUR || 0;
             const priceUSD = d.sharePriceUSD || 0;
-            const eurRate = d.eurToUsdRate || 1.14;
+            const eurRate = d.eurToUsdRate || 1.1706;
             const hist = config.rsuHistoricalPrices || {};
 
             // Include both past (with historical prices) and future events
