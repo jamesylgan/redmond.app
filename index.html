@@ -914,6 +914,7 @@
                                     <div style="display: flex; gap: 4px;">
                                         <input type="number" id="rsuSharePrice" placeholder="e.g. 64" step="0.01" onchange="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; flex: 1;">
                                         <button type="button" onclick="fetchRSUSharePrice()" style="padding: 4px 8px; font-size: 11px; cursor: pointer;" title="Fetch current price">↻</button>
+                                        <button type="button" onclick="fetchHistoricalPrices()" style="padding: 4px 8px; font-size: 10px; cursor: pointer;" title="Fetch vest-date prices for past months">Hist</button>
                                     </div>
                                     <span id="rsuSharePriceStatus" style="font-size: 10px; color: var(--text-muted);"></span>
                                 </label>
@@ -3496,189 +3497,169 @@
             const allEvents = computeVestEvents(grants, transferDate);
             if (allEvents.length === 0) return '';
 
-            // Share price for EUR value display
-            const overviewPriceUSD = config.rsuSharePrice || 0;
-            const overviewEurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
-            const overviewPriceEUR = overviewPriceUSD > 0 ? overviewPriceUSD / overviewEurRate : 0;
-            const overviewTicker = config.rsuTicker || 'AFRM';
+            const currentPriceUSD = config.rsuSharePrice || 0;
+            const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+            const currentPriceEUR = currentPriceUSD > 0 ? currentPriceUSD / eurRate : 0;
+            const ticker = config.rsuTicker || 'AFRM';
+            const histPrices = config.rsuHistoricalPrices || {};
+            const hasPrice = currentPriceEUR > 0;
 
             const es = currentLang === 'es';
-            const monthNamesLong = es
-                ? ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-                : ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const monthNamesShort = es
                 ? ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
                 : ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-            // Determine date range: 3 months back + 9 months forward from latest payslip
+            // Get calendar year range (Jan 1 to Dec 31 of latest payslip year)
             const sorted = [...payslips].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
             const latest = sorted[sorted.length - 1];
-            const now = new Date(latest.year, latest.month - 1, 15);
-            const rangeStart = addMonths(now, -3);
-            const rangeEnd = addMonths(now, 9);
+            const calYear = latest.year;
 
-            // Build month slots
-            const slots = [];
-            const cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-            while (cursor <= rangeEnd) {
-                const m = cursor.getMonth() + 1;
-                const y = cursor.getFullYear();
-                const isPast = (y < latest.year) || (y === latest.year && m <= latest.month);
-                const isCurrent = (y === latest.year && m === latest.month);
-
-                // Find payslip for this month
-                const ps = payslips.find(p => p.month === m && p.year === y);
-
-                // Find vest events for this month
-                const monthVests = getVestEventsForMonth(allEvents, m, y);
-                const vestShares = monthVests.reduce((s, e) => s + e.shares, 0);
-                const weightedUSPct = vestShares > 0 ? monthVests.reduce((s, e) => s + e.shares * e.usPct, 0) / vestShares : 0;
-                const weightedESPct = 1 - weightedUSPct;
-
-                // RSU amounts from payslip
-                let payslipRSU = 0;
-                let payslipRSUTaxReported = 0;
-                if (ps) {
-                    payslipRSU = (ps.earnings.find(e => /especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
-                    payslipRSUTaxReported = (ps.earnings.find(e => /rsu.*tax.*reported/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
+            // Helper: get price for a vest event (historical if available, else current)
+            function getVestPriceEUR(event) {
+                const d = event.date;
+                const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                if (histPrices[key]) return histPrices[key] / eurRate;
+                // Try nearby dates (±3 days)
+                for (let off = 1; off <= 3; off++) {
+                    const before = new Date(d); before.setDate(before.getDate() - off);
+                    const after = new Date(d); after.setDate(after.getDate() + off);
+                    const bKey = `${before.getFullYear()}-${String(before.getMonth()+1).padStart(2,'0')}-${String(before.getDate()).padStart(2,'0')}`;
+                    const aKey = `${after.getFullYear()}-${String(after.getMonth()+1).padStart(2,'0')}-${String(after.getDate()).padStart(2,'0')}`;
+                    if (histPrices[bKey]) return histPrices[bKey] / eurRate;
+                    if (histPrices[aKey]) return histPrices[aKey] / eurRate;
                 }
-                const payslipTotal = payslipRSU + payslipRSUTaxReported;
-
-                slots.push({ m, y, isPast, isCurrent, ps, monthVests, vestShares, weightedUSPct, weightedESPct, payslipRSU, payslipRSUTaxReported, payslipTotal });
-                cursor.setMonth(cursor.getMonth() + 1);
+                return currentPriceEUR; // fallback
             }
 
-            // Summary stats
-            const pastSlots = slots.filter(s => s.isPast);
-            const futureSlots = slots.filter(s => !s.isPast);
-            const pastTotalShares = pastSlots.reduce((s, sl) => s + sl.vestShares, 0);
-            const futureTotalShares = futureSlots.reduce((s, sl) => s + sl.vestShares, 0);
-            const pastOnNomina = pastSlots.reduce((s, sl) => s + sl.payslipTotal, 0);
-            const pastExpectedVests = pastSlots.filter(s => s.vestShares > 0).length;
-            const pastWithNomina = pastSlots.filter(s => s.payslipTotal > 0).length;
-            // US-sourced (not on nómina) = total vest value - what's on nómina
-            const pastTotalVestValue = overviewPriceEUR > 0 ? pastTotalShares * overviewPriceEUR : 0;
-            const pastUSValue = pastSlots.reduce((s, sl) => s + (sl.vestShares > 0 && overviewPriceEUR > 0 ? sl.vestShares * overviewPriceEUR * sl.weightedUSPct : 0), 0);
+            // Aggregate: past (Jan→latest month) and future (latest+1→Dec)
+            const yearEvents = allEvents.filter(e => e.date.getFullYear() === calYear);
+            const pastEvents = yearEvents.filter(e => (e.date.getMonth() + 1) <= latest.month);
+            const futureEvents = yearEvents.filter(e => (e.date.getMonth() + 1) > latest.month);
+
+            // Compute aggregates with per-event pricing
+            function aggregate(events, useHistorical) {
+                let shares = 0, totalValue = 0, usValue = 0, esValue = 0;
+                const monthDetails = [];
+                for (const e of events) {
+                    const price = useHistorical ? getVestPriceEUR(e) : currentPriceEUR;
+                    const val = e.shares * price;
+                    shares += e.shares;
+                    totalValue += val;
+                    usValue += val * e.usPct;
+                    esValue += val * e.spainPct;
+                    monthDetails.push({ ...e, priceEUR: price, value: val });
+                }
+                const avgUSPct = shares > 0 ? events.reduce((s, e) => s + e.shares * e.usPct, 0) / shares : 0;
+                return { shares, totalValue, usValue, esValue, avgUSPct, avgESPct: 1 - avgUSPct, details: monthDetails };
+            }
+
+            const past = aggregate(pastEvents, true);
+            const future = aggregate(futureEvents, false);
+            const annual = { shares: past.shares + future.shares, totalValue: past.totalValue + future.totalValue, usValue: past.usValue + future.usValue, esValue: past.esValue + future.esValue };
+
+            // Get nómina RSU totals for past
+            let pastOnNomina = 0;
+            for (const ps of payslips) {
+                if (ps.year === calYear && ps.month <= latest.month) {
+                    pastOnNomina += (ps.earnings.find(e => /especies.*rsu|rsu.*in-kind/i.test(e.nameEn + ' ' + e.nameEs)) || {}).amount || 0;
+                }
+            }
 
             let html = `<div class="card" style="border: 2px solid #17a2b8;">
-                <h2 style="color: #0c5460;">${es ? 'Resumen de Equity — US/ES' : 'Equity Overview — US/ES Transfer'}</h2>
+                <h2 style="color: #0c5460;">${es ? `Resumen de Equity ${calYear} — US/ES` : `${calYear} Equity Overview — US/ES Transfer`}</h2>
                 <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
-                    ${es
-                        ? 'Vista de 12 meses de vesting de RSU: 3 meses anteriores comparados con las nóminas, y 9 meses proyectados.'
-                        : '12-month rolling view of RSU vesting: past 3 months cross-referenced with payslips, plus 9 months projected.'}
+                    ${es ? `Año calendario ${calYear}. Precios históricos via "${ticker}" (click Hist para cargar). Futuro: $${currentPriceUSD.toFixed(2)} actual.`
+                        : `Calendar year ${calYear}. Past months use historical ${ticker} prices (click Hist to load). Future: current $${currentPriceUSD.toFixed(2)}.`}
                 </p>
 
                 <div class="summary-grid">
+                    ${hasPrice ? `<div class="summary-item" style="background: #f8f9fa;">
+                        <div class="value">${formatCurrency(annual.totalValue)}</div>
+                        <div class="label">${es ? `Total RSU ${calYear}` : `${calYear} Total RSU`}</div>
+                    </div>` : ''}
                     <div class="summary-item" style="background: #e8f4fd;">
-                        <div class="value" style="color: #1565c0;">${pastTotalShares.toFixed(1)}</div>
-                        <div class="label">${es ? 'Acciones pasadas (3m)' : 'Past Shares (3mo)'}</div>
+                        <div class="value" style="color: #1565c0;">${hasPrice ? formatCurrency(annual.usValue) : annual.shares.toFixed(0) + ' shares'}</div>
+                        <div class="label">${es ? 'US (no en nómina)' : 'US (not on nómina)'}</div>
                     </div>
                     <div class="summary-item" style="background: #e8f5e9;">
-                        <div class="value" style="color: #2e7d32;">${futureTotalShares.toFixed(1)}</div>
-                        <div class="label">${es ? 'Acciones futuras (9m)' : 'Upcoming Shares (9mo)'}</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="value">${pastWithNomina}/${pastExpectedVests}</div>
-                        <div class="label">${es ? 'Meses con nómina' : 'Months on Nómina'}</div>
+                        <div class="value" style="color: #2e7d32;">${hasPrice ? formatCurrency(annual.esValue) : '—'}</div>
+                        <div class="label">${es ? 'ES (en nómina)' : 'ES (on nómina)'}</div>
                     </div>
                     ${pastOnNomina > 0 ? `<div class="summary-item">
-                        <div class="value" style="color: #2e7d32;">${formatCurrency(pastOnNomina)}</div>
-                        <div class="label">${es ? 'RSU en nóminas (ES)' : 'RSU on Payslips (ES)'}</div>
-                    </div>` : ''}
-                    ${pastUSValue > 0 ? `<div class="summary-item" style="background: #e8f4fd;">
-                        <div class="value" style="color: #1565c0;">${formatCurrency(pastUSValue)}</div>
-                        <div class="label">${es ? 'RSU NO en nóminas (US)' : 'RSU NOT on Payslips (US)'}</div>
-                    </div>` : ''}
-                    ${pastTotalVestValue > 0 ? `<div class="summary-item" style="background: #f8f9fa;">
-                        <div class="value">${formatCurrency(pastTotalVestValue)}</div>
-                        <div class="label">${es ? 'Valor total RSU (3m)' : 'Total RSU Value (3mo)'}</div>
+                        <div class="value" style="color: var(--primary);">${formatCurrency(pastOnNomina)}</div>
+                        <div class="label">${es ? 'RSU real en nóminas' : 'Actual RSU on Payslips'}</div>
                     </div>` : ''}
                 </div>`;
 
-            // Table
-            const hasPrice = overviewPriceEUR > 0;
+            // Compact 3-row table
             html += `<div style="overflow-x: auto; margin-top: 15px;">
-                ${hasPrice ? `<p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;">${es ? `Valores estimados a ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/acción)` : `Values estimated at ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/share)`}</p>` : ''}
-                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                     <thead><tr style="background: #f0f7ff;">
-                        <th style="padding: 6px 8px; text-align:left;">${es ? 'Mes' : 'Month'}</th>
-                        <th style="padding: 6px 8px; text-align:right;">${es ? 'Acciones' : 'Shares'}</th>
-                        ${hasPrice ? `<th style="padding: 6px 8px; text-align:right;">${es ? 'Valor total' : 'Total Value'}</th>` : ''}
-                        <th style="padding: 6px 8px; text-align:right; color: #1565c0;">${es ? 'US (no en nómina)' : 'US (not on nómina)'}</th>
-                        <th style="padding: 6px 8px; text-align:right; color: #2e7d32;">${es ? 'ES (en nómina)' : 'ES (on nómina)'}</th>
-                        <th style="padding: 6px 8px; text-align:center;">${es ? 'Estado' : 'Status'}</th>
-                    </tr></thead><tbody>`;
+                        <th style="padding: 8px; text-align:left;">${es ? 'Período' : 'Period'}</th>
+                        <th style="padding: 8px; text-align:right;">${es ? 'Acciones' : 'Shares'}</th>
+                        ${hasPrice ? `<th style="padding: 8px; text-align:right;">${es ? 'Valor total' : 'Total Value'}</th>` : ''}
+                        <th style="padding: 8px; text-align:right; color: #1565c0;">${es ? 'US (no nómina)' : 'US (off payslip)'}</th>
+                        <th style="padding: 8px; text-align:right; color: #2e7d32;">${es ? 'ES (nómina)' : 'ES (on payslip)'}</th>
+                    </tr></thead><tbody>
+                    <tr style="border-bottom: 1px solid #ddd;">
+                        <td style="padding: 8px;">${es ? `Ene–${monthNamesShort[latest.month]} ${calYear} (pasado)` : `Jan–${monthNamesShort[latest.month]} ${calYear} (past)`}</td>
+                        <td style="padding: 8px; text-align:right;">${past.shares.toFixed(0)}</td>
+                        ${hasPrice ? `<td style="padding: 8px; text-align:right; font-weight: 600;">${formatCurrency(past.totalValue)}</td>` : ''}
+                        <td style="padding: 8px; text-align:right; color: #1565c0;">${hasPrice ? formatCurrency(past.usValue) : `${(past.avgUSPct*100).toFixed(0)}%`}</td>
+                        <td style="padding: 8px; text-align:right; color: #2e7d32;">${hasPrice ? formatCurrency(past.esValue) : `${(past.avgESPct*100).toFixed(0)}%`}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #ddd; background: #fafafa;">
+                        <td style="padding: 8px;">${es ? `${monthNamesShort[latest.month + 1] || 'Ene'}–Dic ${calYear} (futuro)` : `${monthNamesShort[latest.month + 1] || 'Jan'}–Dec ${calYear} (projected)`}</td>
+                        <td style="padding: 8px; text-align:right;">${future.shares.toFixed(0)}</td>
+                        ${hasPrice ? `<td style="padding: 8px; text-align:right; font-weight: 600;">${formatCurrency(future.totalValue)}</td>` : ''}
+                        <td style="padding: 8px; text-align:right; color: #1565c0;">${hasPrice ? formatCurrency(future.usValue) : `${(future.avgUSPct*100).toFixed(0)}%`}</td>
+                        <td style="padding: 8px; text-align:right; color: #2e7d32;">${hasPrice ? formatCurrency(future.esValue) : `${(future.avgESPct*100).toFixed(0)}%`}</td>
+                    </tr>
+                    <tr style="font-weight: 700; border-top: 2px solid #333; background: #f0f7ff;">
+                        <td style="padding: 8px;">${es ? `Total ${calYear}` : `${calYear} Annual Total`}</td>
+                        <td style="padding: 8px; text-align:right;">${annual.shares.toFixed(0)}</td>
+                        ${hasPrice ? `<td style="padding: 8px; text-align:right;">${formatCurrency(annual.totalValue)}</td>` : ''}
+                        <td style="padding: 8px; text-align:right; color: #1565c0;">${hasPrice ? formatCurrency(annual.usValue) : '—'}</td>
+                        <td style="padding: 8px; text-align:right; color: #2e7d32;">${hasPrice ? formatCurrency(annual.esValue) : '—'}</td>
+                    </tr>
+                </tbody></table></div>`;
 
-            for (const sl of slots) {
-                const label = `${monthNamesShort[sl.m]} ${sl.y}`;
-                const rowBg = sl.isCurrent ? 'background: #fffde7;' : sl.isPast ? '' : 'background: #fafafa; color: var(--text-muted);';
-                const border = sl.isCurrent ? 'border: 2px solid #ffc107;' : '';
-
-                // Total vest value from shares × price (the REAL income)
-                const totalVestValue = sl.vestShares > 0 && hasPrice ? sl.vestShares * overviewPriceEUR : 0;
-                const usValue = totalVestValue * sl.weightedUSPct;
-                const esValue = totalVestValue * sl.weightedESPct;
-
-                // Status: validate nómina RSU against expected ES-sourced value
-                let status = '';
-                if (sl.vestShares === 0) {
-                    status = `<span style="color: var(--text-muted);">—</span>`;
-                } else if (sl.isPast && sl.payslipRSU > 0 && esValue > 0) {
-                    // Cross-validate: nómina RSU In-Kind should ≈ expected ES value
-                    const nominaDiff = Math.abs(sl.payslipRSU - esValue);
-                    const nominaPctDiff = esValue > 0 ? (nominaDiff / esValue * 100) : 0;
-                    if (nominaPctDiff < 20) {
-                        status = `<span class="badge badge-success" title="${es ? 'Nómina' : 'Payslip'}: ${formatCurrency(sl.payslipRSU)} ≈ ES ${formatCurrency(esValue)}">✓</span>`;
-                    } else {
-                        status = `<span class="badge badge-warning" title="${es ? 'Nómina' : 'Payslip'}: ${formatCurrency(sl.payslipRSU)} vs ES ${formatCurrency(esValue)}">⚠ ${nominaPctDiff.toFixed(0)}%</span>`;
-                    }
-                } else if (sl.isPast && sl.payslipTotal > 0) {
-                    status = `<span class="badge badge-success">✓ ${es ? 'nómina' : 'payslip'}</span>`;
-                } else if (sl.isPast && sl.ps && sl.payslipTotal === 0 && sl.vestShares > 0) {
-                    status = `<span class="badge badge-warning">${es ? 'no en nómina' : 'not on payslip'}</span>`;
-                } else if (sl.isPast && !sl.ps) {
-                    status = `<span class="badge badge-info">${es ? 'sin nómina' : 'no payslip'}</span>`;
-                } else {
-                    status = `<span style="color: var(--text-muted); font-size: 11px;">${es ? 'proyectado' : 'projected'}</span>`;
+            // Monthly detail (collapsible)
+            if (past.details.length > 0 || future.details.length > 0) {
+                html += `<details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; font-size: 12px; color: var(--text-muted);">${es ? 'Detalle mensual' : 'Monthly detail'}</summary>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px;">
+                        <thead><tr style="background: #f8f9fa;">
+                            <th style="padding: 4px 6px; text-align:left;">${es ? 'Fecha' : 'Date'}</th>
+                            <th style="padding: 4px 6px; text-align:left;">${es ? 'Grant' : 'Grant'}</th>
+                            <th style="padding: 4px 6px; text-align:right;">${es ? 'Acc.' : 'Shares'}</th>
+                            ${hasPrice ? `<th style="padding: 4px 6px; text-align:right;">$/share</th><th style="padding: 4px 6px; text-align:right;">${es ? 'Valor' : 'Value'}</th>` : ''}
+                            <th style="padding: 4px 6px; text-align:right;">US %</th>
+                            <th style="padding: 4px 6px; text-align:right;">ES %</th>
+                        </tr></thead><tbody>`;
+                for (const e of [...past.details, ...future.details]) {
+                    const d = e.date;
+                    const isPastEvent = (d.getMonth() + 1) <= latest.month;
+                    const bg = isPastEvent ? '' : 'color: var(--text-muted);';
+                    const histPrice = histPrices[`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`];
+                    const priceLabel = histPrice ? `$${histPrice.toFixed(2)}` : (isPastEvent ? `~$${currentPriceUSD.toFixed(0)}` : `$${currentPriceUSD.toFixed(0)}`);
+                    html += `<tr style="border-bottom: 1px solid #f0f0f0; ${bg}">
+                        <td style="padding: 3px 6px;">${monthNamesShort[d.getMonth()+1]} ${d.getDate()}</td>
+                        <td style="padding: 3px 6px;">${e.grantName}</td>
+                        <td style="padding: 3px 6px; text-align:right;">${e.shares.toFixed(0)}</td>
+                        ${hasPrice ? `<td style="padding: 3px 6px; text-align:right; font-size:10px;">${priceLabel}</td><td style="padding: 3px 6px; text-align:right;">${formatCurrency(e.value)}</td>` : ''}
+                        <td style="padding: 3px 6px; text-align:right; color: #1565c0;">${(e.usPct*100).toFixed(0)}%</td>
+                        <td style="padding: 3px 6px; text-align:right; color: #2e7d32;">${(e.spainPct*100).toFixed(0)}%</td>
+                    </tr>`;
                 }
-
-                // Grant details tooltip
-                const grantDetails = sl.monthVests.map(v => `${v.grantName}: ${v.shares.toFixed(0)} shares (US ${(v.usPct*100).toFixed(0)}%)`).join(', ');
-
-                html += `<tr style="${rowBg} ${border} border-bottom: 1px solid #eee;" ${grantDetails ? `title="${grantDetails}"` : ''}>
-                    <td style="padding: 6px 8px; font-weight: ${sl.isCurrent ? '700' : '400'};">${label}${sl.isCurrent ? (es ? ' ◀ actual' : ' ◀ current') : ''}</td>
-                    <td style="padding: 6px 8px; text-align:right;">${sl.vestShares > 0 ? sl.vestShares.toFixed(0) : '—'}</td>
-                    ${hasPrice ? `<td style="padding: 6px 8px; text-align:right; font-weight: 600;">${totalVestValue > 0 ? formatCurrency(totalVestValue) : '—'}</td>` : ''}
-                    <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${usValue > 0 ? `${formatCurrency(usValue)} <span style="font-size:10px;">(${(sl.weightedUSPct*100).toFixed(0)}%)</span>` : '—'}</td>
-                    <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${esValue > 0 ? `${formatCurrency(esValue)} <span style="font-size:10px;">(${(sl.weightedESPct*100).toFixed(0)}%)</span>` : '—'}</td>
-                    <td style="padding: 6px 8px; text-align:center;">${status}</td>
-                </tr>`;
+                html += '</tbody></table></details>';
             }
 
-            // Totals row
-            const allShares = slots.reduce((s, sl) => s + sl.vestShares, 0);
-            const allTotalValue = hasPrice ? allShares * overviewPriceEUR : 0;
-            const allUSValue = slots.reduce((s, sl) => s + (sl.vestShares > 0 && hasPrice ? sl.vestShares * overviewPriceEUR * sl.weightedUSPct : 0), 0);
-            const allESValue = slots.reduce((s, sl) => s + (sl.vestShares > 0 && hasPrice ? sl.vestShares * overviewPriceEUR * sl.weightedESPct : 0), 0);
-            html += `<tr style="font-weight: 700; border-top: 2px solid #333; background: #f8f9fa;">
-                <td style="padding: 6px 8px;">Total (12mo)</td>
-                <td style="padding: 6px 8px; text-align:right;">${allShares.toFixed(0)}</td>
-                ${hasPrice ? `<td style="padding: 6px 8px; text-align:right;">${formatCurrency(allTotalValue)}</td>` : ''}
-                <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${allUSValue > 0 ? formatCurrency(allUSValue) : '—'}</td>
-                <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${allESValue > 0 ? formatCurrency(allESValue) : '—'}</td>
-                <td></td>
-            </tr>`;
-
-            html += '</tbody></table></div>';
-
-            // Short note with link to full guide
-            html += `<div style="margin-top: 12px; padding: 8px 10px; background: #e7f3ff; border-radius: 4px; font-size: 11px; color: #0c5460;">
+            html += `<div style="margin-top: 10px; padding: 8px 10px; background: #e7f3ff; border-radius: 4px; font-size: 11px; color: #0c5460;">
                 ${es
-                    ? 'US = no tributa en España. ES = sujeto a IRPF (Beckham 24% si aplica). Meses futuros: solo %. <a href="#" onclick="document.querySelector(\'[data-tab=equity-guide]\').click(); return false;" style="color: #0c5460; font-weight: 600;">Ver guía completa →</a>'
-                    : 'US-sourced = not taxable in Spain. ES-sourced = Spanish IRPF (Beckham 24% if applicable). Future months: % only. <a href="#" onclick="document.querySelector(\'[data-tab=equity-guide]\').click(); return false;" style="color: #0c5460; font-weight: 600;">Full guide →</a>'}
-            </div>`;
-
-            html += '</div>';
+                    ? 'US = no tributa en España. ES = sujeto a IRPF (Beckham 24% si aplica). <a href="#" onclick="document.querySelector(\'[data-tab=equity-guide]\').click(); return false;" style="color: #0c5460; font-weight: 600;">Ver guía completa →</a>'
+                    : 'US = not taxable in Spain. ES = Spanish IRPF (Beckham 24% if applicable). <a href="#" onclick="document.querySelector(\'[data-tab=equity-guide]\').click(); return false;" style="color: #0c5460; font-weight: 600;">Full guide →</a>'}
+            </div></div>`;
             return html;
         }
 
@@ -4558,6 +4539,60 @@
         }
 
         // ===== Income Summary Letter Generator =====
+        // Fetch historical close prices for vest dates
+        async function fetchHistoricalPrices() {
+            const ticker = config.rsuTicker || 'AFRM';
+            const grants = config.rsuGrants || [];
+            const transferDate = config.rsuTransferDate;
+            if (!grants.length || !transferDate) return;
+
+            const allEvents = computeVestEvents(grants, transferDate);
+            const now = new Date();
+            // Get past vest dates (up to 12 months back)
+            const pastDates = allEvents
+                .filter(e => e.date < now)
+                .map(e => { const d = e.date; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
+            const uniqueDates = [...new Set(pastDates)].sort();
+            if (uniqueDates.length === 0) return;
+
+            const statusEl = document.getElementById('rsuSharePriceStatus');
+            if (statusEl) { statusEl.textContent = 'Fetching historical prices...'; statusEl.style.color = 'var(--text-muted)'; }
+
+            // Fetch 1-year range from Yahoo Finance
+            const earliest = new Date(uniqueDates[0]);
+            const period1 = Math.floor((earliest.getTime() - 86400000 * 7) / 1000); // 1 week before first date
+            const period2 = Math.floor(Date.now() / 1000);
+            try {
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d`);
+                const data = await res.json();
+                const timestamps = data?.chart?.result?.[0]?.timestamp || [];
+                const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+
+                if (timestamps.length === 0) throw new Error('No data');
+
+                // Build date→price map
+                if (!config.rsuHistoricalPrices) config.rsuHistoricalPrices = {};
+                for (const targetDate of uniqueDates) {
+                    const target = new Date(targetDate + 'T16:00:00Z').getTime() / 1000; // 4pm UTC (market close)
+                    // Find closest timestamp
+                    let bestIdx = 0, bestDiff = Infinity;
+                    for (let i = 0; i < timestamps.length; i++) {
+                        const diff = Math.abs(timestamps[i] - target);
+                        if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+                    }
+                    if (closes[bestIdx] != null) {
+                        config.rsuHistoricalPrices[targetDate] = closes[bestIdx];
+                    }
+                }
+                autoSaveConfig();
+                if (statusEl) { statusEl.textContent = `Fetched ${Object.keys(config.rsuHistoricalPrices).length} historical prices`; statusEl.style.color = '#28a745'; }
+                if (parsedPayslips.length > 0) displayResults();
+            } catch (e) {
+                if (statusEl) { statusEl.textContent = 'Historical prices failed. Using current price for all.'; statusEl.style.color = '#dc3545'; }
+                console.error('Historical price fetch error:', e);
+            }
+        }
+
         async function fetchRSUSharePrice() {
             const ticker = document.getElementById('rsuTicker')?.value || 'AFRM';
             const statusEl = document.getElementById('rsuSharePriceStatus');
