@@ -3501,6 +3501,29 @@
             const overviewEurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
             const overviewPriceEUR = overviewPriceUSD > 0 ? overviewPriceUSD / overviewEurRate : 0;
             const overviewTicker = config.rsuTicker || 'AFRM';
+            const histPrices = config.rsuHistoricalPrices || {};
+            const hasPrice = overviewPriceEUR > 0;
+
+            // Get vest-day price (historical if cached, else current)
+            function getVestPriceEUR(vestDate) {
+                const d = vestDate;
+                for (let off = 0; off <= 3; off++) {
+                    const check = new Date(d); check.setDate(check.getDate() - off);
+                    const key = `${check.getFullYear()}-${String(check.getMonth()+1).padStart(2,'0')}-${String(check.getDate()).padStart(2,'0')}`;
+                    if (histPrices[key]) return histPrices[key] / overviewEurRate;
+                }
+                return overviewPriceEUR;
+            }
+
+            // Compute per-slot total value using historical prices for past, current for future
+            function slotTotalValue(sl) {
+                if (sl.vestShares <= 0 || !hasPrice) return 0;
+                if (sl.isPast) {
+                    // Sum per-event with historical prices
+                    return sl.monthVests.reduce((sum, e) => sum + e.shares * getVestPriceEUR(e.date), 0);
+                }
+                return sl.vestShares * overviewPriceEUR;
+            }
 
             const es = currentLang === 'es';
             const monthNamesLong = es
@@ -3554,11 +3577,14 @@
             const pastTotalShares = pastSlots.reduce((s, sl) => s + sl.vestShares, 0);
             const futureTotalShares = futureSlots.reduce((s, sl) => s + sl.vestShares, 0);
             const pastOnNomina = pastSlots.reduce((s, sl) => s + sl.payslipTotal, 0);
-            const pastExpectedVests = pastSlots.filter(s => s.vestShares > 0).length;
-            const pastWithNomina = pastSlots.filter(s => s.payslipTotal > 0).length;
-            // US-sourced (not on nómina) = total vest value - what's on nómina
-            const pastTotalVestValue = overviewPriceEUR > 0 ? pastTotalShares * overviewPriceEUR : 0;
-            const pastUSValue = pastSlots.reduce((s, sl) => s + (sl.vestShares > 0 && overviewPriceEUR > 0 ? sl.vestShares * overviewPriceEUR * sl.weightedUSPct : 0), 0);
+            // Compute values using historical prices for past, current for future
+            const pastTotalValue = pastSlots.reduce((s, sl) => s + slotTotalValue(sl), 0);
+            const pastUSValue = pastSlots.reduce((s, sl) => s + slotTotalValue(sl) * sl.weightedUSPct, 0);
+            const pastESValue = pastSlots.reduce((s, sl) => s + slotTotalValue(sl) * sl.weightedESPct, 0);
+            const futureTotalValue = futureSlots.reduce((s, sl) => s + slotTotalValue(sl), 0);
+            const futureUSValue = futureSlots.reduce((s, sl) => s + slotTotalValue(sl) * sl.weightedUSPct, 0);
+            const futureESValue = futureSlots.reduce((s, sl) => s + slotTotalValue(sl) * sl.weightedESPct, 0);
+            const annualTotalValue = pastTotalValue + futureTotalValue;
 
             let html = `<div class="card" style="border: 2px solid #17a2b8;">
                 <h2 style="color: #0c5460;">${es ? 'Resumen de Equity — US/ES' : 'Equity Overview — US/ES Transfer'}</h2>
@@ -3569,18 +3595,20 @@
                 </p>
 
                 <div class="summary-grid">
-                    <div class="summary-item" style="background: #e8f4fd;">
-                        <div class="value" style="color: #1565c0;">${pastTotalShares.toFixed(1)}</div>
-                        <div class="label">${es ? 'Acciones pasadas (3m)' : 'Past Shares (3mo)'}</div>
-                    </div>
-                    <div class="summary-item" style="background: #e8f5e9;">
-                        <div class="value" style="color: #2e7d32;">${futureTotalShares.toFixed(1)}</div>
-                        <div class="label">${es ? 'Acciones futuras (9m)' : 'Upcoming Shares (9mo)'}</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="value">${pastWithNomina}/${pastExpectedVests}</div>
-                        <div class="label">${es ? 'Meses con nómina' : 'Months on Nómina'}</div>
-                    </div>
+                    ${pastTotalValue > 0 ? `<div class="summary-item" style="background: #f8f9fa;">
+                        <div class="value">${formatCurrency(pastTotalValue)}</div>
+                        <div class="label">${es ? 'RSU pasado (YTD)' : 'RSU Past (YTD)'}</div>
+                        <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${pastTotalShares.toFixed(0)} ${es ? 'acciones' : 'shares'}</div>
+                    </div>` : ''}
+                    ${futureTotalValue > 0 ? `<div class="summary-item" style="background: #e8f5e9;">
+                        <div class="value" style="color: #2e7d32;">${formatCurrency(futureTotalValue)}</div>
+                        <div class="label">${es ? 'RSU proyectado (resto)' : 'RSU Projected (rest of yr)'}</div>
+                        <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">${futureTotalShares.toFixed(0)} ${es ? 'acciones' : 'shares'}</div>
+                    </div>` : ''}
+                    ${annualTotalValue > 0 ? `<div class="summary-item" style="background: #e7f3ff; border: 1px solid var(--primary);">
+                        <div class="value" style="color: var(--primary);">${formatCurrency(annualTotalValue)}</div>
+                        <div class="label">${es ? `Total RSU ${latest.year} (proyectado)` : `${latest.year} RSU Total (projected)`}</div>
+                    </div>` : ''}
                     ${pastOnNomina > 0 ? `<div class="summary-item">
                         <div class="value" style="color: #2e7d32;">${formatCurrency(pastOnNomina)}</div>
                         <div class="label">${es ? 'RSU en nóminas (ES)' : 'RSU on Payslips (ES)'}</div>
@@ -3589,14 +3617,9 @@
                         <div class="value" style="color: #1565c0;">${formatCurrency(pastUSValue)}</div>
                         <div class="label">${es ? 'RSU NO en nóminas (US)' : 'RSU NOT on Payslips (US)'}</div>
                     </div>` : ''}
-                    ${pastTotalVestValue > 0 ? `<div class="summary-item" style="background: #f8f9fa;">
-                        <div class="value">${formatCurrency(pastTotalVestValue)}</div>
-                        <div class="label">${es ? 'Valor total RSU (3m)' : 'Total RSU Value (3mo)'}</div>
-                    </div>` : ''}
                 </div>`;
 
             // Table
-            const hasPrice = overviewPriceEUR > 0;
             html += `<div style="overflow-x: auto; margin-top: 15px;">
                 ${hasPrice ? `<p style="font-size: 11px; color: var(--text-muted); margin: 0 0 6px 0;">${es ? `Valores estimados a ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/acción)` : `Values estimated at ${overviewTicker} $${(config.rsuSharePrice||0).toFixed(2)} USD (${formatCurrency(overviewPriceEUR)}/share)`}</p>` : ''}
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
@@ -3614,8 +3637,8 @@
                 const rowBg = sl.isCurrent ? 'background: #fffde7;' : sl.isPast ? '' : 'background: #fafafa; color: var(--text-muted);';
                 const border = sl.isCurrent ? 'border: 2px solid #ffc107;' : '';
 
-                // Total vest value from shares × price (the REAL income)
-                const totalVestValue = sl.vestShares > 0 && hasPrice ? sl.vestShares * overviewPriceEUR : 0;
+                // Total vest value (historical price for past, current for future)
+                const totalVestValue = slotTotalValue(sl);
                 const usValue = totalVestValue * sl.weightedUSPct;
                 const esValue = totalVestValue * sl.weightedESPct;
 
@@ -3655,11 +3678,11 @@
                 </tr>`;
             }
 
-            // Totals row
+            // Totals row (using historical prices for past, current for future)
             const allShares = slots.reduce((s, sl) => s + sl.vestShares, 0);
-            const allTotalValue = hasPrice ? allShares * overviewPriceEUR : 0;
-            const allUSValue = slots.reduce((s, sl) => s + (sl.vestShares > 0 && hasPrice ? sl.vestShares * overviewPriceEUR * sl.weightedUSPct : 0), 0);
-            const allESValue = slots.reduce((s, sl) => s + (sl.vestShares > 0 && hasPrice ? sl.vestShares * overviewPriceEUR * sl.weightedESPct : 0), 0);
+            const allTotalValue = slots.reduce((s, sl) => s + slotTotalValue(sl), 0);
+            const allUSValue = slots.reduce((s, sl) => s + slotTotalValue(sl) * sl.weightedUSPct, 0);
+            const allESValue = slots.reduce((s, sl) => s + slotTotalValue(sl) * sl.weightedESPct, 0);
             html += `<tr style="font-weight: 700; border-top: 2px solid #333; background: #f8f9fa;">
                 <td style="padding: 6px 8px;">Total (12mo)</td>
                 <td style="padding: 6px 8px; text-align:right;">${allShares.toFixed(0)}</td>
