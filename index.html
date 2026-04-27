@@ -4876,20 +4876,41 @@
                                 <th style="padding: 2px 5px; text-align:right;">Shares</th>
                                 <th style="padding: 2px 5px; text-align:right;">US %</th>
                                 <th style="padding: 2px 5px; text-align:right;">US Shares</th>
+                                <th style="padding: 2px 5px; text-align:right;">Sold for Tax</th>
+                                <th style="padding: 2px 5px; text-align:right;">$ Withheld</th>
                             </tr></thead>
-                            <tbody>${pastEvents.map(e => {
-                                const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
-                                const checked = usVestConfirmed[dk] ? 'checked' : '';
-                                const usShares = (e.shares * e.usPct).toFixed(1);
-                                return `<tr style="border-bottom:1px solid #f0f0f0;">
-                                    <td style="padding: 2px 5px; text-align:center;"><input type="checkbox" ${checked} onchange="toggleUSVestConfirmed('${dk}', this.checked)" style="cursor:pointer;"></td>
-                                    <td style="padding: 2px 5px;">${months2[e.date.getMonth()+1]} ${e.date.getDate()}, ${e.date.getFullYear()}</td>
-                                    <td style="padding: 2px 5px;">${e.grantName}</td>
-                                    <td style="padding: 2px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
-                                    <td style="padding: 2px 5px; text-align:right;">${(e.usPct*100).toFixed(0)}%</td>
-                                    <td style="padding: 2px 5px; text-align:right; color: #1565c0;">${usShares}</td>
+                            <tbody>${(() => {
+                                const soldData = config.sharesSoldForTax || {};
+                                const withheldData = config.usTaxWithheldPerVest || {};
+                                const histP = config.rsuHistoricalPrices || {};
+                                let totalSoldShares = 0, totalWithheldUSD = 0;
+                                const rows = pastEvents.map(e => {
+                                    const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
+                                    const dateDk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                                    const checked = usVestConfirmed[dk] ? 'checked' : '';
+                                    const usShares = (e.shares * e.usPct).toFixed(1);
+                                    const sold = soldData[dk] || '';
+                                    const withheld = withheldData[dk] || '';
+                                    if (sold) totalSoldShares += parseFloat(sold);
+                                    if (withheld) totalWithheldUSD += parseFloat(withheld);
+                                    else if (sold) totalWithheldUSD += parseFloat(sold) * (histP[dateDk] || config.rsuSharePrice || 0);
+                                    return `<tr style="border-bottom:1px solid #f0f0f0;">
+                                        <td style="padding: 2px 5px; text-align:center;"><input type="checkbox" ${checked} onchange="toggleUSVestConfirmed('${dk}', this.checked)" style="cursor:pointer;"></td>
+                                        <td style="padding: 2px 5px;">${months2[e.date.getMonth()+1]} ${e.date.getDate()}, ${e.date.getFullYear()}</td>
+                                        <td style="padding: 2px 5px;">${e.grantName}</td>
+                                        <td style="padding: 2px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
+                                        <td style="padding: 2px 5px; text-align:right;">${(e.usPct*100).toFixed(0)}%</td>
+                                        <td style="padding: 2px 5px; text-align:right; color: #1565c0;">${usShares}</td>
+                                        <td style="padding: 2px 5px; text-align:right;"><input type="number" value="${sold}" placeholder="0" step="1" style="width:45px; padding:1px 3px; border:1px solid #ddd; border-radius:3px; font-size:10px; text-align:right;" onblur="updateSharesSoldForTax('${dk}', this.value)"></td>
+                                        <td style="padding: 2px 5px; text-align:right;"><input type="number" value="${withheld}" placeholder="auto" step="1" style="width:55px; padding:1px 3px; border:1px solid ${withheld ? '#ddd' : '#eee'}; border-radius:3px; font-size:10px; text-align:right;" onblur="updateWithheldPerVest('${dk}', this.value)"></td>
+                                    </tr>`;
+                                }).join('');
+                                return rows + `<tr style="font-weight:600; border-top:2px solid #333;">
+                                    <td colspan="6" style="padding: 3px 5px; text-align:right;">Total:</td>
+                                    <td style="padding: 3px 5px; text-align:right;">${totalSoldShares > 0 ? totalSoldShares.toFixed(0) : '—'}</td>
+                                    <td style="padding: 3px 5px; text-align:right;">${totalWithheldUSD > 0 ? '$' + Math.round(totalWithheldUSD).toLocaleString() : '—'}</td>
                                 </tr>`;
-                            }).join('')}</tbody>
+                            })()}</tbody>
                         </table>
                         <div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px;">
                             <label style="display: flex; align-items: center; gap: 6px;">
@@ -4922,11 +4943,16 @@
         function updateSharesSoldForTax(dateKey, value) {
             if (!config.sharesSoldForTax) config.sharesSoldForTax = {};
             const shares = parseFloat(value) || 0;
-            if (shares > 0) {
-                config.sharesSoldForTax[dateKey] = shares;
-            } else {
-                delete config.sharesSoldForTax[dateKey];
-            }
+            if (shares > 0) { config.sharesSoldForTax[dateKey] = shares; }
+            else { delete config.sharesSoldForTax[dateKey]; }
+            autoSaveConfig();
+        }
+
+        function updateWithheldPerVest(dateKey, value) {
+            if (!config.usTaxWithheldPerVest) config.usTaxWithheldPerVest = {};
+            const amt = parseFloat(value) || 0;
+            if (amt > 0) { config.usTaxWithheldPerVest[dateKey] = amt; }
+            else { delete config.usTaxWithheldPerVest[dateKey]; }
             autoSaveConfig();
         }
 
@@ -5030,8 +5056,26 @@
                 document.getElementById('usTaxSpanishPaid').value = Math.round(projectedAnnual * eurRate) || '';
             }
 
-            // US withholding: keep existing value if already entered
-            // (user enters total $ withheld from Schwab statements directly)
+            // US withholding: sum from per-vest data in US Vest Verification
+            if (config.rsuGrants?.length > 0 && config.rsuTransferDate) {
+                const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
+                const year = new Date().getFullYear();
+                const pastEvts = events.filter(e => e.date < new Date() && e.date.getFullYear() === year);
+                const soldData = config.sharesSoldForTax || {};
+                const withheldData = config.usTaxWithheldPerVest || {};
+                const histPrices = config.rsuHistoricalPrices || {};
+                let totalSold = 0, totalWithheldFromVests = 0;
+                for (const e of pastEvts) {
+                    const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
+                    const dateDk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                    if (withheldData[dk]) { totalWithheldFromVests += withheldData[dk]; }
+                    else if (soldData[dk]) { totalWithheldFromVests += soldData[dk] * (histPrices[dateDk] || priceUSD); totalSold += soldData[dk]; }
+                }
+                if (totalWithheldFromVests > 0) {
+                    document.getElementById('usTaxSharesSold').value = totalSold > 0 ? Math.round(totalSold) : '';
+                    document.getElementById('usTaxWithheld').value = Math.round(totalWithheldFromVests);
+                }
+            }
 
             computeUSTaxEstimate();
         }
@@ -5046,7 +5090,9 @@
             const spanishTaxPaid = parseFloat(document.getElementById('usTaxSpanishPaid')?.value) || 0;
             const usWithheldDirect = parseFloat(document.getElementById('usTaxWithheld')?.value) || 0;
             const usSharesSold = parseFloat(document.getElementById('usTaxSharesSold')?.value) || 0;
+            // Priority: direct $ amount > shares × price
             const usWithheld = usWithheldDirect > 0 ? usWithheldDirect : (usSharesSold > 0 ? usSharesSold * (config.rsuSharePrice || 0) : 0);
+            const withheldSource = usWithheldDirect > 0 ? 'direct' : (usSharesSold > 0 ? 'shares' : 'none');
             const spouseIncome = parseFloat(document.getElementById('usTaxSpouseIncome')?.value) || 0;
 
             if (salary === 0 && rsuTotal === 0) { container.style.display = 'none'; return; }
@@ -5143,7 +5189,7 @@
                     <tr><td style="padding:4px 6px;">Federal tax</td><td style="text-align:right; padding:4px 6px;">${fmt(federalTax)}</td></tr>
                     <tr><td style="padding:4px 6px;">Foreign Tax Credit</td><td style="text-align:right; padding:4px 6px; color:#2e7d32;">-${fmt(ftcUsable)}</td></tr>
                     <tr style="font-weight:700; border-top:2px solid #333;"><td style="padding:4px 6px;">Net federal tax liability</td><td style="text-align:right; padding:4px 6px;">${fmt(netFederalTax)}</td></tr>
-                    <tr><td style="padding:4px 6px;">Already withheld${usWithheldDirect > 0 ? '' : usSharesSold > 0 ? ` (${usSharesSold} shares × $${(config.rsuSharePrice||0).toFixed(2)})` : ''}</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td></tr>
+                    <tr><td style="padding:4px 6px;">Already withheld${withheldSource === 'shares' ? ` (${usSharesSold} shares × $${(config.rsuSharePrice||0).toFixed(2)})` : withheldSource === 'direct' ? ' (from Schwab/vest data)' : ''}</td><td style="text-align:right; padding:4px 6px;">-${fmt(usWithheld)}</td></tr>
                     <tr style="font-weight:700; font-size:18px; border-top:2px solid #333;"><td style="padding:6px;">${balanceOwed >= 0 ? 'Balance owed' : 'Estimated refund'}</td><td style="text-align:right; padding:6px; color:${balanceOwed > 0 ? '#dc3545' : '#28a745'};">${balanceOwed >= 0 ? fmt(balanceOwed) : fmt(Math.abs(balanceOwed))}</td></tr>
                 </table>
             </div>`;
@@ -5760,6 +5806,7 @@
                 usVestConfirmed: config.usVestConfirmed || {},
                 usW2Total: config.usW2Total || 0,
                 sharesSoldForTax: config.sharesSoldForTax || {},
+                usTaxWithheldPerVest: config.usTaxWithheldPerVest || {},
                 beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
 
