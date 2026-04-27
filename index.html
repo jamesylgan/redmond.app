@@ -1414,6 +1414,39 @@
                 </div>
             </div>
         </div>
+
+        <div class="card" style="border: 2px solid #4caf50; margin-top: 20px;">
+            <h2 style="color: #2e7d32;" data-i18n="incomeLetterTitle">Income Summary Letter</h2>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;" data-i18n="incomeLetterDesc">
+                Generate a printable income summary that explains your total compensation including RSU equity that doesn't appear on your Spanish payslips. Useful for rental applications, mortgage pre-approvals, or other proof-of-income needs.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>Full Name</span>
+                    <input type="text" id="incomeLetterName" placeholder="e.g. James Gan" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>Employer</span>
+                    <input type="text" id="incomeLetterEmployer" placeholder="e.g. Affirm" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>Job Title</span>
+                    <input type="text" id="incomeLetterTitle2" placeholder="e.g. Senior Software Engineer" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                    <span>Letter Language</span>
+                    <select id="incomeLetterLang" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                        <option value="es">Spanish (for Spanish landlords)</option>
+                        <option value="en">English</option>
+                        <option value="both">Bilingual (ES + EN)</option>
+                    </select>
+                </label>
+            </div>
+            <button onclick="generateIncomeLetter()" style="background: #4caf50; font-size: 14px;">
+                Generate & Print Income Letter
+            </button>
+            <span style="font-size: 12px; color: var(--text-muted); margin-left: 10px;">Opens in a new printable window</span>
+        </div>
     </div>
 
     </div><!-- end payrollPage -->
@@ -4355,6 +4388,172 @@
             }
             html += '</tbody></table></div></details>';
             container.innerHTML = html;
+        }
+
+        // ===== Income Summary Letter Generator =====
+        function generateIncomeLetter() {
+            const name = document.getElementById('incomeLetterName')?.value || '[Your Name]';
+            const employer = document.getElementById('incomeLetterEmployer')?.value || '[Employer]';
+            const jobTitle = document.getElementById('incomeLetterTitle2')?.value || '[Job Title]';
+            const lang = document.getElementById('incomeLetterLang')?.value || 'es';
+            const annualGross = config.annualGross || 0;
+            const monthlyGross = annualGross / 12;
+            const grants = config.rsuGrants || [];
+            const transferDate = config.rsuTransferDate || '';
+
+            // Compute monthly RSU value from vest events over next 12 months
+            const allEvents = (grants.length > 0 && transferDate) ? computeVestEvents(grants, transferDate) : [];
+            const now = new Date();
+            const monthsAhead = 12;
+            let totalVestShares = 0;
+            let vestMonths = 0;
+            const monthlyVests = {};
+
+            for (const e of allEvents) {
+                const diff = (e.date.getFullYear() - now.getFullYear()) * 12 + (e.date.getMonth() - now.getMonth());
+                if (diff >= -3 && diff <= monthsAhead) {
+                    const key = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, '0')}`;
+                    if (!monthlyVests[key]) monthlyVests[key] = { shares: 0, usPct: 0, esPct: 0, count: 0 };
+                    monthlyVests[key].shares += e.shares;
+                    monthlyVests[key].usPct += e.shares * e.usPct;
+                    monthlyVests[key].esPct += e.shares * e.spainPct;
+                    monthlyVests[key].count++;
+                    totalVestShares += e.shares;
+                    vestMonths++;
+                }
+            }
+            // Weight the percentages
+            for (const k of Object.keys(monthlyVests)) {
+                const mv = monthlyVests[k];
+                if (mv.shares > 0) { mv.usPct /= mv.shares; mv.esPct /= mv.shares; }
+            }
+
+            // Get payslip data for recent months
+            const recentPayslips = [...parsedPayslips].sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month).slice(-3);
+            const avgNet = recentPayslips.length > 0 ? recentPayslips.reduce((s, p) => s + p.totals.netPay, 0) / recentPayslips.length : 0;
+
+            // Average monthly RSU vest value (from payslips that had RSUs)
+            let rsuPayslipTotal = 0;
+            let rsuPayslipCount = 0;
+            for (const ps of recentPayslips) {
+                const rsuAmt = ps.earnings.filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs)).reduce((s, e) => s + e.amount, 0);
+                if (rsuAmt > 0) { rsuPayslipTotal += rsuAmt; rsuPayslipCount++; }
+            }
+            const avgMonthlyRSU = rsuPayslipCount > 0 ? rsuPayslipTotal / rsuPayslipCount : 0;
+
+            const avgTotalComp = monthlyGross + avgMonthlyRSU;
+            const today = new Date();
+            const dateStr = today.toLocaleDateString(lang === 'en' ? 'en-GB' : 'es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+
+            const fmtEUR = (v) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(v);
+
+            // Build letter content
+            const content = buildLetterContent(lang, { name, employer, jobTitle, annualGross, monthlyGross, avgNet, avgMonthlyRSU, avgTotalComp, dateStr, recentPayslips, monthlyVests, totalVestShares, fmtEUR });
+
+            // Open print window
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${lang === 'es' ? 'Certificado de Ingresos' : 'Income Summary'} - ${name}</title>
+            <style>
+                @media print { @page { margin: 2cm; } body { font-size: 11pt; } .no-print { display: none; } }
+                body { font-family: Georgia, 'Times New Roman', serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #222; line-height: 1.6; }
+                h1 { font-size: 20pt; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 20px; }
+                h2 { font-size: 14pt; color: #444; margin-top: 24px; }
+                table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10pt; }
+                th, td { padding: 6px 10px; border-bottom: 1px solid #ddd; text-align: left; }
+                th { background: #f5f5f5; font-weight: 600; }
+                .amount { text-align: right; font-family: 'Courier New', monospace; }
+                .total-row { font-weight: 700; border-top: 2px solid #333; }
+                .highlight { background: #f0f8e8; }
+                .note { font-size: 9pt; color: #666; margin-top: 20px; padding: 12px; background: #f9f9f9; border: 1px solid #eee; border-radius: 4px; }
+                .print-btn { background: #4caf50; color: white; border: none; padding: 10px 24px; font-size: 14px; cursor: pointer; border-radius: 4px; margin: 20px 0; }
+                .print-btn:hover { background: #388e3c; }
+                .header-meta { color: #666; font-size: 10pt; }
+                .signature-line { margin-top: 40px; border-top: 1px solid #333; width: 250px; padding-top: 4px; font-size: 9pt; color: #666; }
+            </style></head><body>
+            <div class="no-print"><button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
+            ${content}
+            </body></html>`);
+            printWindow.document.close();
+        }
+
+        function buildLetterContent(lang, d) {
+            const es = lang === 'es' || lang === 'both';
+            const en = lang === 'en' || lang === 'both';
+            let html = '';
+
+            if (es) {
+                html += `
+                <h1>Certificado de Ingresos</h1>
+                <p class="header-meta">${d.dateStr}</p>
+                <p>A quien corresponda,</p>
+                <p>El presente documento detalla la compensación total de <strong>${d.name}</strong>, empleado/a de <strong>${d.employer}</strong> como <strong>${d.jobTitle}</strong>.</p>
+
+                <h2>Compensación Mensual</h2>
+                <p>La compensación total incluye tanto el salario en nómina como acciones (RSU — <em>Restricted Stock Units</em>) que se consolidan periódicamente. Las RSU representan una parte significativa del paquete retributivo pero <strong>no aparecen en su totalidad en la nómina española</strong>, ya que una parte corresponde a trabajo realizado en otro país y se tributa en esa jurisdicción.</p>
+
+                <table>
+                    <tr><th>Concepto</th><th class="amount">Mensual</th><th class="amount">Anual</th></tr>
+                    <tr><td>Salario bruto (nómina)</td><td class="amount">${d.fmtEUR(d.monthlyGross)}</td><td class="amount">${d.fmtEUR(d.annualGross)}</td></tr>
+                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>RSU (acciones consolidadas, media mensual)</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
+                    <tr class="total-row"><td>Compensación total estimada</td><td class="amount">${d.fmtEUR(d.avgTotalComp)}</td><td class="amount">${d.fmtEUR(d.avgTotalComp * 12)}</td></tr>
+                    ${d.avgNet > 0 ? `<tr><td>Neto medio en nómina (últimos ${d.recentPayslips.length} meses)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td><td class="amount">${d.fmtEUR(d.avgNet * 12)}</td></tr>` : ''}
+                </table>
+
+                ${d.avgMonthlyRSU > 0 ? `<h2>¿Por qué las RSU no aparecen completamente en la nómina?</h2>
+                <p>Las RSU son acciones de la empresa que se consolidan según un calendario establecido. Al tratarse de una transferencia internacional (EE.UU. → España), la tributación se reparte entre ambos países según los días trabajados en cada uno durante el período entre la fecha de concesión y la fecha de consolidación.</p>
+                <ul>
+                    <li><strong>Parte atribuida a España:</strong> Aparece en la nómina como "Especies Si. RSUs Dep" (retribución en especie). Se descuenta mediante "Descuento Conceptos en Especie" ya que se reciben acciones, no efectivo.</li>
+                    <li><strong>Parte atribuida a EE.UU.:</strong> No tributa en España y por tanto <strong>no aparece en la nómina española</strong>. Se declara y tributa en EE.UU.</li>
+                </ul>
+                <p>Ambas partes constituyen ingresos reales del empleado — la nómina española refleja solo parcialmente el valor total de las RSU consolidadas.</p>` : ''}
+
+                <div class="note">
+                    <strong>Nota:</strong> Este documento es un resumen informativo generado por el empleado. Los importes de nómina pueden verificarse con las nóminas oficiales. El valor de las RSU fluctúa según la cotización de las acciones en bolsa. Para verificación adicional, puede solicitarse una carta oficial del departamento de Recursos Humanos de ${d.employer}.
+                </div>
+
+                <div class="signature-line">Firma del empleado</div>
+                `;
+            }
+
+            if (es && en) {
+                html += '<div style="border-top: 3px solid #333; margin: 40px 0;"></div>';
+            }
+
+            if (en) {
+                html += `
+                <h1>Income Summary Certificate</h1>
+                <p class="header-meta">${d.dateStr}</p>
+                <p>To whom it may concern,</p>
+                <p>This document outlines the total compensation of <strong>${d.name}</strong>, employed at <strong>${d.employer}</strong> as <strong>${d.jobTitle}</strong>.</p>
+
+                <h2>Monthly Compensation</h2>
+                <p>Total compensation includes both payroll salary and RSU (Restricted Stock Units) equity that vests periodically. RSUs are a significant part of the compensation package but <strong>do not fully appear on the Spanish payslip (nómina)</strong>, as a portion is attributed to work performed in another country and taxed in that jurisdiction.</p>
+
+                <table>
+                    <tr><th>Item</th><th class="amount">Monthly</th><th class="amount">Annual</th></tr>
+                    <tr><td>Gross salary (on payslip)</td><td class="amount">${d.fmtEUR(d.monthlyGross)}</td><td class="amount">${d.fmtEUR(d.annualGross)}</td></tr>
+                    ${d.avgMonthlyRSU > 0 ? `<tr class="highlight"><td>RSU equity vesting (monthly average)</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU)}</td><td class="amount">${d.fmtEUR(d.avgMonthlyRSU * 12)}</td></tr>` : ''}
+                    <tr class="total-row"><td>Estimated total compensation</td><td class="amount">${d.fmtEUR(d.avgTotalComp)}</td><td class="amount">${d.fmtEUR(d.avgTotalComp * 12)}</td></tr>
+                    ${d.avgNet > 0 ? `<tr><td>Average net pay on payslip (last ${d.recentPayslips.length} months)</td><td class="amount">${d.fmtEUR(d.avgNet)}</td><td class="amount">${d.fmtEUR(d.avgNet * 12)}</td></tr>` : ''}
+                </table>
+
+                ${d.avgMonthlyRSU > 0 ? `<h2>Why don't RSUs fully appear on the Spanish payslip?</h2>
+                <p>RSUs are company shares that vest on a set schedule. As an international transfer (US → Spain), the taxation is split between both countries based on workdays in each during the grant-to-vest period.</p>
+                <ul>
+                    <li><strong>Spain-sourced portion:</strong> Appears on the payslip as in-kind income ("Especies Si. RSUs Dep"), offset by "Descuento Conceptos en Especie" since shares are received, not cash.</li>
+                    <li><strong>US-sourced portion:</strong> Not taxable in Spain and therefore <strong>does not appear on the Spanish payslip</strong>. It is reported and taxed in the United States.</li>
+                </ul>
+                <p>Both portions represent real income to the employee — the Spanish payslip only partially reflects the total value of vested RSUs.</p>` : ''}
+
+                <div class="note">
+                    <strong>Note:</strong> This is an informational summary generated by the employee. Payslip amounts can be verified against official payslips. RSU values fluctuate with share price. For additional verification, an official letter can be requested from ${d.employer}'s HR department.
+                </div>
+
+                <div class="signature-line">Employee signature</div>
+                `;
+            }
+
+            return html;
         }
 
         function calculateExpected() {
