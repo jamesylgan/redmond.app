@@ -4860,10 +4860,11 @@
             const avgNet = recentPayslips.length > 0 ? recentPayslips.reduce((s, p) => s + p.totals.netPay, 0) / recentPayslips.length : 0;
 
             // RSU monthly average: use grant table + user-provided share price
-            const sharePriceUSD = parseFloat(document.getElementById('incomeLetterSharePrice')?.value) || 0;
-            const eurToUsdRate = parseFloat(document.getElementById('incomeLetterEurRate')?.value) || config.eurToUsdRate || 1.14;
+            // Use letter inputs, fall back to grant panel / config values
+            const sharePriceUSD = parseFloat(document.getElementById('incomeLetterSharePrice')?.value) || config.rsuSharePrice || 0;
+            const eurToUsdRate = parseFloat(document.getElementById('incomeLetterEurRate')?.value) || config.rsuEurRate || config.eurToUsdRate || 1.14;
             const sharePriceEUR = sharePriceUSD > 0 ? sharePriceUSD / eurToUsdRate : 0;
-            const ticker = document.getElementById('incomeLetterTicker')?.value || 'AFRM';
+            const ticker = document.getElementById('incomeLetterTicker')?.value || config.rsuTicker || 'AFRM';
 
             let avgMonthlyRSU = 0;
             let annualRSU = 0;
