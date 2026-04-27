@@ -904,6 +904,28 @@
                                 <span><strong>US → Spain transfer date</strong></span>
                                 <input type="date" id="rsuTransferDate" onblur="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
                             </label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                                    <span><strong>Stock Ticker</strong></span>
+                                    <input type="text" id="rsuTicker" value="AFRM" onchange="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                                </label>
+                                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                                    <span><strong>Share Price (USD)</strong></span>
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="number" id="rsuSharePrice" placeholder="e.g. 64" step="0.01" onchange="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; flex: 1;">
+                                        <button type="button" onclick="fetchRSUSharePrice()" style="padding: 4px 8px; font-size: 11px; cursor: pointer;" title="Fetch current price">↻</button>
+                                    </div>
+                                    <span id="rsuSharePriceStatus" style="font-size: 10px; color: var(--text-muted);"></span>
+                                </label>
+                                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+                                    <span><strong>EUR/USD Rate</strong></span>
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="number" id="rsuEurRate" step="0.01" onchange="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; flex: 1;">
+                                        <button type="button" onclick="fetchRSUEurRate()" style="padding: 4px 8px; font-size: 11px; cursor: pointer;" title="Fetch current rate">↻</button>
+                                    </div>
+                                    <span id="rsuEurRateStatus" style="font-size: 10px; color: var(--text-muted);"></span>
+                                </label>
+                            </div>
                             <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">RSU Grants</div>
                             <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px 0;">
                                 Enter each grant. The tool computes vest events and splits them by US/Spain workdays using the pro-rata formula from IRS Memo 202327014 / Spain DGT V0425-25.
@@ -1423,7 +1445,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
                     <span>Full Name</span>
-                    <input type="text" id="incomeLetterName" placeholder="e.g. James Gan" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                    <input type="text" id="incomeLetterName" placeholder="e.g. John Smith" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
                 </label>
                 <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
                     <span>Employer</span>
@@ -2208,7 +2230,7 @@
                 if (text.match(/Contingencias|Formaci[oó]n|Desempleo|Base sujeta|horas extra|garantía|ERTE|Incapacidad/i)) return true;
                 if (text.match(/Importe\s*remuneración|Importe\s*prorrata|Percepciones|APORTACI|TIPO|CNAE|CBA|AREA|NRO/i)) return true;
                 if (text.match(/Página|página|INSCRIPCI|CATEGOR|PUESTO|ANTIGÜEDAD|D\.N\.I/i)) return true;
-                if (text.match(/Affirm|Financial|Solutions|GAN.*JAMES|Senior.*Engineer|PROGRAMACI/i)) return true;
+                if (text.match(/Financial|Solutions|PROGRAMACI|Salario\s*Base|Mejora\s*Absorbible/i)) return true;
                 if (text.match(/^\d+$/) || text.match(/^[\d\s\/\-]+$/)) return true;
                 if (text.match(/^Mensual|Marzo|Enero|Febrero|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre/i)) return true;
                 return false;
@@ -3474,6 +3496,12 @@
             const allEvents = computeVestEvents(grants, transferDate);
             if (allEvents.length === 0) return '';
 
+            // Share price for EUR value display
+            const overviewPriceUSD = config.rsuSharePrice || 0;
+            const overviewEurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+            const overviewPriceEUR = overviewPriceUSD > 0 ? overviewPriceUSD / overviewEurRate : 0;
+            const overviewTicker = config.rsuTicker || 'AFRM';
+
             const es = currentLang === 'es';
             const monthNamesLong = es
                 ? ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -3588,8 +3616,11 @@
                     status = `<span style="color: var(--text-muted); font-size: 11px;">${es ? 'proyectado' : 'projected'}</span>`;
                 }
 
-                const usAmt = sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal * sl.weightedUSPct) : (sl.vestShares > 0 && !sl.isPast ? `~${(sl.weightedUSPct * 100).toFixed(0)}%` : '—');
-                const esAmt = sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal * sl.weightedESPct) : (sl.vestShares > 0 && !sl.isPast ? `~${(sl.weightedESPct * 100).toFixed(0)}%` : '—');
+                // For future months with no payslip, estimate value from share price
+                const estValue = sl.vestShares > 0 && overviewPriceEUR > 0 ? sl.vestShares * overviewPriceEUR : 0;
+                const valueSource = sl.payslipTotal > 0 ? sl.payslipTotal : estValue;
+                const usAmt = valueSource > 0 ? formatCurrency(valueSource * sl.weightedUSPct) : '—';
+                const esAmt = valueSource > 0 ? formatCurrency(valueSource * sl.weightedESPct) : '—';
 
                 // Grant details tooltip
                 const grantDetails = sl.monthVests.map(v => `${v.grantName}: ${v.shares.toFixed(1)} shares`).join(', ');
@@ -3599,7 +3630,7 @@
                     <td style="padding: 6px 8px; text-align:right;">${sl.vestShares > 0 ? sl.vestShares.toFixed(1) : '—'}</td>
                     <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${sl.vestShares > 0 ? (sl.weightedUSPct * 100).toFixed(1) + '%' : '—'}</td>
                     <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${sl.vestShares > 0 ? (sl.weightedESPct * 100).toFixed(1) + '%' : '—'}</td>
-                    <td style="padding: 6px 8px; text-align:right;">${sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal) : '—'}</td>
+                    <td style="padding: 6px 8px; text-align:right;">${sl.payslipTotal > 0 ? formatCurrency(sl.payslipTotal) : (estValue > 0 && !sl.isPast ? `<span style="color:var(--text-muted);">~${formatCurrency(estValue)}</span>` : '—')}</td>
                     <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${usAmt}</td>
                     <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${esAmt}</td>
                     <td style="padding: 6px 8px; text-align:center;">${status}</td>
@@ -3608,13 +3639,23 @@
 
             // Totals row
             const allShares = slots.reduce((s, sl) => s + sl.vestShares, 0);
+            const allEstValue = overviewPriceEUR > 0 ? allShares * overviewPriceEUR : 0;
             const allOnNomina = slots.reduce((s, sl) => s + sl.payslipTotal, 0);
+            const allUSValue = slots.reduce((s, sl) => {
+                const val = sl.payslipTotal > 0 ? sl.payslipTotal : (sl.vestShares > 0 && overviewPriceEUR > 0 ? sl.vestShares * overviewPriceEUR : 0);
+                return s + val * sl.weightedUSPct;
+            }, 0);
+            const allESValue = slots.reduce((s, sl) => {
+                const val = sl.payslipTotal > 0 ? sl.payslipTotal : (sl.vestShares > 0 && overviewPriceEUR > 0 ? sl.vestShares * overviewPriceEUR : 0);
+                return s + val * sl.weightedESPct;
+            }, 0);
             html += `<tr style="font-weight: 700; border-top: 2px solid #333; background: #f8f9fa;">
                 <td style="padding: 6px 8px;">Total (12mo)</td>
-                <td style="padding: 6px 8px; text-align:right;">${allShares.toFixed(1)}</td>
+                <td style="padding: 6px 8px; text-align:right;">${allShares.toFixed(0)}</td>
                 <td colspan="2"></td>
-                <td style="padding: 6px 8px; text-align:right;">${allOnNomina > 0 ? formatCurrency(allOnNomina) : '—'}</td>
-                <td colspan="2"></td>
+                <td style="padding: 6px 8px; text-align:right;">${allEstValue > 0 ? formatCurrency(allEstValue) : (allOnNomina > 0 ? formatCurrency(allOnNomina) : '—')}</td>
+                <td style="padding: 6px 8px; text-align:right; color: #1565c0;">${allUSValue > 0 ? formatCurrency(allUSValue) : '—'}</td>
+                <td style="padding: 6px 8px; text-align:right; color: #2e7d32;">${allESValue > 0 ? formatCurrency(allESValue) : '—'}</td>
                 <td></td>
             </tr>`;
 
@@ -4142,6 +4183,12 @@
             }
             const rsuTransferDate = document.getElementById('rsuTransferDate');
             if (rsuTransferDate) rsuTransferDate.value = config.rsuTransferDate || '';
+            const rsuTicker = document.getElementById('rsuTicker');
+            if (rsuTicker) rsuTicker.value = config.rsuTicker || 'AFRM';
+            const rsuSharePrice = document.getElementById('rsuSharePrice');
+            if (rsuSharePrice) rsuSharePrice.value = config.rsuSharePrice || '';
+            const rsuEurRate = document.getElementById('rsuEurRate');
+            if (rsuEurRate) rsuEurRate.value = config.rsuEurRate || '';
             renderRSUGrantsTable();
             const beckhamDetails = document.getElementById('beckhamLawDetails');
             if (beckhamDetails) beckhamDetails.style.display = config.beckhamLawQualifies ? 'block' : 'none';
@@ -4402,43 +4449,105 @@
                 return;
             }
 
+            const sharePriceUSD = config.rsuSharePrice || 0;
+            const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+            const ticker = config.rsuTicker || 'AFRM';
+            const priceEUR = sharePriceUSD > 0 ? sharePriceUSD / eurRate : 0;
+            const totalShares = events.reduce((s, e) => s + e.shares, 0);
+            const totalValue = priceEUR > 0 ? totalShares * priceEUR : 0;
+            const fmtVal = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+
             const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const summaryPrice = priceEUR > 0 ? ` — ${fmtVal(totalValue)} at ${ticker} $${sharePriceUSD}` : '';
             let html = `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
                 <summary style="cursor: pointer; padding: 8px 10px; background: #f8f9fa; font-size: 12px; font-weight: 600;">
-                    Vest Schedule Preview <span style="font-weight: normal; color: var(--text-muted);">(${events.length} events, ${events.reduce((s, e) => s + e.shares, 0).toFixed(1)} shares remaining)</span>
+                    Vest Schedule Preview <span style="font-weight: normal; color: var(--text-muted);">(${events.length} events, ${totalShares.toFixed(0)} shares${summaryPrice})</span>
                 </summary>
-                <div style="padding: 8px; max-height: 300px; overflow-y: auto;">
+                <div style="padding: 8px; max-height: 400px; overflow-y: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
                         <thead><tr style="background: #f8f9fa;">
                             <th style="padding: 3px 5px; text-align:left;">Date</th>
                             <th style="padding: 3px 5px; text-align:left;">Grant</th>
                             <th style="padding: 3px 5px; text-align:right;">Shares</th>
-                            <th style="padding: 3px 5px; text-align:right;">US Days</th>
-                            <th style="padding: 3px 5px; text-align:right;">ES Days</th>
+                            ${priceEUR > 0 ? '<th style="padding: 3px 5px; text-align:right;">Value (EUR)</th>' : ''}
                             <th style="padding: 3px 5px; text-align:right;">US %</th>
                             <th style="padding: 3px 5px; text-align:right;">ES %</th>
+                            ${priceEUR > 0 ? '<th style="padding: 3px 5px; text-align:right;">US (EUR)</th><th style="padding: 3px 5px; text-align:right;">ES (EUR)</th>' : ''}
                         </tr></thead><tbody>`;
 
             for (const e of events) {
                 const d = e.date;
                 const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, ${d.getFullYear()}`;
-                const usBg = e.usPct > 0.5 ? 'color: #1565c0;' : '';
-                const esBg = e.spainPct > 0.5 ? 'color: #2e7d32;' : '';
+                const val = e.shares * priceEUR;
+                const usVal = val * e.usPct;
+                const esVal = val * e.spainPct;
                 html += `<tr style="border-bottom: 1px solid #f0f0f0;">
                     <td style="padding: 3px 5px;">${dateStr}</td>
                     <td style="padding: 3px 5px;">${e.grantName}</td>
-                    <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(2)}</td>
-                    <td style="padding: 3px 5px; text-align:right;">${e.usWorkdays}</td>
-                    <td style="padding: 3px 5px; text-align:right;">${e.spainWorkdays}</td>
-                    <td style="padding: 3px 5px; text-align:right; ${usBg}">${(e.usPct * 100).toFixed(1)}%</td>
-                    <td style="padding: 3px 5px; text-align:right; ${esBg}">${(e.spainPct * 100).toFixed(1)}%</td>
+                    <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
+                    ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(val)}</td>` : ''}
+                    <td style="padding: 3px 5px; text-align:right; color: #1565c0;">${(e.usPct * 100).toFixed(1)}%</td>
+                    <td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${(e.spainPct * 100).toFixed(1)}%</td>
+                    ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(usVal)}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(esVal)}</td>` : ''}
                 </tr>`;
             }
+            html += `<tr style="font-weight: 600; border-top: 2px solid #333;">
+                <td colspan="2" style="padding: 3px 5px;">Total</td>
+                <td style="padding: 3px 5px; text-align:right;">${totalShares.toFixed(0)}</td>
+                ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(totalValue)}</td>` : ''}
+                <td colspan="2"></td>
+                ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0))}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0))}</td>` : ''}
+            </tr>`;
             html += '</tbody></table></div></details>';
             container.innerHTML = html;
         }
 
         // ===== Income Summary Letter Generator =====
+        async function fetchRSUSharePrice() {
+            const ticker = document.getElementById('rsuTicker')?.value || 'AFRM';
+            const statusEl = document.getElementById('rsuSharePriceStatus');
+            const priceInput = document.getElementById('rsuSharePrice');
+            statusEl.textContent = 'Fetching...';
+            try {
+                const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`);
+                const data = await res.json();
+                const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+                if (price) {
+                    priceInput.value = price.toFixed(2);
+                    statusEl.textContent = `${ticker}: $${price.toFixed(2)} (${new Date().toLocaleTimeString()})`;
+                    statusEl.style.color = '#28a745';
+                    autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+                } else { throw new Error('No data'); }
+            } catch (e) {
+                try {
+                    const res2 = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=demo`);
+                    const data2 = await res2.json();
+                    if (data2?.c > 0) {
+                        priceInput.value = data2.c.toFixed(2);
+                        statusEl.textContent = `${ticker}: $${data2.c.toFixed(2)}`;
+                        statusEl.style.color = '#28a745';
+                        autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+                    } else { throw new Error('No data'); }
+                } catch (e2) { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
+            }
+        }
+
+        async function fetchRSUEurRate() {
+            const statusEl = document.getElementById('rsuEurRateStatus');
+            const rateInput = document.getElementById('rsuEurRate');
+            statusEl.textContent = 'Fetching...';
+            try {
+                const res = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
+                const data = await res.json();
+                if (data.rates?.USD) {
+                    rateInput.value = data.rates.USD.toFixed(4);
+                    statusEl.textContent = `1 EUR = $${data.rates.USD.toFixed(4)}`;
+                    statusEl.style.color = '#28a745';
+                    autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();
+                } else { throw new Error('No data'); }
+            } catch (e) { statusEl.textContent = 'Failed. Enter manually.'; statusEl.style.color = '#dc3545'; }
+        }
+
         async function fetchLetterEurRate() {
             const statusEl = document.getElementById('eurRateLetterStatus');
             const rateInput = document.getElementById('incomeLetterEurRate');
@@ -4868,6 +4977,9 @@
                 showEstimatedTax: document.getElementById('showEstimatedTax')?.checked || false,
                 rsuValidationMode: document.getElementById('rsuValidationMode')?.value || 'normal',
                 rsuTransferDate: document.getElementById('rsuTransferDate')?.value || '',
+                rsuTicker: document.getElementById('rsuTicker')?.value || 'AFRM',
+                rsuSharePrice: parseFloat(document.getElementById('rsuSharePrice')?.value) || 0,
+                rsuEurRate: parseFloat(document.getElementById('rsuEurRate')?.value) || 0,
                 rsuGrants: config.rsuGrants || [],
                 beckhamPerPayslip: config.beckhamPerPayslip || {}
             };
