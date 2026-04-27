@@ -4076,17 +4076,62 @@
                                     </tr>` : ''}
                                 </tbody>
                             </table>
-                            ${rsuPayslipTotal > 0 ? `
-                            <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
-                                <strong>Payslip RSU: ${formatCurrency(rsuPayslipTotal)}</strong>
-                                <table style="width: 100%; margin-top: 6px;">
-                                    <tr><td>US-sourced (${(weightedUSPct * 100).toFixed(1)}%):</td><td class="text-right" style="color: #1565c0;">${formatCurrency(rsuPayslipTotal * weightedUSPct)}</td><td style="font-size:11px; color:var(--text-muted); padding-left:8px;">Not taxable in Spain</td></tr>
-                                    <tr><td>Spain-sourced (${(weightedESPct * 100).toFixed(1)}%):</td><td class="text-right" style="color: #2e7d32;">${formatCurrency(rsuPayslipTotal * weightedESPct)}</td><td style="font-size:11px; color:var(--text-muted); padding-left:8px;">${config.beckhamLawQualifies ? 'Beckham 24% flat rate' : 'Spanish IRPF rates'}</td></tr>
-                                </table>
-                            </div>` : `
-                            <div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px;">
-                                ${totalSharesThisMonth.toFixed(1)} shares expected to vest this month but no RSU earnings found on payslip.
-                            </div>`}
+                            ${(() => {
+                                // Full reconciliation: grants vs nómina
+                                const cvPriceUSD = config.rsuSharePrice || 0;
+                                const cvEurRate = config.rsuEurRate || config.eurToUsdRate || 1.14;
+                                const cvPriceEUR = cvPriceUSD > 0 ? cvPriceUSD / cvEurRate : 0;
+                                const cvTicker = config.rsuTicker || 'AFRM';
+                                const totalVestValue = cvPriceEUR > 0 ? totalSharesThisMonth * cvPriceEUR : 0;
+                                const expectedSpainValue = totalVestValue * weightedESPct;
+                                const expectedUSValue = totalVestValue * weightedUSPct;
+
+                                if (totalVestValue > 0 || rsuPayslipTotal > 0) {
+                                    // Back-calculate implied share price from nómina if we have both
+                                    let nominaCheck = '';
+                                    if (rsuPayslipTotal > 0 && totalVestValue > 0) {
+                                        const diff = Math.abs(rsuInKind - expectedSpainValue);
+                                        const pctDiff = expectedSpainValue > 0 ? (diff / expectedSpainValue * 100) : 0;
+                                        const impliedPricePerShare = rsuInKind / (totalSharesThisMonth * weightedESPct);
+                                        const impliedPriceUSD = impliedPricePerShare * cvEurRate;
+                                        nominaCheck = pctDiff < 15
+                                            ? `<div style="margin-top: 8px; padding: 6px 10px; background: #d4edda; border-radius: 4px; font-size: 11px; color: #155724;">✓ Nómina RSU In-Kind (${formatCurrency(rsuInKind)}) is consistent with expected Spain portion (${formatCurrency(expectedSpainValue)}). Implied share price: ~$${impliedPriceUSD.toFixed(2)} ${cvTicker}.</div>`
+                                            : `<div style="margin-top: 8px; padding: 6px 10px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">⚠ Nómina RSU In-Kind (${formatCurrency(rsuInKind)}) differs from expected Spain portion (${formatCurrency(expectedSpainValue)}) by ${pctDiff.toFixed(1)}%. Implied share price: ~$${impliedPriceUSD.toFixed(2)} vs configured $${cvPriceUSD.toFixed(2)}. The vest-day price likely differed.</div>`;
+                                    }
+                                    return `
+                                    <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                                        <strong>RSU Vest Reconciliation</strong>
+                                        <table style="width: 100%; margin-top: 6px; font-size: 12px;">
+                                            ${totalVestValue > 0 ? `<tr style="border-bottom: 1px solid #eee;">
+                                                <td>Total vest value (${totalSharesThisMonth.toFixed(0)} × ${formatCurrency(cvPriceEUR)})</td>
+                                                <td class="text-right"><strong>${formatCurrency(totalVestValue)}</strong></td>
+                                                <td style="font-size:10px; color:var(--text-muted); padding-left:6px;">${cvTicker} $${cvPriceUSD.toFixed(2)}</td>
+                                            </tr>` : ''}
+                                            <tr style="border-bottom: 1px solid #eee;">
+                                                <td style="color: #2e7d32;">Spain-sourced (${(weightedESPct * 100).toFixed(1)}%) — on nómina</td>
+                                                <td class="text-right" style="color: #2e7d32;">${totalVestValue > 0 ? formatCurrency(expectedSpainValue) : '—'}</td>
+                                                <td style="font-size:10px; color:var(--text-muted); padding-left:6px;">${config.beckhamLawQualifies ? 'Beckham 24%' : 'IRPF'}</td>
+                                            </tr>
+                                            <tr style="border-bottom: 1px solid #eee;">
+                                                <td style="color: #1565c0;">US-sourced (${(weightedUSPct * 100).toFixed(1)}%) — NOT on nómina</td>
+                                                <td class="text-right" style="color: #1565c0;">${totalVestValue > 0 ? formatCurrency(expectedUSValue) : '—'}</td>
+                                                <td style="font-size:10px; color:var(--text-muted); padding-left:6px;">Taxed in US only</td>
+                                            </tr>
+                                            ${rsuPayslipTotal > 0 ? `<tr style="border-top: 2px solid #ddd;">
+                                                <td>Actual nómina RSU In-Kind</td>
+                                                <td class="text-right">${formatCurrency(rsuInKind)}</td>
+                                                <td style="font-size:10px; color:var(--text-muted); padding-left:6px;">Payslip amount</td>
+                                            </tr>
+                                            ${rsuTaxReported > 0 ? `<tr><td>Actual nómina RSU Tax Reported</td><td class="text-right">${formatCurrency(rsuTaxReported)}</td><td style="font-size:10px; color:var(--text-muted); padding-left:6px;">Informational</td></tr>` : ''}` : ''}
+                                        </table>
+                                        ${nominaCheck}
+                                    </div>`;
+                                } else {
+                                    return `<div style="margin-top: 8px; padding: 8px; background: #fff3cd; border-radius: 4px; font-size: 11px;">
+                                        ${totalSharesThisMonth.toFixed(0)} shares expected to vest this month. ${cvPriceUSD > 0 ? '' : 'Enter share price above to see EUR values.'}${rsuPayslipTotal === 0 ? ' No RSU earnings found on payslip.' : ''}
+                                    </div>`;
+                                }
+                            })()}
                         </div>
                     </details>`;
                 } else if (rsuPayslipTotal > 0) {
