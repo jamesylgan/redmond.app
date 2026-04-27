@@ -1547,9 +1547,9 @@
                     <div style="font-size: 10px; color: var(--text-muted);">Total IRPF + Repercutidos from payslips</div>
                 </div>
                 <div class="form-group">
-                    <label>US Withholding at Vest (USD)</label>
-                    <input type="number" id="usTaxWithheld" placeholder="from shares sold" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
-                    <div style="font-size: 10px; color: var(--text-muted);">Shares sold × price at each vest</div>
+                    <label>Total US Taxes Withheld (USD)</label>
+                    <input type="number" id="usTaxWithheld" placeholder="e.g. 53000" step="1" onchange="computeUSTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <div style="font-size: 10px; color: var(--text-muted);">Total $ withheld from shares sold at vest (check Schwab statements)</div>
                 </div>
                 <div class="form-group">
                     <label>Spouse Income (USD, for MFJ)</label>
@@ -4871,13 +4871,11 @@
                                 <th style="padding: 2px 5px; text-align:right;">Shares</th>
                                 <th style="padding: 2px 5px; text-align:right;">US %</th>
                                 <th style="padding: 2px 5px; text-align:right;">US Shares</th>
-                                <th style="padding: 2px 5px; text-align:right;">Sold for Tax</th>
                             </tr></thead>
-                            <tbody>${(() => { const soldData = config.sharesSoldForTax || {}; return pastEvents.map(e => {
+                            <tbody>${pastEvents.map(e => {
                                 const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
                                 const checked = usVestConfirmed[dk] ? 'checked' : '';
                                 const usShares = (e.shares * e.usPct).toFixed(1);
-                                const soldShares = soldData[dk] || '';
                                 return `<tr style="border-bottom:1px solid #f0f0f0;">
                                     <td style="padding: 2px 5px; text-align:center;"><input type="checkbox" ${checked} onchange="toggleUSVestConfirmed('${dk}', this.checked)" style="cursor:pointer;"></td>
                                     <td style="padding: 2px 5px;">${months2[e.date.getMonth()+1]} ${e.date.getDate()}, ${e.date.getFullYear()}</td>
@@ -4885,9 +4883,8 @@
                                     <td style="padding: 2px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
                                     <td style="padding: 2px 5px; text-align:right;">${(e.usPct*100).toFixed(0)}%</td>
                                     <td style="padding: 2px 5px; text-align:right; color: #1565c0;">${usShares}</td>
-                                    <td style="padding: 2px 5px; text-align:right;"><input type="number" value="${soldShares}" placeholder="0" step="1" style="width:50px; padding:1px 3px; border:1px solid #ddd; border-radius:3px; font-size:10px; text-align:right;" onblur="updateSharesSoldForTax('${dk}', this.value)"></td>
                                 </tr>`;
-                            }).join(''); })()}</tbody>
+                            }).join('')}</tbody>
                         </table>
                         <div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px;">
                             <label style="display: flex; align-items: center; gap: 6px;">
@@ -5028,18 +5025,8 @@
                 document.getElementById('usTaxSpanishPaid').value = Math.round(projectedAnnual * eurRate) || '';
             }
 
-            // US withholding from shares sold
-            const sharesSold = config.sharesSoldForTax || {};
-            const hist = config.rsuHistoricalPrices || {};
-            let totalWithheld = 0;
-            for (const [dk, shares] of Object.entries(sharesSold)) {
-                if (shares > 0) {
-                    const dateKey = dk.replace(/-grant_.*$/, '');
-                    const price = hist[dateKey] || (config.rsuSharePrice || 0);
-                    totalWithheld += shares * price;
-                }
-            }
-            if (totalWithheld > 0) document.getElementById('usTaxWithheld').value = Math.round(totalWithheld);
+            // US withholding: keep existing value if already entered
+            // (user enters total $ withheld from Schwab statements directly)
 
             computeUSTaxEstimate();
         }
