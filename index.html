@@ -4265,10 +4265,12 @@
                     vestDates[vestDates.length - 1].shares += grant.totalShares - totalAllocated;
                 }
 
-                // Skip already-vested shares by whole vest count to avoid fractional remainders
+                // Skip already-vested shares by whole vest count.
+                // Use floor so that if "already vested" includes the most recent vest
+                // (e.g. 3333 / 416.67 = 7.99), we only skip 7 and keep vest #8 visible.
                 const alreadyVested = grant.sharesAlreadyVested || 0;
-                const vestsToSkip = Math.round(alreadyVested / sharesPerVest);
-                for (let vi = 0; vi < Math.min(vestsToSkip, vestDates.length); vi++) {
+                const vestsToSkip = Math.floor(alreadyVested / sharesPerVest - 0.01);
+                for (let vi = 0; vi < Math.max(0, Math.min(vestsToSkip, vestDates.length)); vi++) {
                     vestDates[vi].shares = 0;
                 }
 
