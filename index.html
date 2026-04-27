@@ -902,7 +902,7 @@
                             <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">US/ES Transfer Details</div>
                             <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; margin-bottom: 12px; max-width: 220px;">
                                 <span><strong>US → Spain transfer date</strong></span>
-                                <input type="date" id="rsuTransferDate" onchange="autoSaveConfig(); renderRSUGrantsTable(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+                                <input type="date" id="rsuTransferDate" onblur="autoSaveConfig(); renderVestPreview(); if (parsedPayslips.length > 0) displayResults();" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
                             </label>
                             <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">RSU Grants</div>
                             <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 8px 0;">
@@ -4323,7 +4323,7 @@
                 const g = grants[i];
                 html += `<tr style="border-bottom: 1px solid #e5e7eb;">
                     <td style="padding: 4px 3px;"><input type="text" value="${g.name || ''}" placeholder="Grant #${i+1}" onchange="updateRSUGrant(${i}, 'name', this.value)" style="${inputStyle}"></td>
-                    <td style="padding: 4px 3px;"><input type="date" value="${g.grantDate || ''}" onchange="updateRSUGrant(${i}, 'grantDate', this.value)" style="${inputStyle}"></td>
+                    <td style="padding: 4px 3px;"><input type="date" value="${g.grantDate || ''}" onblur="updateRSUGrant(${i}, 'grantDate', this.value)" style="${inputStyle}"></td>
                     <td style="padding: 4px 3px;"><input type="number" value="${g.totalShares || ''}" placeholder="0" onchange="updateRSUGrant(${i}, 'totalShares', this.value)" style="${inputStyle} text-align: right;"></td>
                     <td style="padding: 4px 3px;"><select onchange="updateRSUGrant(${i}, 'vestingSchedule', this.value)" style="${inputStyle}">
                         <option value="monthly" ${g.vestingSchedule === 'monthly' ? 'selected' : ''}>Monthly</option>
