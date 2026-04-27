@@ -2496,32 +2496,46 @@
             const avgMonthlyBase = totalBaseSalary / parsedPayslips.length;
             const avgMonthlyAdditional = totalAdditionalComp / parsedPayslips.length;
 
-            // Prorate annual salary
-            const proratedAnnualGross = config.annualGross > 0 ? (config.annualGross / 12) * monthsInYear : 0;
-            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional + totalOncallComp + expectedAnnualRSU;
+            // === Salary projection: compare parsed months vs expected for those SAME months ===
+            const parsedMonthCount = parsedPayslips.length;
+            const remainingMonths = 12 - lastPayslip.month; // months left after last parsed
 
-            // Extrapolate to end of year — use base salary average for remaining months,
-            // plus grant table for remaining RSU vests (not average, since RSU months are spiky)
-            const monthsUntilYearEnd = 13 - lastPayslip.month;
-            const remainingMonths = monthsUntilYearEnd - 1; // exclude already parsed last month
+            // What we EXPECTED for the parsed months (base salary portion)
+            const expectedBaseForParsed = config.annualGross > 0 ? (config.annualGross / 12) * parsedMonthCount : 0;
 
-            // Expected remaining RSU from grants (future months only)
-            let projectedRemainingRSU = 0;
-            if (Object.keys(expectedRSUByMonth).length > 0) {
-                for (let m = lastPayslip.month + 1; m <= 12; m++) {
-                    const key = `${m}/${firstPayslip.year}`;
-                    if (expectedRSUByMonth[key]) projectedRemainingRSU += expectedRSUByMonth[key].totalValue;
-                }
-            }
-
-            // Base projection: average non-RSU gross × remaining months + known future RSU
+            // RSU: actual on payslips vs expected ES-sourced for those same months
             const rsuOnPayslips = parsedPayslips.reduce((s, ps) => {
                 return s + ps.earnings.filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs)).reduce((s2, e) => s2 + e.amount, 0);
             }, 0);
+            let expectedRSU_ES_ForParsed = 0;
+            for (const ps of parsedPayslips) {
+                const key = `${ps.month}/${ps.year}`;
+                if (expectedRSUByMonth[key]) expectedRSU_ES_ForParsed += expectedRSUByMonth[key].spainValue;
+            }
+
+            // Non-RSU base: actual vs expected
             const nonRSUGross = totalGross - rsuOnPayslips;
-            const avgMonthlyNonRSU = nonRSUGross / parsedPayslips.length;
-            const projectedRemainingGross = (avgMonthlyNonRSU * remainingMonths) + projectedRemainingRSU;
+            const baseDiffForParsed = nonRSUGross - expectedBaseForParsed;
+
+            // RSU ES diff (actual on payslips vs expected ES for those months)
+            const rsuESDiffForParsed = rsuOnPayslips - expectedRSU_ES_ForParsed;
+
+            // Project full year: base (from average) + future RSU ES from grants
+            const avgMonthlyNonRSU = nonRSUGross / parsedMonthCount;
+            let projectedRemainingRSU_ES = 0;
+            if (Object.keys(expectedRSUByMonth).length > 0) {
+                for (let m = lastPayslip.month + 1; m <= 12; m++) {
+                    const key = `${m}/${firstPayslip.year}`;
+                    if (expectedRSUByMonth[key]) projectedRemainingRSU_ES += expectedRSUByMonth[key].spainValue;
+                }
+            }
+            const projectedRemainingGross = (avgMonthlyNonRSU * remainingMonths) + projectedRemainingRSU_ES;
             const projectedYearGross = totalGross + projectedRemainingGross;
+
+            // Expected annual total (what payslips should show over the full year)
+            const proratedAnnualGross = config.annualGross > 0 ? (config.annualGross / 12) * (parsedMonthCount + remainingMonths) : 0;
+            const proratedPlusAdditional = proratedAnnualGross + expectedAnnualAdditional + totalOncallComp + expectedAnnualRSU;
+
             const projectedYearBase = totalBaseSalary + (avgMonthlyBase * remainingMonths);
             const projectedYearAdditional = totalAdditionalComp + (avgMonthlyAdditional * remainingMonths);
 
@@ -2828,24 +2842,31 @@
                                     </summary>
                                     <div style="padding: 8px 0 0 10px; font-size: 12px; color: var(--text-muted);">
                                         ${(() => {
-                                            const lines = [];
-                                            const baseDiff = totalBaseSalary - proratedAnnualGross;
-                                            if (Math.abs(baseDiff) > 1) lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'Salario base vs contrato:' : 'Base salary vs contract:'}</span><span>${baseDiff >= 0 ? '+' : ''}${formatCurrency(baseDiff)}</span></div>`);
-                                            if (rsuOnPayslips > 0 && expectedAnnualRSU_ES > 0) {
-                                                const rsuDiffParsed = rsuOnPayslips - expectedAnnualRSU_ES * (parsedPayslips.length / monthsInYear);
-                                                lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'RSU en nóminas (ES) vs esperado:' : 'RSU on payslips (ES) vs expected:'}</span><span>${rsuDiffParsed >= 0 ? '+' : ''}${formatCurrency(rsuDiffParsed)} <span style="font-size:10px;">(${currentLang === 'es' ? 'diferencia de precio' : 'price diff'})</span></span></div>`);
+                                            const es2 = currentLang === 'es';
+                                            const row = (label, value, style) => `<div style="display:flex;justify-content:space-between;padding:2px 0;${style || ''}"><span>${label}</span><span>${value}</span></div>`;
+                                            let out = '';
+                                            // 1. Base salary: actual parsed vs expected for same months
+                                            out += `<div style="font-weight:600; margin-bottom:4px;">${es2 ? `Meses parseados (${parsedMonthCount}):` : `Parsed months (${parsedMonthCount}):`}</div>`;
+                                            out += row(es2 ? 'Salario base (no RSU) parseado:' : 'Base salary (non-RSU) parsed:', formatCurrency(nonRSUGross));
+                                            out += row(es2 ? 'Salario base esperado (contrato × ' + parsedMonthCount + ' meses):' : 'Expected base (contract × ' + parsedMonthCount + ' months):', formatCurrency(expectedBaseForParsed));
+                                            if (Math.abs(baseDiffForParsed) > 1) out += row(es2 ? 'Diferencia base:' : 'Base diff:', `${baseDiffForParsed >= 0 ? '+' : ''}${formatCurrency(baseDiffForParsed)}`, baseDiffForParsed > 1 ? 'color:var(--success);' : Math.abs(baseDiffForParsed) < 50 ? '' : 'color:var(--warning);');
+                                            // 2. RSU ES: actual on payslips vs expected ES for those months
+                                            if (expectedRSU_ES_ForParsed > 0 || rsuOnPayslips > 0) {
+                                                out += `<div style="font-weight:600; margin: 8px 0 4px 0;">${es2 ? 'RSU (parte España — en nómina):' : 'RSU (Spain portion — on payslip):'}</div>`;
+                                                out += row(es2 ? 'RSU real en nóminas:' : 'Actual RSU on payslips:', formatCurrency(rsuOnPayslips));
+                                                out += row(es2 ? 'RSU esperado ES (grants × precio):' : 'Expected ES RSU (grants × price):', formatCurrency(expectedRSU_ES_ForParsed));
+                                                const rsuESDiffPct = expectedRSU_ES_ForParsed > 0 ? Math.abs(rsuESDiffForParsed / expectedRSU_ES_ForParsed * 100) : 0;
+                                                const rsuIcon = rsuESDiffPct < 25 ? '✓' : '~';
+                                                out += row(es2 ? 'Diferencia RSU ES:' : 'RSU ES diff:', `<span style="color:${rsuESDiffPct < 25 ? 'var(--success)' : 'var(--warning)'};">${rsuIcon} ${rsuESDiffForParsed >= 0 ? '+' : ''}${formatCurrency(rsuESDiffForParsed)} (${rsuESDiffPct.toFixed(0)}%${rsuESDiffPct > 5 ? ', ' + (es2 ? 'precio del día de vest difiere' : 'vest-day price differs') : ''})</span>`);
                                             }
+                                            // 3. Note about US portion
                                             if (expectedAnnualRSU_Total > expectedAnnualRSU_ES) {
-                                                const usAnnual = expectedAnnualRSU_Total - expectedAnnualRSU_ES;
-                                                lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0; color: #1565c0;"><span>${currentLang === 'es' ? 'RSU parte US (no en nóminas, no en proyección):' : 'RSU US portion (not on payslips, excluded from projection):'}</span><span>${formatCurrency(usAnnual)}/yr</span></div>`);
+                                                out += `<div style="margin-top: 8px; padding: 6px; background: #e8f4fd; border-radius: 4px; color: #1565c0; font-size: 11px;">
+                                                    ${es2 ? 'La parte US de RSU no aparece en nóminas y no se incluye en esta proyección.' : 'US-sourced RSU does not appear on payslips and is excluded from this projection.'}
+                                                    ${es2 ? 'Valor anual US estimado:' : 'Estimated annual US value:'} ${formatCurrency(expectedAnnualRSU_Total - expectedAnnualRSU_ES)}
+                                                </div>`;
                                             }
-                                            if (projectedRemainingRSU > 0) {
-                                                lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'RSU proyectado restante (meses futuros, ES):' : 'Projected remaining RSU (future months, ES):'}</span><span>${formatCurrency(projectedRemainingRSU)}</span></div>`);
-                                            }
-                                            const compDiff = totalAdditionalComp - expectedAnnualAdditional;
-                                            if (Math.abs(compDiff) > 1) lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>${currentLang === 'es' ? 'Compensación adicional vs esperado:' : 'Additional comp vs expected:'}</span><span>${compDiff >= 0 ? '+' : ''}${formatCurrency(compDiff)}</span></div>`);
-                                            lines.push(`<div style="display:flex;justify-content:space-between;padding:2px 0; font-style:italic; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px;"><span>${currentLang === 'es' ? 'Nota: La proyección excluye RSU de fuente US ya que no aparece en nóminas.' : 'Note: Projection excludes US-sourced RSU as it does not appear on payslips.'}</span></div>`);
-                                            return lines.join('');
+                                            return out;
                                         })()}
                                     </div>
                                 </details>
