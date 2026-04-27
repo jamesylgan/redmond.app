@@ -2602,33 +2602,53 @@
                             <td>${currentLang === 'es' ? `Prorrateado (${monthsInYear} meses):` : `Prorated (${monthsInYear} months):`}</td>
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(proratedAnnualGross)}</td>
                         </tr>
-                        ${expectedAnnualAdditional > 0 ? `
+                        ${(expectedAnnualAdditional > 0 || totalAdditionalComp > 0) ? `
                         <tr>
                             <td colspan="2">
                                 <details style="margin: 0;" class="expandable-row">
                                     <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Compensación adicional esperada:' : 'Expected additional compensation:'}</span>
-                                        <span style="padding-left: 15px;">+${formatCurrency(expectedAnnualAdditional)}</span>
+                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Compensación adicional (esperado vs real):' : 'Additional compensation (expected vs actual):'}</span>
+                                        <span style="padding-left: 15px;">+${formatCurrency(additionalCompExclRSU)}</span>
                                     </summary>
-                                    <div style="padding: 8px 0 0 20px; font-size: 13px; color: var(--text-muted);">
-                                        ${expectedAdditionalBreakdown.map(b => {
-                                            const categoryNames = {
-                                                wallet: 'Wallet Benefits',
-                                                awardco: 'Awardco',
-                                                exemptInsurance: 'Exempt Insurance',
-                                                taxableInsurance: 'Taxable Insurance',
-                                                rsu: 'RSUs / Stock',
-                                                espp: 'ESPP',
-                                                bonus: 'Bonuses',
-                                                other: 'Other'
-                                            };
-                                            const name = categoryNames[b.category] || b.category;
-                                            const annualAmount = b.monthly * monthsInYear;
-                                            return `<div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                                                <span>${name} (${formatCurrency(b.monthly)}/mo × ${monthsInYear}):</span>
-                                                <span>${formatCurrency(annualAmount)}</span>
-                                            </div>`;
-                                        }).join('')}
+                                    <div style="padding: 8px 0 0 10px; font-size: 12px;">
+                                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                                        <thead><tr style="color:var(--text-muted);"><th style="text-align:left; padding:2px 4px;">${currentLang === 'es' ? 'Categoría' : 'Category'}</th><th style="text-align:right; padding:2px 4px;">${currentLang === 'es' ? 'Esperado/mo' : 'Expected/mo'}</th><th style="text-align:right; padding:2px 4px;">${currentLang === 'es' ? 'Real (${parsedMonthCount}mo)' : 'Actual (${parsedMonthCount}mo)'}</th><th style="text-align:right; padding:2px 4px;">${currentLang === 'es' ? 'Esperado (${parsedMonthCount}mo)' : 'Expected (${parsedMonthCount}mo)'}</th><th style="text-align:right; padding:2px 4px;">Diff</th></tr></thead>
+                                        <tbody>
+                                        ${(() => {
+                                            const categoryNames = { wallet: 'Wallet', awardco: 'Awardco', exemptInsurance: 'Exempt Ins.', taxableInsurance: 'Taxable Ins.', rsu: 'RSU', espp: 'ESPP', bonus: 'Bonus', other: 'Other' };
+                                            // Build per-category: expected from config, actual from parsed
+                                            const cats = new Set([
+                                                ...Object.keys(config.compCategories || {}).filter(c => config.compCategories[c].enabled),
+                                                ...Object.values(earningToCategory)
+                                            ]);
+                                            let rows = '';
+                                            for (const cat of cats) {
+                                                if (cat === 'rsu') continue; // RSU shown separately
+                                                const catCfg = config.compCategories?.[cat] || {};
+                                                const expMonthly = catCfg.expectedMonthly || 0;
+                                                const startMo = catCfg.startMonth || 0;
+                                                const applicableMonths = startMo > 0 ? parsedPayslips.filter(ps => ps.month >= startMo).length : parsedMonthCount;
+                                                const expForParsed = expMonthly * applicableMonths;
+                                                // Sum actual from parsed payslips for this category
+                                                let actual = 0;
+                                                for (const [name, amt] of Object.entries(additionalCompBreakdown)) {
+                                                    if (earningToCategory[name] === cat) actual += amt;
+                                                }
+                                                if (expForParsed === 0 && actual === 0) continue;
+                                                const diff = actual - expForParsed;
+                                                const diffPct = expForParsed > 0 ? (diff / expForParsed * 100) : 0;
+                                                const icon = expForParsed === 0 ? '?' : (Math.abs(diffPct) < 10 ? '<span style="color:var(--success);">✓</span>' : '<span style="color:var(--warning);">⚠</span>');
+                                                rows += `<tr style="border-bottom:1px solid #eee;">
+                                                    <td style="padding:3px 4px;">${icon} ${categoryNames[cat] || cat}</td>
+                                                    <td style="padding:3px 4px; text-align:right;">${expMonthly > 0 ? formatCurrency(expMonthly) : '—'}</td>
+                                                    <td style="padding:3px 4px; text-align:right;">${formatCurrency(actual)}</td>
+                                                    <td style="padding:3px 4px; text-align:right;">${expForParsed > 0 ? formatCurrency(expForParsed) : '—'}</td>
+                                                    <td style="padding:3px 4px; text-align:right; color:${Math.abs(diffPct) < 10 ? 'var(--success)' : 'var(--warning)'};">${expForParsed > 0 ? (diff >= 0 ? '+' : '') + formatCurrency(diff) : ''}</td>
+                                                </tr>`;
+                                            }
+                                            return rows;
+                                        })()}
+                                        </tbody></table>
                                     </div>
                                 </details>
                             </td>
@@ -2741,90 +2761,11 @@
                             <td>${currentLang === 'es' ? `Parseado base (${parsedPayslips.length} nóminas):` : `Parsed base (${parsedPayslips.length} payslips):`}</td>
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(totalBaseSalary)}</td>
                         </tr>
-                        ${totalAdditionalComp > 0 ? `
-                        <tr>
-                            <td colspan="2">
-                                <details style="margin: 0;" class="expandable-row">
-                                    <summary style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><span class="expand-icon">▶</span> ${currentLang === 'es' ? 'Parseado adicional:' : 'Parsed additional:'}</span>
-                                        <span style="padding-left: 15px;">+${formatCurrency(totalAdditionalComp)}</span>
-                                    </summary>
-                                    <div style="padding: 8px 0 0 20px; font-size: 13px;">
-                                        ${(() => {
-                                            // Pre-sum all RSU line items to compare combined total against expected
-                                            const rsuItems = Object.entries(additionalCompBreakdown).filter(([n]) => /rsu|RSU/i.test(n));
-                                            const rsuCombinedActual = rsuItems.reduce((s, [, a]) => s + a, 0);
-                                            let rsuExpectedES = 0;
-                                            if (Object.keys(expectedRSUByMonth).length > 0) {
-                                                for (const ps of parsedPayslips) { const k = `${ps.month}/${ps.year}`; if (expectedRSUByMonth[k]) rsuExpectedES += expectedRSUByMonth[k].spainValue; }
-                                            }
-                                            let rsuShownCombined = false;
-                                            return Object.entries(additionalCompBreakdown).map(([name, amount]) => {
-                                            const category = earningToCategory[name];
-                                            const catConfig = category && config.compCategories?.[category];
-                                            const expectedMonthly = catConfig?.expectedMonthly || 0;
-                                            const benefitStartMonth = catConfig?.startMonth || 0;
-                                            const isRSUItem = /rsu|RSU/i.test(name);
-
-                                            let expectedForParsed = 0;
-                                            let hasExpected = false;
-                                            let monthLabel = '';
-                                            let applicableMonths = parsedPayslips.length;
-
-                                            if (isRSUItem && rsuExpectedES > 0) {
-                                                // Show combined RSU comparison on the first RSU line only
-                                                if (!rsuShownCombined) {
-                                                    rsuShownCombined = true;
-                                                    expectedForParsed = rsuExpectedES;
-                                                    hasExpected = true;
-                                                    // Show as combined: actual is sum of all RSU lines
-                                                    const combinedDiff = rsuCombinedActual - rsuExpectedES;
-                                                    const combinedPct = rsuExpectedES > 0 ? Math.abs(combinedDiff / rsuExpectedES * 100) : 0;
-                                                    const combinedIcon = combinedPct < 25 ? '✓' : '~';
-                                                    const combinedColor = combinedPct < 25 ? 'var(--success)' : 'var(--warning)';
-                                                    return `<div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--border);">
-                                                        <span><span style="color: ${combinedColor};">${combinedIcon}</span> ${currentLang === 'es' ? 'RSU combinado (In-Kind + Tax Reported):' : 'RSU combined (In-Kind + Tax Reported):'}</span>
-                                                        <span>${formatCurrency(rsuCombinedActual)} <span style="color: var(--text-muted); font-size: 11px;">(exp ES: ${formatCurrency(rsuExpectedES)}, ${combinedDiff >= 0 ? '+' : ''}${formatCurrency(combinedDiff)})</span></span>
-                                                    </div>
-                                                    ${rsuItems.map(([n, a]) => `<div style="display: flex; justify-content: space-between; padding: 1px 0 1px 15px; font-size: 12px; color: var(--text-muted);">
-                                                        <span>↳ ${n}:</span><span>${formatCurrency(a)}</span>
-                                                    </div>`).join('')}`;
-                                                } else {
-                                                    return ''; // Already shown as combined above
-                                                }
-                                            } else if (isRSUItem && Object.keys(expectedRSUByMonth).length > 0) {
-                                                hasExpected = false;
-                                                monthLabel = `${parsedPayslips.length} mo (ES-sourced from grants)`;
-                                            } else {
-                                                if (benefitStartMonth > 0) {
-                                                    applicableMonths = parsedPayslips.filter(ps => ps.month >= benefitStartMonth).length;
-                                                }
-                                                expectedForParsed = expectedMonthly ? expectedMonthly * applicableMonths : 0;
-                                                hasExpected = expectedMonthly > 0;
-                                                monthLabel = benefitStartMonth > 0 ? applicableMonths + ' mo (from ' + ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][benefitStartMonth] + ')' : applicableMonths + ' mo';
-                                            }
-
-                                            const diff = hasExpected && expectedForParsed > 0 ? amount - expectedForParsed : 0;
-                                            const pctDiff = expectedForParsed > 0 ? Math.abs(diff / expectedForParsed * 100) : 0;
-                                            const tolerance = isRSUItem ? 25 : (config.tolerance || 2); // RSU uses wider tolerance (price varies)
-                                            const diffStr = hasExpected && expectedForParsed > 0 ? (diff >= 0 ? '+' : '') + formatCurrency(diff) : '';
-                                            const statusIcon = hasExpected
-                                                ? (expectedForParsed === 0 ? '—' : (pctDiff <= tolerance ? '✓' : '~'))
-                                                : '?';
-                                            const statusColor = hasExpected
-                                                ? (expectedForParsed === 0 ? 'var(--text-muted)' : (pctDiff <= tolerance ? 'var(--success)' : 'var(--warning)'))
-                                                : 'var(--text-muted)';
-                                            const rsuNote = isRSUItem && hasExpected ? ' <span style="font-size:10px;">(price may differ from vest day)</span>' : '';
-                                            return `<div style="display: flex; justify-content: space-between; padding: 2px 0; color: ${hasExpected ? 'inherit' : 'var(--text-muted)'};">
-                                                <span><span style="color: ${statusColor};">${statusIcon}</span> ${name}${hasExpected ? '' : ' (no expected set)'}:</span>
-                                                <span>${formatCurrency(amount)}${hasExpected && expectedForParsed > 0 ? ' <span style="color: var(--text-muted); font-size: 11px;">(exp: ' + formatCurrency(expectedForParsed) + ' for ' + monthLabel + ', ' + diffStr + rsuNote + ')</span>' : ''}</span>
-                                            </div>`;
-                                        }).join(''); })()}
-                                    </div>
-                                </details>
-                            </td>
-                        </tr>
-                        ` : ''}
+                        ${additionalCompExclRSU > 0 ? `
+                        <tr style="font-size: 13px; color: var(--text-muted);">
+                            <td style="padding-left: 15px;">${currentLang === 'es' ? 'Adicional (Wallet, Seguros, etc.):' : 'Additional (Wallet, Insurance, etc.):'}</td>
+                            <td class="text-right" style="padding-left: 15px;">+${formatCurrency(additionalCompExclRSU)}</td>
+                        </tr>` : ''}
                         <tr>
                             <td>${currentLang === 'es' ? 'Parseado total:' : 'Parsed total:'}</td>
                             <td class="text-right" style="padding-left: 15px;">${formatCurrency(totalGross)}</td>
