@@ -1861,6 +1861,7 @@
             'Taxable Insurance': 'taxableInsurance',
             'RSU In-Kind Income': 'rsu',
             'RSU Tax Reported': 'rsu',
+            'On-Call Compensation': 'oncall',
         };
 
         // Explanations for payslip items (used in info tooltips)
@@ -1877,6 +1878,7 @@
             'Taxable Insurance': 'Company-paid insurance premiums that exceed the tax-exempt limit and are subject to income tax.',
             'RSU In-Kind Income': 'Restricted Stock Units (RSUs) that vested this period, reported as in-kind income. This amount is added to your gross pay but deducted back via "Descuento Conceptos en Especie" since you receive shares, not cash. Subject to IRPF via Repercutidos.',
             'RSU Tax Reported': 'The taxable value of RSU vesting reported for IRPF purposes. This is a real earning included in T. DEVENGADO, not merely informational. The difference from RSU In-Kind Income may reflect employer-absorbed withholding or cost basis adjustments.',
+            'On-Call Compensation': 'Combined on-call stipend and incident response pay. Compare against the On-Call Tracker for a breakdown of expected stipends (€20/workday, €50/weekend-holiday) and overtime response pay.',
             // Deductions
             'Common Contingencies': 'Social security contribution (4.70%) covering healthcare, maternity/paternity leave, and retirement pension.',
             'Intergenerational Equity': 'Contribution (0.15%) to ensure pension sustainability across generations, introduced in 2023.',
@@ -2151,7 +2153,8 @@
                 { pattern: /Cotizaci[oó]n\s*Formaci[oó]n\s*Profesional/i, type: 'deduction', nameEn: 'Professional Training', nameEs: 'Cotización Formación Profesional' },
                 { pattern: /Cotizaci[oó]n\s*Desempleo/i, type: 'deduction', nameEn: 'Unemployment Insurance', nameEs: 'Cotización Desempleo' },
                 { pattern: /Tributaci[oó]n.*IRPF|IRPF.*Tributaci[oó]n|\bIRPF\b/i, type: 'deduction', nameEn: 'Income Tax (IRPF)', nameEs: 'Tributación IRPF' },
-                { pattern: /Imp\.?\s*Ingr\.?\s*Cta\.?\s*Repercutidos/i, type: 'deduction', nameEn: 'Passed-on Income Tax', nameEs: 'Imp. Ingr. Cta. Repercutidos' }
+                { pattern: /Imp\.?\s*Ingr\.?\s*Cta\.?\s*Repercutidos/i, type: 'deduction', nameEn: 'Passed-on Income Tax', nameEs: 'Imp. Ingr. Cta. Repercutidos' },
+                { pattern: /\bOn-?Call\b/i, type: 'earning', nameEn: 'On-Call Compensation', nameEs: 'On-Call' }
             ];
 
             // Process each row to find concepts and amounts
@@ -3717,6 +3720,7 @@
                         </div>
 
                         ${buildCrossValidationPanel(ps)}
+                        ${buildOncallComparisonPanel(ps)}
                     </div>
                 </div>`;
             }
@@ -4430,6 +4434,99 @@
 
             html += beckhamHtml;
             html += estimatedTaxHtml;
+            return html;
+        }
+
+        // ===== On-Call Comparison Panel (per payslip) =====
+        function buildOncallComparisonPanel(ps) {
+            if (typeof OC === 'undefined') return '';
+
+            // Find on-call earning on this payslip
+            const oncallEarning = ps.earnings.find(e => e.nameEn === 'On-Call Compensation');
+            const payslipAmount = oncallEarning ? oncallEarning.amount : 0;
+
+            // Get tracker data for this month
+            OC.ensureInit();
+            const trackerComp = OC.getMonthlyCompensation(ps.month, ps.year);
+            const trackerTotal = trackerComp.total;
+
+            // Nothing to show if neither source has on-call
+            if (payslipAmount === 0 && trackerTotal === 0) return '';
+
+            const delta = payslipAmount - trackerTotal;
+            const absDelta = Math.abs(delta);
+            const tolerance = config.tolerance || 2;
+            const pctDiff = trackerTotal > 0 ? (absDelta / trackerTotal * 100) : (payslipAmount > 0 ? 100 : 0);
+            const isMatch = absDelta < 1;
+            const isClose = pctDiff <= tolerance;
+
+            let statusBg, statusColor, statusIcon, statusText;
+            if (isMatch) {
+                statusBg = '#d4edda'; statusColor = '#155724'; statusIcon = '✓'; statusText = 'Match';
+            } else if (isClose) {
+                statusBg = '#fff3cd'; statusColor = '#856404'; statusIcon = '≈'; statusText = `${formatCurrency(absDelta)} diff`;
+            } else {
+                statusBg = '#f8d7da'; statusColor = '#721c24'; statusIcon = '⚠'; statusText = `${delta > 0 ? '+' : ''}${formatCurrency(delta)} diff`;
+            }
+
+            const es = currentLang === 'es';
+            const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            let html = `
+            <details style="margin-top: 12px; border: 2px solid #6f42c1; border-radius: 8px; overflow: hidden;"${payslipAmount > 0 && trackerTotal > 0 ? ' open' : ''}>
+                <summary style="cursor: pointer; padding: 10px 12px; background: #f3e8ff; font-weight: 600; font-size: 13px;">
+                    ${es ? 'Comparación On-Call' : 'On-Call Comparison'} (${months[ps.month]} ${ps.year})
+                    <span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; margin-left:8px; background:${statusBg}; color:${statusColor};">${statusIcon} ${statusText}</span>
+                </summary>
+                <div style="padding: 12px; font-size: 12px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead><tr style="background: #f3e8ff;">
+                            <th style="text-align:left; padding: 4px 6px;">Source</th>
+                            <th style="text-align:right; padding: 4px 6px;">Stipend</th>
+                            <th style="text-align:right; padding: 4px 6px;">Response Pay</th>
+                            <th style="text-align:right; padding: 4px 6px;">Total</th>
+                        </tr></thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 4px 6px;">${es ? 'Nómina (real)' : 'Payslip (actual)'}</td>
+                                <td style="padding: 4px 6px; text-align:right; color:var(--text-muted);">—</td>
+                                <td style="padding: 4px 6px; text-align:right; color:var(--text-muted);">—</td>
+                                <td style="padding: 4px 6px; text-align:right; font-weight:600;">${payslipAmount > 0 ? formatCurrency(payslipAmount) : '<span style="color:var(--text-muted);">—</span>'}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 4px 6px;">${es ? 'Tracker (esperado)' : 'Tracker (expected)'}</td>
+                                <td style="padding: 4px 6px; text-align:right;">${trackerComp.stipend > 0 ? formatCurrency(trackerComp.stipend) : '<span style="color:var(--text-muted);">—</span>'}</td>
+                                <td style="padding: 4px 6px; text-align:right;">${trackerComp.responsePay > 0 ? formatCurrency(trackerComp.responsePay) : '<span style="color:var(--text-muted);">—</span>'}</td>
+                                <td style="padding: 4px 6px; text-align:right; font-weight:600;">${trackerTotal > 0 ? formatCurrency(trackerTotal) : '<span style="color:var(--text-muted);">—</span>'}</td>
+                            </tr>`;
+
+            if (payslipAmount > 0 && trackerTotal > 0) {
+                html += `
+                            <tr style="font-weight: 600; border-top: 2px solid #ddd;">
+                                <td style="padding: 4px 6px;">${es ? 'Diferencia' : 'Delta'}</td>
+                                <td colspan="2"></td>
+                                <td style="padding: 4px 6px; text-align:right; color:${isMatch ? 'var(--success)' : isClose ? '#856404' : 'var(--danger)'};">${delta > 0 ? '+' : ''}${formatCurrency(delta)}</td>
+                            </tr>`;
+            }
+
+            html += `</tbody></table>`;
+
+            // Helpful notes
+            if (payslipAmount > 0 && trackerTotal === 0) {
+                html += `<div style="margin-top: 8px; padding: 6px 10px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
+                    ${es ? 'On-call aparece en la nómina pero no hay datos en el tracker para este mes. Añade tu rotación y respuestas en el On-Call Tracker.' : 'On-call appears on payslip but no tracker data for this month. Add your rotation and responses in the On-Call Tracker.'}
+                </div>`;
+            } else if (payslipAmount === 0 && trackerTotal > 0) {
+                html += `<div style="margin-top: 8px; padding: 6px 10px; background: #fff3cd; border-radius: 4px; font-size: 11px; color: #856404;">
+                    ${es ? 'El tracker espera compensación on-call pero no aparece en esta nómina. Puede aparecer en una nómina posterior.' : 'Tracker expects on-call compensation but none found on this payslip. It may appear on a later payslip.'}
+                </div>`;
+            } else if (!isMatch && !isClose) {
+                html += `<div style="margin-top: 8px; padding: 6px 10px; background: #f8d7da; border-radius: 4px; font-size: 11px; color: #721c24;">
+                    ${es ? 'La diferencia supera la tolerancia. Verifica las rotaciones y respuestas a incidentes en el tracker, o el cálculo de tu empresa puede diferir.' : 'Difference exceeds tolerance. Verify rotations and incident responses in the tracker, or your company may calculate differently.'}
+                </div>`;
+            }
+
+            html += `</div></details>`;
             return html;
         }
 
