@@ -7214,16 +7214,24 @@
                 dayKeys.forEach(ds => {
                     const dayResps = byDay[ds];
                     const rp = calculateDayResponsePay(dayResps, ds);
-                    rp.groups.forEach(g => {
-                        const isGrouped = g.entries.length > 1;
-                        const rate = getOvertimeRate();
-                        const payStr = rate > 0 ? ` = ${fmtEur((g.paidMin / 60) * rate)}` : '';
-                        if (isGrouped) html += `<div class="log-group"><div class="log-group-header">Overlapping incidents &mdash; Real: ${durStr(g.realMin)} &rarr; Paid: ${durStr(g.paidMin)}${payStr}</div>`;
-                        g.entries.forEach(r => { html += renderLogEntry(r, g); });
-                        if (isGrouped) html += `</div>`;
-                    });
                     const payIds = new Set(rp.groups.flatMap(g => g.ids));
-                    dayResps.filter(r => !payIds.has(r.id)).forEach(r => { html += renderLogEntry(r, null); });
+                    const rate = getOvertimeRate();
+                    const items = [];
+                    rp.groups.forEach(g => { items.push({ sortKey: g.entries[0].startTime, type: 'group', g }); });
+                    dayResps.filter(r => !payIds.has(r.id)).forEach(r => { items.push({ sortKey: r.startTime, type: 'entry', r }); });
+                    items.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+                    items.forEach(item => {
+                        if (item.type === 'group') {
+                            const g = item.g;
+                            const isGrouped = g.entries.length > 1;
+                            const payStr = rate > 0 ? ` = ${fmtEur((g.paidMin / 60) * rate)}` : '';
+                            if (isGrouped) html += `<div class="log-group"><div class="log-group-header">Overlapping incidents &mdash; Real: ${durStr(g.realMin)} &rarr; Paid: ${durStr(g.paidMin)}${payStr}</div>`;
+                            [...g.entries].reverse().forEach(r => { html += renderLogEntry(r, g); });
+                            if (isGrouped) html += `</div>`;
+                        } else {
+                            html += renderLogEntry(item.r, null);
+                        }
+                    });
                 });
                 html += `</div>`;
             });
