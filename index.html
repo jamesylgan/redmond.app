@@ -6932,8 +6932,11 @@
         if (parsedPayslips.length > 0) {
             displayResults();
             updateCurrentSessionInfo();
-            // Switch to results tab when loading saved data
-            document.querySelector('[data-tab="results"]').click();
+            // Only auto-switch to results if the user has no stored tab preference (first load or upload tab)
+            const _storedTab = (() => { try { return localStorage.getItem('payroll_activeTab'); } catch(e) { return null; } })();
+            if (!_storedTab || _storedTab === 'upload') {
+                document.querySelector('[data-tab="results"]').click();
+            }
         }
 
         // Auto-save config on input changes
