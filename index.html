@@ -5858,12 +5858,7 @@
 
         // Fetch EUR/USD rate using multiple fallback methods
         async function fetchEurUsdRate() {
-            // Try fetch first (works from http:// origins)
-            try {
-                const r = await fetch('https://api.frankfurter.app/latest?from=EUR&to=USD');
-                if (r.ok) { const d = await r.json(); if (d.rates?.USD) return d.rates.USD; }
-            } catch (e) {}
-            // Try open.er-api.com (supports JSONP-like via callback)
+            // open.er-api.com: works from bellevue.tech and file:// (no CORS issues unlike frankfurter)
             try {
                 const r = await fetch('https://open.er-api.com/v6/latest/EUR');
                 if (r.ok) { const d = await r.json(); if (d.rates?.USD) return d.rates.USD; }
@@ -5883,28 +5878,21 @@
             }
 
             // vatcomply.com: free ECB-based historical rates, CORS *, no API key
-            try {
-                const r = await fetch(`https://api.vatcomply.com/rates?date=${dateStr}&base=EUR`);
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.rates?.USD) return { rate: d.rates.USD, date: d.date || dateStr };
-                }
-            } catch(e) {}
-
-            // Frankfurter range endpoint (avoids per-date redirect; may fail from some origins)
-            try {
-                const dStart = new Date(new Date(dateStr).getTime() - 7 * 86400000).toISOString().slice(0, 10);
-                const r = await fetch(`https://api.frankfurter.app/${dStart}..${dateStr}?from=EUR&to=USD`);
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.rates) {
-                        const best = Object.keys(d.rates).filter(k => k <= dateStr).sort().pop();
-                        if (best && d.rates[best]?.USD) return { rate: d.rates[best].USD, date: best };
+            // Retry once on 429 (rate limit) with a backoff
+            for (let attempt = 0; attempt < 2; attempt++) {
+                if (attempt > 0) await new Promise(res => setTimeout(res, 1500));
+                try {
+                    const r = await fetch(`https://api.vatcomply.com/rates?date=${dateStr}&base=EUR`);
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d.rates?.USD) return { rate: d.rates.USD, date: d.date || dateStr };
+                        break;
                     }
-                }
-            } catch(e) {}
+                    if (r.status !== 429) break;
+                } catch(e) { break; }
+            }
 
-            // Current rate as last resort
+            // Current rate as last resort (approximate for historical dates)
             const rate = await fetchEurUsdRate();
             if (rate) return { rate, date: dateStr };
 
@@ -5954,8 +5942,11 @@
             const recent = missing.filter(d => d >= nowStr);
 
             // Historical: fetch each via vatcomply (ECB data, free, CORS *)
-            for (const dateStr of historical) {
+            // 400ms gap between requests to avoid vatcomply rate limiting
+            for (let i = 0; i < historical.length; i++) {
+                const dateStr = historical[i];
                 if (statusCallback) statusCallback(fetched, missing.length);
+                if (i > 0) await new Promise(res => setTimeout(res, 400));
                 const result = await fetchHistoricalEurRate(dateStr);
                 if (result) {
                     config.historicalEurRates[result.date] = result.rate;
