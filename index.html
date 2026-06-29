@@ -1942,19 +1942,32 @@
 
         // Tab switching (scoped to payroll page)
         let usTaxTabVisited = false;
+        function activatePayrollTab(tabId) {
+            const tab = document.querySelector(`#payrollPage .tab[data-tab="${tabId}"]`);
+            if (!tab) return;
+            document.querySelectorAll('#payrollPage .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#payrollPage .tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            if (tabId === 'us-tax-estimate' && !usTaxTabVisited) {
+                usTaxTabVisited = true;
+                prefillUSTaxFromConfig();
+            }
+            try { localStorage.setItem('payroll_activeTab', tabId); } catch(e) {}
+            history.replaceState(null, '', '#' + tabId);
+        }
         document.querySelectorAll('#payrollPage .tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('#payrollPage .tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('#payrollPage .tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.tab).classList.add('active');
-                // Auto-fill US tax tab on first visit
-                if (tab.dataset.tab === 'us-tax-estimate' && !usTaxTabVisited) {
-                    usTaxTabVisited = true;
-                    prefillUSTaxFromConfig();
-                }
-            });
+            tab.addEventListener('click', () => activatePayrollTab(tab.dataset.tab));
         });
+        // Restore tab from URL hash or localStorage on load
+        (function restorePayrollTab() {
+            const hashTab = window.location.hash.replace('#', '');
+            const storedTab = (() => { try { return localStorage.getItem('payroll_activeTab'); } catch(e) { return null; } })();
+            const target = hashTab || storedTab;
+            if (target && target !== 'upload' && document.querySelector(`#payrollPage .tab[data-tab="${target}"]`)) {
+                activatePayrollTab(target);
+            }
+        })();
 
         // Drop zone events
         const dropZone = document.getElementById('dropZone');
@@ -4947,21 +4960,50 @@
                             ${priceEUR > 0 ? '<th style="padding: 3px 5px; text-align:right;">US (EUR)</th><th style="padding: 3px 5px; text-align:right;">ES (EUR)</th>' : ''}
                         </tr></thead><tbody>`;
 
+            // Group events by date for per-date subtotals
+            const vestByDate = [];
+            const vestDateOrder = [];
             for (const e of events) {
-                const d = e.date;
-                const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, ${d.getFullYear()}`;
-                const val = e.shares * priceEUR;
-                const usVal = val * e.usPct;
-                const esVal = val * e.spainPct;
-                html += `<tr style="border-bottom: 1px solid #f0f0f0;">
-                    <td style="padding: 3px 5px;">${dateStr}</td>
-                    <td style="padding: 3px 5px;">${e.grantName}</td>
-                    <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
-                    ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(val)}</td>` : ''}
-                    <td style="padding: 3px 5px; text-align:right; color: #1565c0;">${(e.usPct * 100).toFixed(1)}%</td>
-                    <td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${(e.spainPct * 100).toFixed(1)}%</td>
-                    ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(usVal)}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(esVal)}</td>` : ''}
-                </tr>`;
+                const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                if (!vestByDate[dk]) { vestByDate[dk] = []; vestDateOrder.push(dk); }
+                vestByDate[dk].push(e);
+            }
+            for (const dk of vestDateOrder) {
+                const group = vestByDate[dk];
+                const multiGrant = group.length > 1;
+                for (const e of group) {
+                    const d = e.date;
+                    const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, ${d.getFullYear()}`;
+                    const val = e.shares * priceEUR;
+                    const usVal = val * e.usPct;
+                    const esVal = val * e.spainPct;
+                    html += `<tr style="border-bottom: 1px solid #f0f0f0;">
+                        <td style="padding: 3px 5px;">${dateStr}</td>
+                        <td style="padding: 3px 5px;">${e.grantName}</td>
+                        <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(val)}</td>` : ''}
+                        <td style="padding: 3px 5px; text-align:right; color: #1565c0;">${(e.usPct * 100).toFixed(1)}%</td>
+                        <td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${(e.spainPct * 100).toFixed(1)}%</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(usVal)}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(esVal)}</td>` : ''}
+                    </tr>`;
+                }
+                if (multiGrant) {
+                    const dtShares = group.reduce((s, e) => s + e.shares, 0);
+                    const dtVal = dtShares * priceEUR;
+                    const dtUsVal = group.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0);
+                    const dtEsVal = group.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0);
+                    const dtUsPct = dtShares > 0 ? group.reduce((s, e) => s + e.shares * e.usPct, 0) / dtShares : 0;
+                    const dtEsPct = dtShares > 0 ? group.reduce((s, e) => s + e.shares * e.spainPct, 0) / dtShares : 0;
+                    html += `<tr style="font-weight: 600; border-top: 1px solid #bbb; border-bottom: 2px solid #bbb; background: #f0f0f0;">
+                        <td style="padding: 3px 5px; font-size:10px; color: #555;">↳ date total</td>
+                        <td style="padding: 3px 5px;"></td>
+                        <td style="padding: 3px 5px; text-align:right;">${dtShares.toFixed(0)}</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(dtVal)}</td>` : ''}
+                        <td style="padding: 3px 5px; text-align:right; color: #1565c0;">${(dtUsPct * 100).toFixed(1)}%</td>
+                        <td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${(dtEsPct * 100).toFixed(1)}%</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(dtUsVal)}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(dtEsVal)}</td>` : ''}
+                    </tr>`;
+                }
             }
             html += `<tr style="font-weight: 600; border-top: 2px solid #333;">
                 <td colspan="2" style="padding: 3px 5px;">Total</td>
@@ -5085,6 +5127,140 @@
                                 </div>`;
                             })() : ''}
                         </div>
+                    </div>
+                </details>`;
+            }
+
+            // Withholding History — per-vest breakdown of vested value (gross/withheld/net) in USD and EUR
+            const soldDataWH = config.sharesSoldForTax || {};
+            const withheldDataWH = config.usTaxWithheldPerVest || {};
+            const histPricesWH = config.rsuHistoricalPrices || {};
+            const eurRateWH = config.rsuEurRate || config.eurToUsdRate || 1.1706;
+            const now3 = new Date();
+            const pastEventsWH = events.filter(e => e.date < now3);
+            const withHoldingRows = pastEventsWH.map(e => {
+                const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}-${e.grantId}`;
+                const dateDk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                const soldShares = parseFloat(soldDataWH[dk]) || 0;
+                const vestPriceUSD = histPricesWH[dateDk] || sharePriceUSD || 0;
+                const totalVestedUSD = e.shares * vestPriceUSD;
+                const withheldUSD = parseFloat(withheldDataWH[dk]) || (soldShares * vestPriceUSD);
+                const netUSD = totalVestedUSD - withheldUSD;
+                const totalVestedEUR = eurRateWH > 0 ? totalVestedUSD / eurRateWH : 0;
+                const withheldEUR = eurRateWH > 0 ? withheldUSD / eurRateWH : 0;
+                const netEUR = eurRateWH > 0 ? netUSD / eurRateWH : 0;
+                const withheldPct = e.shares > 0 && soldShares > 0 ? (soldShares / e.shares * 100) : 0;
+                return { e, dk, dateDk, soldShares, vestPriceUSD, totalVestedUSD, withheldUSD, netUSD, totalVestedEUR, withheldEUR, netEUR, withheldPct };
+            }).filter(r => r.vestPriceUSD > 0);
+
+            if (withHoldingRows.length > 0) {
+                const fmtUSD = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+                const fmtEUR2 = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+                const totalWithheldShares = withHoldingRows.reduce((s, r) => s + r.soldShares, 0);
+                const totalGrossUSD = withHoldingRows.reduce((s, r) => s + r.totalVestedUSD, 0);
+                const totalWithheldUSD2 = withHoldingRows.reduce((s, r) => s + r.withheldUSD, 0);
+                const totalNetUSD = withHoldingRows.reduce((s, r) => s + r.netUSD, 0);
+                const totalGrossEUR = withHoldingRows.reduce((s, r) => s + r.totalVestedEUR, 0);
+                const totalWithheldEUR = withHoldingRows.reduce((s, r) => s + r.withheldEUR, 0);
+                const totalNetEUR = withHoldingRows.reduce((s, r) => s + r.netEUR, 0);
+                const months3 = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                html += `<details style="border: 1px solid #c8e6c9; border-radius: 6px; overflow: hidden; margin-top: 8px;">
+                    <summary style="cursor: pointer; padding: 6px 10px; background: #f1f8e9; font-size: 11px; font-weight: 600;">
+                        Withholding History <span style="font-weight: normal; color: var(--text-muted);">(${withHoldingRows.length} vests — gross ${fmtEUR2(totalGrossEUR)} — withheld ${fmtEUR2(totalWithheldEUR)} — net ${fmtEUR2(totalNetEUR)})</span>
+                    </summary>
+                    <div style="padding: 8px; max-height: 350px; overflow-y: auto;">
+                        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
+                            Values at vest-day price. EUR = USD ÷ ${eurRateWH.toFixed(4)}. Withheld = sell-to-cover shares × vest price. Net = gross − withheld.
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                            <thead>
+                                <tr style="background: #f1f8e9;">
+                                    <th style="padding: 3px 5px; text-align:left;" rowspan="2">Date</th>
+                                    <th style="padding: 3px 5px; text-align:left;" rowspan="2">Grant</th>
+                                    <th style="padding: 3px 5px; text-align:right;" rowspan="2">Price</th>
+                                    <th style="padding: 3px 5px; text-align:right;" rowspan="2">Shares</th>
+                                    <th style="padding: 3px 5px; text-align:right;" rowspan="2">Withheld</th>
+                                    <th style="padding: 3px 5px; text-align:center; border-left: 2px solid #ccc;" colspan="3">USD (at vest)</th>
+                                    <th style="padding: 3px 5px; text-align:center; border-left: 2px solid #a5d6a7;" colspan="3">EUR (at vest)</th>
+                                </tr>
+                                <tr style="background: #f1f8e9; font-size: 10px;">
+                                    <th style="padding: 2px 5px; text-align:right; border-left: 2px solid #ccc; color: #555;">Gross</th>
+                                    <th style="padding: 2px 5px; text-align:right; color: #b71c1c;">Withheld</th>
+                                    <th style="padding: 2px 5px; text-align:right; color: #1b5e20;">Net</th>
+                                    <th style="padding: 2px 5px; text-align:right; border-left: 2px solid #a5d6a7; color: #555;">Gross</th>
+                                    <th style="padding: 2px 5px; text-align:right; color: #b71c1c;">Withheld</th>
+                                    <th style="padding: 2px 5px; text-align:right; color: #1b5e20;">Net</th>
+                                </tr>
+                            </thead>
+                            <tbody>${(() => {
+                                // Group rows by dateDk for per-date subtotals
+                                const byDate = [];
+                                const dateOrder = [];
+                                for (const r of withHoldingRows) {
+                                    if (!byDate[r.dateDk]) { byDate[r.dateDk] = []; dateOrder.push(r.dateDk); }
+                                    byDate[r.dateDk].push(r);
+                                }
+                                let rowsHtml = '';
+                                for (const dateDk3 of dateOrder) {
+                                    const group = byDate[dateDk3];
+                                    const multiGrant = group.length > 1;
+                                    for (const r of group) {
+                                        const { e, soldShares, vestPriceUSD, totalVestedUSD, withheldUSD, netUSD, totalVestedEUR, withheldEUR, netEUR, withheldPct } = r;
+                                        const d3 = e.date;
+                                        const dateStr3 = `${months3[d3.getMonth() + 1]} ${d3.getDate()}, ${d3.getFullYear()}`;
+                                        const noWithheld = soldShares === 0 && !withheldDataWH[r.dk];
+                                        rowsHtml += `<tr style="border-bottom: 1px solid #f0f0f0;">
+                                            <td style="padding: 3px 5px; color: var(--text-muted); font-size:10px;">${multiGrant ? dateStr3 : dateStr3}</td>
+                                            <td style="padding: 3px 5px;">${e.grantName}</td>
+                                            <td style="padding: 3px 5px; text-align:right; font-size:10px;">$${vestPriceUSD.toFixed(2)}</td>
+                                            <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #5d4037;">${soldShares > 0 ? soldShares.toFixed(0) + ' (' + withheldPct.toFixed(0) + '%)' : '—'}</td>
+                                            <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #eee;">${fmtUSD(totalVestedUSD)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${withheldUSD > 0 ? fmtUSD(withheldUSD) : '—'}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #1b5e20; font-weight: 600;">${withheldUSD > 0 ? fmtUSD(netUSD) : fmtUSD(totalVestedUSD)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #c8e6c9;">${fmtEUR2(totalVestedEUR)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${withheldEUR > 0 ? fmtEUR2(withheldEUR) : '—'}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #1b5e20; font-weight: 600;">${withheldEUR > 0 ? fmtEUR2(netEUR) : fmtEUR2(totalVestedEUR)}</td>
+                                        </tr>`;
+                                    }
+                                    if (multiGrant) {
+                                        const dtShares = group.reduce((s, r) => s + r.e.shares, 0);
+                                        const dtSold = group.reduce((s, r) => s + r.soldShares, 0);
+                                        const dtGrossUSD = group.reduce((s, r) => s + r.totalVestedUSD, 0);
+                                        const dtWithheldUSD = group.reduce((s, r) => s + r.withheldUSD, 0);
+                                        const dtNetUSD = group.reduce((s, r) => s + r.netUSD, 0);
+                                        const dtGrossEUR = group.reduce((s, r) => s + r.totalVestedEUR, 0);
+                                        const dtWithheldEUR = group.reduce((s, r) => s + r.withheldEUR, 0);
+                                        const dtNetEUR = group.reduce((s, r) => s + r.netEUR, 0);
+                                        const dtWithheldPct = dtShares > 0 && dtSold > 0 ? (dtSold / dtShares * 100) : 0;
+                                        rowsHtml += `<tr style="font-weight: 600; border-top: 1px solid #a5d6a7; border-bottom: 2px solid #a5d6a7; background: #e8f5e9;">
+                                            <td style="padding: 3px 5px; font-size:10px; color: #2e7d32;">↳ date total</td>
+                                            <td style="padding: 3px 5px;"></td>
+                                            <td style="padding: 3px 5px;"></td>
+                                            <td style="padding: 3px 5px; text-align:right;">${dtShares.toFixed(0)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #5d4037;">${dtSold > 0 ? dtSold.toFixed(0) + ' (' + dtWithheldPct.toFixed(0) + '%)' : '—'}</td>
+                                            <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #eee;">${fmtUSD(dtGrossUSD)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${dtWithheldUSD > 0 ? fmtUSD(dtWithheldUSD) : '—'}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #1b5e20;">${fmtUSD(dtNetUSD)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #c8e6c9;">${fmtEUR2(dtGrossEUR)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${dtWithheldEUR > 0 ? fmtEUR2(dtWithheldEUR) : '—'}</td>
+                                            <td style="padding: 3px 5px; text-align:right; color: #1b5e20;">${fmtEUR2(dtNetEUR)}</td>
+                                        </tr>`;
+                                    }
+                                }
+                                return rowsHtml;
+                            })()}
+                            <tr style="font-weight: 600; border-top: 2px solid #333; background: #f1f8e9;">
+                                <td colspan="4" style="padding: 3px 5px; text-align:right;">Total</td>
+                                <td style="padding: 3px 5px; text-align:right; color: #5d4037;">${totalWithheldShares > 0 ? totalWithheldShares.toFixed(0) + ' shares' : '—'}</td>
+                                <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #eee;">${fmtUSD(totalGrossUSD)}</td>
+                                <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${totalWithheldUSD2 > 0 ? fmtUSD(totalWithheldUSD2) : '—'}</td>
+                                <td style="padding: 3px 5px; text-align:right; color: #1b5e20;">${fmtUSD(totalNetUSD)}</td>
+                                <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #c8e6c9;">${fmtEUR2(totalGrossEUR)}</td>
+                                <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${totalWithheldEUR > 0 ? fmtEUR2(totalWithheldEUR) : '—'}</td>
+                                <td style="padding: 3px 5px; text-align:right; color: #1b5e20;">${fmtEUR2(totalNetEUR)}</td>
+                            </tr></tbody>
+                        </table>
                     </div>
                 </details>`;
             }
