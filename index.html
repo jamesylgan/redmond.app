@@ -5871,9 +5871,19 @@
             return null; // caller should prompt manual entry
         }
 
-        // Fetch EUR/USD rate for a specific historical date via frankfurter.app
-        // Returns { rate, date } where date is the actual trading day used (may differ from requested for weekends)
+        // Fetch EUR/USD rate for a specific historical date.
+        // Returns { rate, date } where date is the actual trading day used.
+        // Uses CDN-hosted API as primary (works from file:// origin), frankfurter as fallback.
         async function fetchHistoricalEurRate(dateStr) {
+            // Primary: jsdelivr CDN-hosted currency API — CORS-permissive, works from file://
+            try {
+                const r = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/eur.json`);
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.eur?.usd) return { rate: d.eur.usd, date: d.date || dateStr };
+                }
+            } catch(e) {}
+            // Fallback: frankfurter.app (works from http/https origins, may fail from file://)
             try {
                 const r = await fetch(`https://api.frankfurter.app/${dateStr}?from=EUR&to=USD`);
                 if (r.ok) {
