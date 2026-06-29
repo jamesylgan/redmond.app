@@ -5873,39 +5873,41 @@
 
         // Fetch EUR/USD rate for a specific historical date.
         // Returns { rate, date } where date is the actual trading day used.
-        // Uses CDN-hosted API as primary (works from file:// origin), frankfurter as fallback.
         async function fetchHistoricalEurRate(dateStr) {
-            const cdnBase = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api';
-            // Primary: jsdelivr CDN with specific date — CORS-permissive, works from file://
-            try {
-                const r = await fetch(`${cdnBase}@${dateStr}/v1/currencies/eur.json`);
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.eur?.usd) return { rate: d.eur.usd, date: d.date || dateStr };
-                }
-            } catch(e) {}
-            // CDN publishes once per day; for recent dates not yet published, use @latest
             const daysSince = (Date.now() - new Date(dateStr).getTime()) / 86400000;
-            if (daysSince <= 5) {
-                try {
-                    const r = await fetch(`${cdnBase}@latest/v1/currencies/eur.json`);
-                    if (r.ok) {
-                        const d = await r.json();
-                        if (d.eur?.usd) return { rate: d.eur.usd, date: d.date || dateStr };
-                    }
-                } catch(e) {}
-                // Also try the existing current-rate fetcher as final option
+
+            // Today/very recent: skip historical APIs and use current rate
+            if (daysSince <= 1) {
                 const rate = await fetchEurUsdRate();
                 if (rate) return { rate, date: dateStr };
             }
-            // Fallback: frankfurter.app (works from http/https origins, may fail from file://)
+
+            // vatcomply.com: free ECB-based historical rates, CORS *, no API key
             try {
-                const r = await fetch(`https://api.frankfurter.app/${dateStr}?from=EUR&to=USD`);
+                const r = await fetch(`https://api.vatcomply.com/rates?date=${dateStr}&base=EUR`);
                 if (r.ok) {
                     const d = await r.json();
-                    if (d.rates?.USD) return { rate: d.rates.USD, date: d.date };
+                    if (d.rates?.USD) return { rate: d.rates.USD, date: d.date || dateStr };
                 }
             } catch(e) {}
+
+            // Frankfurter range endpoint (avoids per-date redirect; may fail from some origins)
+            try {
+                const dStart = new Date(new Date(dateStr).getTime() - 7 * 86400000).toISOString().slice(0, 10);
+                const r = await fetch(`https://api.frankfurter.app/${dStart}..${dateStr}?from=EUR&to=USD`);
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.rates) {
+                        const best = Object.keys(d.rates).filter(k => k <= dateStr).sort().pop();
+                        if (best && d.rates[best]?.USD) return { rate: d.rates[best].USD, date: best };
+                    }
+                }
+            } catch(e) {}
+
+            // Current rate as last resort
+            const rate = await fetchEurUsdRate();
+            if (rate) return { rate, date: dateStr };
+
             return null;
         }
 
@@ -5915,7 +5917,9 @@
             if (rate > 0) { config.historicalEurRates[dateStr] = rate; }
             else { delete config.historicalEurRates[dateStr]; }
             autoSaveConfig();
+            const eurPanelWasOpen = document.getElementById('eurRateHistPanel')?.open;
             renderVestPreview();
+            if (eurPanelWasOpen) { const p = document.getElementById('eurRateHistPanel'); if (p) p.open = true; }
             if (parsedPayslips.length > 0) displayResults();
         }
 
@@ -5945,7 +5949,12 @@
             if (missing.length === 0) { if (statusCallback) statusCallback(0, 0); return; }
             if (!config.historicalEurRates) config.historicalEurRates = {};
             let fetched = 0;
-            for (const dateStr of missing) {
+            const nowStr = new Date().toISOString().slice(0, 10);
+            const historical = missing.filter(d => d < nowStr);
+            const recent = missing.filter(d => d >= nowStr);
+
+            // Historical: fetch each via vatcomply (ECB data, free, CORS *)
+            for (const dateStr of historical) {
                 if (statusCallback) statusCallback(fetched, missing.length);
                 const result = await fetchHistoricalEurRate(dateStr);
                 if (result) {
@@ -5954,8 +5963,21 @@
                     fetched++;
                 }
             }
+
+            // Recent / today: use current rate fetcher
+            for (const dateStr of recent) {
+                const rate = await fetchEurUsdRate();
+                if (rate) { config.historicalEurRates[dateStr] = rate; fetched++; }
+            }
+
             autoSaveConfig();
+            // Re-render but preserve open state of the EUR rates panel
+            const eurPanelWasOpen = document.getElementById('eurRateHistPanel')?.open;
             renderVestPreview();
+            if (eurPanelWasOpen) {
+                const p = document.getElementById('eurRateHistPanel');
+                if (p) p.open = true;
+            }
             if (parsedPayslips.length > 0) displayResults();
             if (statusCallback) statusCallback(fetched, missing.length);
         }
