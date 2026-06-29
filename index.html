@@ -4946,7 +4946,7 @@
 
             const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const summaryPrice = priceEUR > 0 ? ` — ${fmtVal(totalValue)} at ${ticker} $${sharePriceUSD}` : '';
-            let html = `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
+            let html = `<details id="vestSchedulePreview" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
                 <summary style="cursor: pointer; padding: 8px 10px; background: #f8f9fa; font-size: 12px; font-weight: 600;">
                     Vest Schedule Preview <span style="font-weight: normal; color: var(--text-muted);">(${events.length} events, ${totalShares.toFixed(0)} shares${summaryPrice})</span>
                 </summary>
@@ -5026,7 +5026,7 @@
             if (pastVestDates.length > 0 || Object.keys(hist).length > 0) {
                 const allDates = [...new Set([...pastVestDates, ...Object.keys(hist)])].sort();
                 const cachedCount = allDates.filter(k => hist[k]).length;
-                html += `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
+                html += `<details id="vestHistPricesPanel" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
                     <summary style="cursor: pointer; padding: 6px 10px; background: #f8f9fa; font-size: 11px; font-weight: 600;">
                         Historical Vest-Day Prices <span style="font-weight: normal; color: var(--text-muted);">(${cachedCount}/${allDates.length} filled — enter USD price per share on each vest date)</span>
                     </summary>
@@ -5135,7 +5135,7 @@
                     return usVestConfirmed[dk];
                 }).length;
                 const months2 = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                html += `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
+                html += `<details id="vestUSVerifyPanel" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;">
                     <summary style="cursor: pointer; padding: 6px 10px; background: #f8f9fa; font-size: 11px; font-weight: 600;">
                         US Vest Verification <span style="font-weight: normal; color: var(--text-muted);">(${confirmedCount}/${pastEvents.length} confirmed — check off vests as you see them in Schwab)</span>
                     </summary>
@@ -5242,7 +5242,7 @@
                 const totalWithheldEUR = withHoldingRows.reduce((s, r) => s + r.withheldEUR, 0);
                 const totalNetEUR = withHoldingRows.reduce((s, r) => s + r.netEUR, 0);
                 const months3 = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                html += `<details style="border: 1px solid #c8e6c9; border-radius: 6px; overflow: hidden; margin-top: 8px;">
+                html += `<details id="vestWithholdingPanel" style="border: 1px solid #c8e6c9; border-radius: 6px; overflow: hidden; margin-top: 8px;">
                     <summary style="cursor: pointer; padding: 6px 10px; background: #f1f8e9; font-size: 11px; font-weight: 600;">
                         Withholding History <span style="font-weight: normal; color: var(--text-muted);">(${withHoldingRows.length} vests — gross ${fmtEUR2(totalGrossEUR)} — withheld ${fmtEUR2(totalWithheldEUR)} — net ${fmtEUR2(totalNetEUR)})</span>
                     </summary>
@@ -6495,7 +6495,8 @@
                 usW2Total: config.usW2Total || 0,
                 sharesSoldForTax: config.sharesSoldForTax || {},
                 usTaxWithheldPerVest: config.usTaxWithheldPerVest || {},
-                beckhamPerPayslip: config.beckhamPerPayslip || {}
+                beckhamPerPayslip: config.beckhamPerPayslip || {},
+                historicalEurRates: config.historicalEurRates || {}
             };
 
             // Toggle RSU mode UI
