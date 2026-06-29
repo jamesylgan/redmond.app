@@ -5048,6 +5048,82 @@
                 </details>`;
             }
 
+            // Historical EUR/USD Rates panel
+            {
+                const eurHist = config.historicalEurRates || {};
+                const neededEurDates = getNeededEurRateDates();
+                const allEurDates = [...new Set([...neededEurDates, ...Object.keys(eurHist)])].sort();
+                if (allEurDates.length > 0) {
+                    const filledCount = allEurDates.filter(k => eurHist[k]).length;
+                    const missingCount = allEurDates.filter(k => !eurHist[k]).length;
+                    html += `<details style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden; margin-top: 8px;" id="eurRateHistPanel">
+                        <summary style="cursor: pointer; padding: 6px 10px; background: #f8f9fa; font-size: 11px; font-weight: 600;">
+                            Historical EUR/USD Rates <span style="font-weight: normal; color: var(--text-muted);">(${filledCount}/${allEurDates.length} filled — used for per-date EUR conversions in vest + payslip data)</span>
+                        </summary>
+                        <div style="padding: 8px; max-height: 250px; overflow-y: auto;">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                <button type="button" id="fetchAllEurRatesBtn" onclick="(async()=>{
+                                    const btn=document.getElementById('fetchAllEurRatesBtn');
+                                    const st=document.getElementById('eurRateFetchStatus');
+                                    btn.disabled=true; st.textContent='Fetching...'; st.style.color='#555';
+                                    await fetchAllMissingEurRates((done,tot)=>{ if(st) st.textContent=tot>0?'Fetching '+done+'/'+tot+'...':'All done'; });
+                                    btn.disabled=false; st.textContent='Done'; st.style.color='#28a745';
+                                })()" style="padding:3px 10px; font-size:11px; cursor:pointer; background:var(--primary); color:white; border:none; border-radius:4px;">
+                                    Fetch all missing (${missingCount})
+                                </button>
+                                <span id="eurRateFetchStatus" style="font-size:10px; color:var(--text-muted);"></span>
+                            </div>
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                                <thead><tr style="background: #f8f9fa;">
+                                    <th style="padding: 2px 5px; text-align:left;">Date</th>
+                                    <th style="padding: 2px 5px; text-align:left; color:var(--text-muted); font-weight:normal;">Used for</th>
+                                    <th style="padding: 2px 5px; text-align:right;">EUR/USD rate</th>
+                                    <th style="padding: 2px 5px; text-align:center; width:28px;"></th>
+                                    <th style="padding: 2px 5px; text-align:left;">Status</th>
+                                </tr></thead>
+                                <tbody>${allEurDates.map(k => {
+                                    const hasVal = eurHist[k] != null;
+                                    const isVestDate = neededEurDates.includes(k) && (() => {
+                                        const grants2 = config.rsuGrants || [];
+                                        const td2 = config.rsuTransferDate;
+                                        if (!grants2.length || !td2) return false;
+                                        const now4 = new Date();
+                                        return computeVestEvents(grants2, td2).some(ev => {
+                                            const d4 = ev.date;
+                                            return ev.date < now4 && `${d4.getFullYear()}-${String(d4.getMonth()+1).padStart(2,'0')}-${String(d4.getDate()).padStart(2,'0')}` === k;
+                                        });
+                                    })();
+                                    const isPayslipDate = parsedPayslips.some(p => {
+                                        const ld = new Date(p.year, p.month, 0);
+                                        return `${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}` === k;
+                                    });
+                                    const usedFor = [isVestDate && 'vest', isPayslipDate && 'payslip'].filter(Boolean).join(', ') || 'stored';
+                                    const statusHtml = hasVal
+                                        ? `<span style="color:#28a745;">✓ ${eurHist[k].toFixed(4)}</span>`
+                                        : `<span style="color:#dc3545;">missing</span>`;
+                                    return `<tr style="border-bottom:1px solid #f0f0f0;">
+                                        <td style="padding: 2px 5px;">${k}</td>
+                                        <td style="padding: 2px 5px; font-size:10px; color:var(--text-muted);">${usedFor}</td>
+                                        <td style="padding: 2px 5px; text-align:right;">
+                                            <input type="number" value="${hasVal ? eurHist[k].toFixed(4) : ''}" placeholder="e.g. 1.0850" step="0.0001" style="width:80px; padding:2px 4px; border:1px solid ${hasVal ? '#ddd' : '#ffc107'}; border-radius:3px; font-size:11px; text-align:right;"
+                                                onblur="updateHistoricalEurRate('${k}', this.value)">
+                                        </td>
+                                        <td style="padding:2px 3px; text-align:center;">
+                                            <button type="button" title="Fetch rate for ${k}" onclick="(async()=>{
+                                                const r=await fetchHistoricalEurRate('${k}');
+                                                if(r){updateHistoricalEurRate('${k}',r.rate);}
+                                                else{alert('Failed to fetch rate for ${k}');}
+                                            })()" style="padding:1px 5px; font-size:10px; cursor:pointer; background:#6c757d; color:white; border:none; border-radius:3px;">↻</button>
+                                        </td>
+                                        <td style="padding: 2px 5px; font-size: 10px;">${statusHtml}</td>
+                                    </tr>`;
+                                }).join('')}</tbody>
+                            </table>
+                        </div>
+                    </details>`;
+                }
+            }
+
             // US Vest Verification — confirm each past vest event
             const usVestConfirmed = config.usVestConfirmed || {};
             const pastEvents = events.filter(e => e.date < now2);
@@ -5135,7 +5211,6 @@
             const soldDataWH = config.sharesSoldForTax || {};
             const withheldDataWH = config.usTaxWithheldPerVest || {};
             const histPricesWH = config.rsuHistoricalPrices || {};
-            const eurRateWH = config.rsuEurRate || config.eurToUsdRate || 1.1706;
             const now3 = new Date();
             const pastEventsWH = events.filter(e => e.date < now3);
             const withHoldingRows = pastEventsWH.map(e => {
@@ -5143,14 +5218,15 @@
                 const dateDk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
                 const soldShares = parseFloat(soldDataWH[dk]) || 0;
                 const vestPriceUSD = histPricesWH[dateDk] || sharePriceUSD || 0;
+                const vestEurRate = getEurRateForDate(dateDk);
                 const totalVestedUSD = e.shares * vestPriceUSD;
                 const withheldUSD = parseFloat(withheldDataWH[dk]) || (soldShares * vestPriceUSD);
                 const netUSD = totalVestedUSD - withheldUSD;
-                const totalVestedEUR = eurRateWH > 0 ? totalVestedUSD / eurRateWH : 0;
-                const withheldEUR = eurRateWH > 0 ? withheldUSD / eurRateWH : 0;
-                const netEUR = eurRateWH > 0 ? netUSD / eurRateWH : 0;
+                const totalVestedEUR = vestEurRate > 0 ? totalVestedUSD / vestEurRate : 0;
+                const withheldEUR = vestEurRate > 0 ? withheldUSD / vestEurRate : 0;
+                const netEUR = vestEurRate > 0 ? netUSD / vestEurRate : 0;
                 const withheldPct = e.shares > 0 && soldShares > 0 ? (soldShares / e.shares * 100) : 0;
-                return { e, dk, dateDk, soldShares, vestPriceUSD, totalVestedUSD, withheldUSD, netUSD, totalVestedEUR, withheldEUR, netEUR, withheldPct };
+                return { e, dk, dateDk, vestEurRate, soldShares, vestPriceUSD, totalVestedUSD, withheldUSD, netUSD, totalVestedEUR, withheldEUR, netEUR, withheldPct };
             }).filter(r => r.vestPriceUSD > 0);
 
             if (withHoldingRows.length > 0) {
@@ -5170,7 +5246,7 @@
                     </summary>
                     <div style="padding: 8px; max-height: 350px; overflow-y: auto;">
                         <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">
-                            Values at vest-day price. EUR = USD ÷ ${eurRateWH.toFixed(4)}. Withheld = sell-to-cover shares × vest price. Net = gross − withheld.
+                            Values at vest-day price. EUR uses per-date rate from Historical EUR/USD Rates (falls back to global rate if not set). Withheld = sell-to-cover × vest price. Net = gross − withheld.
                         </div>
                         <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
                             <thead>
@@ -5178,6 +5254,7 @@
                                     <th style="padding: 3px 5px; text-align:left;" rowspan="2">Date</th>
                                     <th style="padding: 3px 5px; text-align:left;" rowspan="2">Grant</th>
                                     <th style="padding: 3px 5px; text-align:right;" rowspan="2">Price</th>
+                                    <th style="padding: 3px 5px; text-align:right;" rowspan="2" title="EUR/USD rate on vest date (* = fallback to global rate)">€/$ rate</th>
                                     <th style="padding: 3px 5px; text-align:right;" rowspan="2">Shares</th>
                                     <th style="padding: 3px 5px; text-align:right;" rowspan="2">Withheld</th>
                                     <th style="padding: 3px 5px; text-align:center; border-left: 2px solid #ccc;" colspan="3">USD (at vest)</th>
@@ -5205,14 +5282,15 @@
                                     const group = byDate[dateDk3];
                                     const multiGrant = group.length > 1;
                                     for (const r of group) {
-                                        const { e, soldShares, vestPriceUSD, totalVestedUSD, withheldUSD, netUSD, totalVestedEUR, withheldEUR, netEUR, withheldPct } = r;
+                                        const { e, vestEurRate, soldShares, vestPriceUSD, totalVestedUSD, withheldUSD, netUSD, totalVestedEUR, withheldEUR, netEUR, withheldPct } = r;
                                         const d3 = e.date;
                                         const dateStr3 = `${months3[d3.getMonth() + 1]} ${d3.getDate()}, ${d3.getFullYear()}`;
-                                        const noWithheld = soldShares === 0 && !withheldDataWH[r.dk];
+                                        const hasPerDateRate = !!(config.historicalEurRates || {})[r.dateDk];
                                         rowsHtml += `<tr style="border-bottom: 1px solid #f0f0f0;">
-                                            <td style="padding: 3px 5px; color: var(--text-muted); font-size:10px;">${multiGrant ? dateStr3 : dateStr3}</td>
+                                            <td style="padding: 3px 5px; color: var(--text-muted); font-size:10px;">${dateStr3}</td>
                                             <td style="padding: 3px 5px;">${e.grantName}</td>
                                             <td style="padding: 3px 5px; text-align:right; font-size:10px;">$${vestPriceUSD.toFixed(2)}</td>
+                                            <td style="padding: 3px 5px; text-align:right; font-size:10px; color:${hasPerDateRate ? '#2e7d32' : '#999'};" title="${hasPerDateRate ? 'Per-date rate' : 'Fallback: global rate'}">${vestEurRate.toFixed(4)}${hasPerDateRate ? '' : '*'}</td>
                                             <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
                                             <td style="padding: 3px 5px; text-align:right; color: #5d4037;">${soldShares > 0 ? soldShares.toFixed(0) + ' (' + withheldPct.toFixed(0) + '%)' : '—'}</td>
                                             <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #eee;">${fmtUSD(totalVestedUSD)}</td>
@@ -5237,6 +5315,7 @@
                                             <td style="padding: 3px 5px; font-size:10px; color: #2e7d32;">↳ date total</td>
                                             <td style="padding: 3px 5px;"></td>
                                             <td style="padding: 3px 5px;"></td>
+                                            <td style="padding: 3px 5px;"></td>
                                             <td style="padding: 3px 5px; text-align:right;">${dtShares.toFixed(0)}</td>
                                             <td style="padding: 3px 5px; text-align:right; color: #5d4037;">${dtSold > 0 ? dtSold.toFixed(0) + ' (' + dtWithheldPct.toFixed(0) + '%)' : '—'}</td>
                                             <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #eee;">${fmtUSD(dtGrossUSD)}</td>
@@ -5251,7 +5330,7 @@
                                 return rowsHtml;
                             })()}
                             <tr style="font-weight: 600; border-top: 2px solid #333; background: #f1f8e9;">
-                                <td colspan="4" style="padding: 3px 5px; text-align:right;">Total</td>
+                                <td colspan="5" style="padding: 3px 5px; text-align:right;">Total</td>
                                 <td style="padding: 3px 5px; text-align:right; color: #5d4037;">${totalWithheldShares > 0 ? totalWithheldShares.toFixed(0) + ' shares' : '—'}</td>
                                 <td style="padding: 3px 5px; text-align:right; border-left: 2px solid #eee;">${fmtUSD(totalGrossUSD)}</td>
                                 <td style="padding: 3px 5px; text-align:right; color: #b71c1c;">${totalWithheldUSD2 > 0 ? fmtUSD(totalWithheldUSD2) : '—'}</td>
@@ -5790,6 +5869,75 @@
                 if (r.ok) { const d = await r.json(); if (d.rates?.USD) return d.rates.USD; }
             } catch (e) {}
             return null; // caller should prompt manual entry
+        }
+
+        // Fetch EUR/USD rate for a specific historical date via frankfurter.app
+        // Returns { rate, date } where date is the actual trading day used (may differ from requested for weekends)
+        async function fetchHistoricalEurRate(dateStr) {
+            try {
+                const r = await fetch(`https://api.frankfurter.app/${dateStr}?from=EUR&to=USD`);
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.rates?.USD) return { rate: d.rates.USD, date: d.date };
+                }
+            } catch(e) {}
+            return null;
+        }
+
+        function updateHistoricalEurRate(dateStr, value) {
+            if (!config.historicalEurRates) config.historicalEurRates = {};
+            const rate = parseFloat(value);
+            if (rate > 0) { config.historicalEurRates[dateStr] = rate; }
+            else { delete config.historicalEurRates[dateStr]; }
+            autoSaveConfig();
+            renderVestPreview();
+            if (parsedPayslips.length > 0) displayResults();
+        }
+
+        // Collect all dates that need a EUR/USD rate: vest dates + payslip month-end dates
+        function getNeededEurRateDates() {
+            const needed = new Set();
+            const grants = config.rsuGrants || [];
+            const transferDate = config.rsuTransferDate;
+            if (grants.length && transferDate) {
+                const now = new Date();
+                for (const e of computeVestEvents(grants, transferDate).filter(ev => ev.date < now)) {
+                    const d = e.date;
+                    needed.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+                }
+            }
+            for (const p of parsedPayslips) {
+                const lastDay = new Date(p.year, p.month, 0);
+                needed.add(`${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`);
+            }
+            return [...needed].sort();
+        }
+
+        async function fetchAllMissingEurRates(statusCallback) {
+            const needed = getNeededEurRateDates();
+            const hist = config.historicalEurRates || {};
+            const missing = needed.filter(d => !hist[d]);
+            if (missing.length === 0) { if (statusCallback) statusCallback(0, 0); return; }
+            if (!config.historicalEurRates) config.historicalEurRates = {};
+            let fetched = 0;
+            for (const dateStr of missing) {
+                if (statusCallback) statusCallback(fetched, missing.length);
+                const result = await fetchHistoricalEurRate(dateStr);
+                if (result) {
+                    config.historicalEurRates[result.date] = result.rate;
+                    if (result.date !== dateStr) config.historicalEurRates[dateStr] = result.rate;
+                    fetched++;
+                }
+            }
+            autoSaveConfig();
+            renderVestPreview();
+            if (parsedPayslips.length > 0) displayResults();
+            if (statusCallback) statusCallback(fetched, missing.length);
+        }
+
+        // Look up stored EUR/USD rate for a date, falling back to the global config rate
+        function getEurRateForDate(dateStr) {
+            return (config.historicalEurRates || {})[dateStr] || config.rsuEurRate || config.eurToUsdRate || 1.1706;
         }
 
         // Fetch historical close prices for past vest dates
