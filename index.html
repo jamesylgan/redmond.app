@@ -782,6 +782,20 @@
             <div id="saveSlotsList">
                 <p style="color: var(--text-muted);">No saved slots yet.</p>
             </div>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--border);">
+                <h3 style="font-size: 16px; margin-bottom: 8px;">Full Backup</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                    Export everything — config, saved slots, and on-call data — as a single file. Payslip PDFs are not included; upload them separately on the new device to re-parse.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <button onclick="exportFullBackup()">Export Full Backup</button>
+                    <label style="display: inline-block; cursor: pointer;">
+                        <input type="file" accept=".json" style="display: none;" onchange="importFullBackup(event)">
+                        <span style="background: #6c757d; color: white; padding: 10px 20px; border-radius: 6px; font-size: 14px;">Import Full Backup</span>
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -991,6 +1005,10 @@
                     <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
                         <input type="checkbox" data-category="other"> Other Benefits
                         <input type="number" data-category-amount="other" placeholder="€/month" step="0.01" style="width: 80px; margin-left: auto;">
+                    </label>
+                    <label class="comp-category" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border-radius: 4px;">
+                        <input type="checkbox" data-category="oncall"> On-Call Pay
+                        <input type="number" data-category-amount="oncall" placeholder="€/month avg" step="0.01" style="width: 80px; margin-left: auto;" title="Leave blank if using On-Call Tracker — expected amounts come from there automatically.">
                     </label>
                 </div>
 
@@ -2154,7 +2172,9 @@
                 { pattern: /Cotizaci[oó]n\s*Desempleo/i, type: 'deduction', nameEn: 'Unemployment Insurance', nameEs: 'Cotización Desempleo' },
                 { pattern: /Tributaci[oó]n.*IRPF|IRPF.*Tributaci[oó]n|\bIRPF\b/i, type: 'deduction', nameEn: 'Income Tax (IRPF)', nameEs: 'Tributación IRPF' },
                 { pattern: /Imp\.?\s*Ingr\.?\s*Cta\.?\s*Repercutidos/i, type: 'deduction', nameEn: 'Passed-on Income Tax', nameEs: 'Imp. Ingr. Cta. Repercutidos' },
-                { pattern: /\bOn-?Call\b/i, type: 'earning', nameEn: 'On-Call Compensation', nameEs: 'On-Call' }
+                { pattern: /\bOn-?Call\b/i, type: 'earning', nameEn: 'On-Call Compensation', nameEs: 'On-Call' },
+                { pattern: /\bESPP\b/i, type: 'deduction', nameEn: 'ESPP', nameEs: 'ESPP' },
+                { pattern: /Ajuste\s*L[ií]quido/i, type: 'deduction', nameEn: 'Liquidity Adjustment', nameEs: 'Ajuste Líquido' }
             ];
 
             // Process each row to find concepts and amounts
@@ -2287,8 +2307,8 @@
                     }
                 }
 
-                // Líquido a Percibir
-                if (rowText.includes('Líquido') || rowText.includes('Liquido')) {
+                // Líquido a Percibir (check for "Percibir" to avoid false match on "Ajuste Liquido" rows)
+                if (rowText.includes('Percibir')) {
                     const numbers = sortedItems.filter(item => /^\d+(?:\.\d{3})*,\d{2}$/.test(item.str));
                     if (numbers.length > 0) {
                         payslip.totals.netPay = parseSpanishNumber(numbers[numbers.length - 1].str);
@@ -2316,6 +2336,7 @@
             const knownRowPattern = (text) => {
                 if (conceptDefs.some(def => def.pattern.test(text))) return true;
                 if (text.match(/Líquido|Liquido|BASE\s*C\.C\.|BASE\s*I\.R\.P\.F\./i)) return true;
+                if (text.match(/\bESPP\b|Ajuste\s*L[ií]quido/i)) return true;
                 if (text.match(/CUANTIA|PRECIO|CONCEPTO|DEVENGOS|DEDUCCIONES/i)) return true;
                 if (text.match(/REM\.\s*TOTAL|T\.\s*DEVENGADO|T\.\s*A\s*DEDUCIR|P\.P\.\s*EXTRAS/i)) return true;
                 if (text.match(/EMPRESA|DOMICILIO|TRABAJADOR|AFILIACI|TARIFA|PERIODO|TOT\.\s*DÍAS/i)) return true;
@@ -2387,12 +2408,30 @@
                 }
             }
 
+            // ESP Pay Group format: "Líquido a Percibir" label and amount are on separate rows
+            if (payslip.totals.netPay === 0) {
+                for (let i = 0; i < rows.length - 1; i++) {
+                    const rt = [...rows[i]].sort((a, b) => a.x - b.x).map(item => item.str).join(' ');
+                    if (rt.includes('Percibir')) {
+                        for (let j = i + 1; j <= Math.min(i + 3, rows.length - 1); j++) {
+                            const nums = rows[j].filter(item => /^\d+(?:\.\d{3})*,\d{2}$/.test(item.str));
+                            if (nums.length > 0) {
+                                const sorted = [...nums].sort((a, b) => a.x - b.x);
+                                payslip.totals.netPay = parseSpanishNumber(sorted[sorted.length - 1].str);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
             // Calculate totals if not found
             if (payslip.totals.grossTotal === 0) {
                 payslip.totals.grossTotal = payslip.earnings.reduce((sum, e) => sum + e.amount, 0);
             }
             if (payslip.totals.deductionsTotal === 0) {
-                payslip.totals.deductionsTotal = payslip.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                payslip.totals.deductionsTotal = payslip.deductions.reduce((sum, d) => sum + d.amount, 0);
             }
             if (payslip.totals.netPay === 0) {
                 payslip.totals.netPay = payslip.totals.grossTotal - payslip.totals.deductionsTotal;
@@ -2523,10 +2562,12 @@
             }
 
             // Calculate expected additional compensation from config
+            // Skip 'oncall' category if On-Call Tracker is enabled — tracker provides expected amounts via totalOncallComp
             let expectedMonthlyAdditional = 0;
             const expectedAdditionalBreakdown = [];
             if (config.compCategories) {
                 for (const [cat, settings] of Object.entries(config.compCategories)) {
+                    if (cat === 'oncall' && config.includeOncallComp) continue;
                     if (settings.enabled && settings.expectedMonthly > 0) {
                         expectedMonthlyAdditional += settings.expectedMonthly;
                         expectedAdditionalBreakdown.push({ category: cat, monthly: settings.expectedMonthly });
@@ -2703,7 +2744,7 @@
                                         <thead><tr style="color:var(--text-muted);"><th style="text-align:left; padding:2px 4px;">${currentLang === 'es' ? 'Categoría' : 'Category'}</th><th style="text-align:right; padding:2px 4px;">${currentLang === 'es' ? 'Esperado/mo' : 'Expected/mo'}</th><th style="text-align:right; padding:2px 4px;">${currentLang === 'es' ? 'Real (${parsedMonthCount}mo)' : 'Actual (${parsedMonthCount}mo)'}</th><th style="text-align:right; padding:2px 4px;">${currentLang === 'es' ? 'Esperado (${parsedMonthCount}mo)' : 'Expected (${parsedMonthCount}mo)'}</th><th style="text-align:right; padding:2px 4px;">Diff</th></tr></thead>
                                         <tbody>
                                         ${(() => {
-                                            const categoryNames = { wallet: 'Wallet', awardco: 'Awardco', exemptInsurance: 'Exempt Ins.', taxableInsurance: 'Taxable Ins.', rsu: 'RSU', espp: 'ESPP', bonus: 'Bonus', other: 'Other' };
+                                            const categoryNames = { wallet: 'Wallet', awardco: 'Awardco', exemptInsurance: 'Exempt Ins.', taxableInsurance: 'Taxable Ins.', rsu: 'RSU', espp: 'ESPP', bonus: 'Bonus', other: 'Other', oncall: 'On-Call' };
                                             // Build per-category: expected from config, actual from parsed
                                             const cats = new Set([
                                                 ...Object.keys(config.compCategories || {}).filter(c => config.compCategories[c].enabled),
@@ -3058,9 +3099,9 @@
                 const periodLabel = `${monthNames[ps.month]} ${ps.year}`;
                 const periodKey = `${ps.month}/${ps.year}`;
 
-                // Calculate net from parsed items
+                // Calculate net from parsed items (use d.amount directly — negative adjustments like Ajuste Líquido reduce the total)
                 const parsedEarnings = ps.earnings.reduce((sum, e) => sum + e.amount, 0);
-                const parsedDeductions = ps.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                const parsedDeductions = ps.deductions.reduce((sum, d) => sum + d.amount, 0);
                 const calculatedNet = parsedEarnings - parsedDeductions;
 
                 // Get parsed Líquido from payslip (may differ if we missed items)
@@ -3203,9 +3244,9 @@
                 const calcOverrideKey = `calc_${periodKey}`;
                 const bankOverrideKey = `bank_${periodKey}`;
 
-                // Check calculated vs payslip net
+                // Check calculated vs payslip net (use d.amount directly — negative adjustments like Ajuste Líquido reduce the total)
                 const parsedEarnings = ps.earnings.reduce((sum, e) => sum + e.amount, 0);
-                const parsedDeductions = ps.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                const parsedDeductions = ps.deductions.reduce((sum, d) => sum + d.amount, 0);
                 const calculatedNet = parsedEarnings - parsedDeductions;
                 const netDiff = calculatedNet - ps.totals.netPay;
                 const netDiffAbs = Math.abs(netDiff);
@@ -3546,7 +3587,7 @@
                                     </tr></thead>
                                     <tbody>`;
 
-                const parsedDeductionsSum = ps.deductions.reduce((sum, d) => sum + Math.abs(d.amount), 0);
+                const parsedDeductionsSum = ps.deductions.reduce((sum, d) => sum + d.amount, 0);
                 const tDeducir = ps.totals.tDeducir || 0;
                 const deductionsValid = tDeducir > 0 && Math.abs(parsedDeductionsSum - tDeducir) < 1;
                 const deductionsDiff = tDeducir > 0 ? parsedDeductionsSum - tDeducir : 0;
@@ -6616,6 +6657,54 @@
             event.target.value = '';
         }
 
+        function exportFullBackup() {
+            autoSaveConfig();
+            const backup = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                payrollSlots: StorageVersionManager.exportData(payrollSaveSlotsSchema),
+                oncall: OC.getRawExportData()
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `payroll-full-backup-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importFullBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const backup = JSON.parse(e.target.result);
+                    if (!backup.payrollSlots || !backup.oncall) {
+                        throw new Error('Invalid backup file — missing payrollSlots or oncall section');
+                    }
+                    StorageVersionManager.importData(payrollSaveSlotsSchema, backup.payrollSlots);
+                    saveSlots = StorageVersionManager.load(payrollSaveSlotsSchema);
+                    const autosave = saveSlots.find(s => s.id === 'autosave');
+                    if (autosave) {
+                        config = { ...autosave.config };
+                        parsedPayslips = autosave.payslips.map(p => ({ ...p }));
+                        applyConfigToUI();
+                    }
+                    renderSaveSlots();
+                    updateCurrentSessionInfo();
+                    if (parsedPayslips.length > 0) displayResults();
+                    OC.restoreFromExport(backup.oncall);
+                    alert('Full backup imported! Upload your payslip PDFs to re-parse them.');
+                } catch (err) {
+                    alert('Import failed: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
         function clearCurrentSession() {
             if (parsedPayslips.length > 0) {
                 const confirmMsg = currentLang === 'es'
@@ -7673,6 +7762,15 @@
         StorageVersionManager.remove(ocSchema); data = StorageVersionManager.load(ocSchema);
         save(); closeSettings(); render(); toast('Cleared');
     }
+    function getRawExportData() {
+        return StorageVersionManager.exportData(ocSchema);
+    }
+    function restoreFromExport(exportedData) {
+        StorageVersionManager.importData(ocSchema, exportedData);
+        data = StorageVersionManager.load(ocSchema);
+        if (data.settings.darkMode) document.getElementById('oncallPage').setAttribute('data-theme', 'dark');
+        if (initialized) render();
+    }
 
     // ── Close overlays on Escape ──
     document.addEventListener('keydown', e => {
@@ -7736,6 +7834,7 @@
         openSettings, closeSettings, updateRatePreview, saveSettings,
         addCustomHoliday, removeCustomHoliday, addAwayDay, removeAwayDay, importCompanyHolidays,
         toggleDarkMode, exportOcData, importDataFile, clearAllData,
+        getRawExportData, restoreFromExport,
         summaryNav, yearlyNav, ensureInit, render,
         getMonthlyCompensation
     };
