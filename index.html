@@ -4924,6 +4924,8 @@
         function renderVestPreview() {
             const container = document.getElementById('rsuVestPreview');
             if (!container) return;
+            // Preserve which <details> panels were open before re-rendering
+            const openDetails = new Set([...container.querySelectorAll('details[id][open]')].map(d => d.id));
             const grants = config.rsuGrants || [];
             const transferDate = config.rsuTransferDate;
             if (grants.length === 0 || !transferDate) { container.innerHTML = ''; return; }
@@ -5345,6 +5347,8 @@
             }
 
             container.innerHTML = html;
+            // Restore previously-open <details> panels
+            openDetails.forEach(id => { const el = document.getElementById(id); if (el) el.open = true; });
         }
 
         function updateSharesSoldForTax(dateKey, value) {
@@ -5871,14 +5875,22 @@
         async function fetchHistoricalEurRate(dateStr) {
             const daysSince = (Date.now() - new Date(dateStr).getTime()) / 86400000;
 
-            // Today/very recent: skip historical APIs and use current rate
+            // Today/very recent: CDN won't have today's data yet; go straight to current rate
             if (daysSince <= 1) {
                 const rate = await fetchEurUsdRate();
                 if (rate) return { rate, date: dateStr };
             }
 
-            // vatcomply.com: free ECB-based historical rates, CORS *, no API key
-            // Retry once on 429 (rate limit) with a backoff
+            // jsDelivr CDN (fawazahmed0): CORS *, no rate limits, has all historical dates
+            try {
+                const r = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/eur.min.json`);
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.eur?.usd) return { rate: d.eur.usd, date: dateStr };
+                }
+            } catch(e) {}
+
+            // vatcomply.com: ECB-based fallback, retry once on 429
             for (let attempt = 0; attempt < 2; attempt++) {
                 if (attempt > 0) await new Promise(res => setTimeout(res, 1500));
                 try {
@@ -5905,9 +5917,7 @@
             if (rate > 0) { config.historicalEurRates[dateStr] = rate; }
             else { delete config.historicalEurRates[dateStr]; }
             autoSaveConfig();
-            const eurPanelWasOpen = document.getElementById('eurRateHistPanel')?.open;
             renderVestPreview();
-            if (eurPanelWasOpen) { const p = document.getElementById('eurRateHistPanel'); if (p) p.open = true; }
             if (parsedPayslips.length > 0) displayResults();
         }
 
@@ -5962,13 +5972,7 @@
             }
 
             autoSaveConfig();
-            // Re-render but preserve open state of the EUR rates panel
-            const eurPanelWasOpen = document.getElementById('eurRateHistPanel')?.open;
             renderVestPreview();
-            if (eurPanelWasOpen) {
-                const p = document.getElementById('eurRateHistPanel');
-                if (p) p.open = true;
-            }
             if (parsedPayslips.length > 0) displayResults();
             if (statusCallback) statusCallback(fetched, missing.length);
         }
