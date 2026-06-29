@@ -5875,14 +5875,29 @@
         // Returns { rate, date } where date is the actual trading day used.
         // Uses CDN-hosted API as primary (works from file:// origin), frankfurter as fallback.
         async function fetchHistoricalEurRate(dateStr) {
-            // Primary: jsdelivr CDN-hosted currency API — CORS-permissive, works from file://
+            const cdnBase = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api';
+            // Primary: jsdelivr CDN with specific date — CORS-permissive, works from file://
             try {
-                const r = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/eur.json`);
+                const r = await fetch(`${cdnBase}@${dateStr}/v1/currencies/eur.json`);
                 if (r.ok) {
                     const d = await r.json();
                     if (d.eur?.usd) return { rate: d.eur.usd, date: d.date || dateStr };
                 }
             } catch(e) {}
+            // CDN publishes once per day; for recent dates not yet published, use @latest
+            const daysSince = (Date.now() - new Date(dateStr).getTime()) / 86400000;
+            if (daysSince <= 5) {
+                try {
+                    const r = await fetch(`${cdnBase}@latest/v1/currencies/eur.json`);
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d.eur?.usd) return { rate: d.eur.usd, date: d.date || dateStr };
+                    }
+                } catch(e) {}
+                // Also try the existing current-rate fetcher as final option
+                const rate = await fetchEurUsdRate();
+                if (rate) return { rate, date: dateStr };
+            }
             // Fallback: frankfurter.app (works from http/https origins, may fail from file://)
             try {
                 const r = await fetch(`https://api.frankfurter.app/${dateStr}?from=EUR&to=USD`);
