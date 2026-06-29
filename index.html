@@ -4945,6 +4945,7 @@
             const fmtVal = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
 
             const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const fmtUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
             const summaryPrice = priceEUR > 0 ? ` — ${fmtVal(totalValue)} at ${ticker} $${sharePriceUSD}` : '';
             let html = `<details id="vestSchedulePreview" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
                 <summary style="cursor: pointer; padding: 8px 10px; background: #f8f9fa; font-size: 12px; font-weight: 600;">
@@ -4953,13 +4954,13 @@
                 <div style="padding: 8px; max-height: 400px; overflow-y: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
                         <thead><tr style="background: #f8f9fa;">
-                            <th style="padding: 3px 5px; text-align:left;">Date</th>
-                            <th style="padding: 3px 5px; text-align:left;">Grant</th>
-                            <th style="padding: 3px 5px; text-align:right;">Shares</th>
-                            ${priceEUR > 0 ? '<th style="padding: 3px 5px; text-align:right;">Value (EUR)</th>' : ''}
-                            <th style="padding: 3px 5px; text-align:right;">US %</th>
-                            <th style="padding: 3px 5px; text-align:right;">ES %</th>
-                            ${priceEUR > 0 ? '<th style="padding: 3px 5px; text-align:right;">US (EUR)</th><th style="padding: 3px 5px; text-align:right;">ES (EUR)</th>' : ''}
+                            <th style="padding: 3px 3px; text-align:left; white-space:nowrap;">Date</th>
+                            <th style="padding: 3px 3px; text-align:left; max-width:60px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Grant</th>
+                            <th style="padding: 3px 3px; text-align:right;">Shs</th>
+                            ${priceEUR > 0 ? '<th style="padding: 3px 3px; text-align:right;">Val €</th><th style="padding: 3px 3px; text-align:right;">Val $</th>' : ''}
+                            <th style="padding: 3px 3px; text-align:right;">US%</th>
+                            <th style="padding: 3px 3px; text-align:right;">ES%</th>
+                            ${priceEUR > 0 ? '<th style="padding: 3px 3px; text-align:right; color:#1565c0;">US €</th><th style="padding: 3px 3px; text-align:right; color:#1565c0;">US $</th><th style="padding: 3px 3px; text-align:right; color:#2e7d32;">ES €</th><th style="padding: 3px 3px; text-align:right; color:#2e7d32;">ES $</th>' : ''}
                         </tr></thead><tbody>`;
 
             // Group events by date for per-date subtotals
@@ -4975,44 +4976,50 @@
                 const multiGrant = group.length > 1;
                 for (const e of group) {
                     const d = e.date;
-                    const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, ${d.getFullYear()}`;
+                    const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, '${String(d.getFullYear()).slice(2)}`;
                     const val = e.shares * priceEUR;
+                    const valUSD = e.shares * sharePriceUSD;
                     const usVal = val * e.usPct;
                     const esVal = val * e.spainPct;
+                    const usValUSD = valUSD * e.usPct;
+                    const esValUSD = valUSD * e.spainPct;
                     html += `<tr style="border-bottom: 1px solid #f0f0f0;">
-                        <td style="padding: 3px 5px;">${dateStr}</td>
-                        <td style="padding: 3px 5px;">${e.grantName}</td>
-                        <td style="padding: 3px 5px; text-align:right;">${e.shares.toFixed(0)}</td>
-                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(val)}</td>` : ''}
-                        <td style="padding: 3px 5px; text-align:right; color: #1565c0;">${(e.usPct * 100).toFixed(1)}%</td>
-                        <td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${(e.spainPct * 100).toFixed(1)}%</td>
-                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(usVal)}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(esVal)}</td>` : ''}
+                        <td style="padding: 3px 3px; white-space:nowrap;">${dateStr}</td>
+                        <td style="padding: 3px 3px; max-width:60px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${e.grantName}</td>
+                        <td style="padding: 3px 3px; text-align:right;">${e.shares.toFixed(0)}</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right;">${fmtVal(val)}</td><td style="padding: 3px 3px; text-align:right;">${fmtUSD(valUSD)}</td>` : ''}
+                        <td style="padding: 3px 3px; text-align:right; color: #1565c0;">${(e.usPct * 100).toFixed(1)}%</td>
+                        <td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${(e.spainPct * 100).toFixed(1)}%</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtVal(usVal)}</td><td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtUSD(usValUSD)}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtVal(esVal)}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtUSD(esValUSD)}</td>` : ''}
                     </tr>`;
                 }
                 if (multiGrant) {
                     const dtShares = group.reduce((s, e) => s + e.shares, 0);
                     const dtVal = dtShares * priceEUR;
+                    const dtValUSD = dtShares * sharePriceUSD;
                     const dtUsVal = group.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0);
                     const dtEsVal = group.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0);
+                    const dtUsValUSD = group.reduce((s, e) => s + e.shares * sharePriceUSD * e.usPct, 0);
+                    const dtEsValUSD = group.reduce((s, e) => s + e.shares * sharePriceUSD * e.spainPct, 0);
                     const dtUsPct = dtShares > 0 ? group.reduce((s, e) => s + e.shares * e.usPct, 0) / dtShares : 0;
                     const dtEsPct = dtShares > 0 ? group.reduce((s, e) => s + e.shares * e.spainPct, 0) / dtShares : 0;
                     html += `<tr style="font-weight: 600; border-top: 1px solid #bbb; border-bottom: 2px solid #bbb; background: #f0f0f0;">
-                        <td style="padding: 3px 5px; font-size:10px; color: #555;">↳ date total</td>
-                        <td style="padding: 3px 5px;"></td>
-                        <td style="padding: 3px 5px; text-align:right;">${dtShares.toFixed(0)}</td>
-                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(dtVal)}</td>` : ''}
-                        <td style="padding: 3px 5px; text-align:right; color: #1565c0;">${(dtUsPct * 100).toFixed(1)}%</td>
-                        <td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${(dtEsPct * 100).toFixed(1)}%</td>
-                        ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(dtUsVal)}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(dtEsVal)}</td>` : ''}
+                        <td style="padding: 3px 3px; font-size:10px; color: #555;">↳ date total</td>
+                        <td style="padding: 3px 3px;"></td>
+                        <td style="padding: 3px 3px; text-align:right;">${dtShares.toFixed(0)}</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right;">${fmtVal(dtVal)}</td><td style="padding: 3px 3px; text-align:right;">${fmtUSD(dtValUSD)}</td>` : ''}
+                        <td style="padding: 3px 3px; text-align:right; color: #1565c0;">${(dtUsPct * 100).toFixed(1)}%</td>
+                        <td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${(dtEsPct * 100).toFixed(1)}%</td>
+                        ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtVal(dtUsVal)}</td><td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtUSD(dtUsValUSD)}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtVal(dtEsVal)}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtUSD(dtEsValUSD)}</td>` : ''}
                     </tr>`;
                 }
             }
             html += `<tr style="font-weight: 600; border-top: 2px solid #333;">
-                <td colspan="2" style="padding: 3px 5px;">Total</td>
-                <td style="padding: 3px 5px; text-align:right;">${totalShares.toFixed(0)}</td>
-                ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right;">${fmtVal(totalValue)}</td>` : ''}
+                <td colspan="2" style="padding: 3px 3px;">Total</td>
+                <td style="padding: 3px 3px; text-align:right;">${totalShares.toFixed(0)}</td>
+                ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right;">${fmtVal(totalValue)}</td><td style="padding: 3px 3px; text-align:right;">${fmtUSD(totalShares * sharePriceUSD)}</td>` : ''}
                 <td colspan="2"></td>
-                ${priceEUR > 0 ? `<td style="padding: 3px 5px; text-align:right; color: #1565c0;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0))}</td><td style="padding: 3px 5px; text-align:right; color: #2e7d32;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0))}</td>` : ''}
+                ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtUSD(events.reduce((s, e) => s + e.shares * sharePriceUSD * e.usPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtUSD(events.reduce((s, e) => s + e.shares * sharePriceUSD * e.spainPct, 0))}</td>` : ''}
             </tr>`;
             html += '</tbody></table></div></details>';
 
@@ -5916,6 +5923,7 @@
             const rate = parseFloat(value);
             if (rate > 0) { config.historicalEurRates[dateStr] = rate; }
             else { delete config.historicalEurRates[dateStr]; }
+            localStorage.setItem('payroll_historicalEurRates', JSON.stringify(config.historicalEurRates));
             autoSaveConfig();
             renderVestPreview();
             if (parsedPayslips.length > 0) displayResults();
@@ -5971,6 +5979,7 @@
                 if (rate) { config.historicalEurRates[dateStr] = rate; fetched++; }
             }
 
+            localStorage.setItem('payroll_historicalEurRates', JSON.stringify(config.historicalEurRates || {}));
             autoSaveConfig();
             renderVestPreview();
             if (parsedPayslips.length > 0) displayResults();
@@ -6771,6 +6780,11 @@
                 parsedPayslips = autosave.payslips.map(p => ({ ...p }));
                 applyConfigToUI();
             }
+            // Restore historicalEurRates from its own key (survives autoSaveConfig rebuilds)
+            try {
+                const stored = JSON.parse(localStorage.getItem('payroll_historicalEurRates') || '{}');
+                config.historicalEurRates = { ...stored, ...(config.historicalEurRates || {}) };
+            } catch(e) {}
 
             renderSaveSlots();
             updateCurrentSessionInfo();
