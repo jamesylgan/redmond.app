@@ -4809,8 +4809,10 @@
                 // Compute pro-rata for remaining vests
                 for (const vest of vestDates) {
                     if (vest.shares <= 0) continue;
-                    const totalWd = countWeekdays(grantDate, vest.date);
-                    const usEnd = vest.date <= transfer ? vest.date : transfer;
+                    // Include vest date itself as a Spain workday (equity team confirmed inclusive counting)
+                    const vestNext = new Date(vest.date); vestNext.setDate(vestNext.getDate() + 1);
+                    const totalWd = countWeekdays(grantDate, vestNext);
+                    const usEnd = vest.date <= transfer ? vestNext : transfer;
                     const usWd = usEnd > grantDate ? countWeekdays(grantDate, usEnd) : 0;
                     const esWd = totalWd - usWd;
 
@@ -4940,13 +4942,20 @@
             const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
             const ticker = config.rsuTicker || 'AFRM';
             const priceEUR = sharePriceUSD > 0 ? sharePriceUSD / eurRate : 0;
+            const histPrices = config.rsuHistoricalPrices || {};
+            const getEventPriceUSD = (e) => {
+                const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                return histPrices[dk] || sharePriceUSD;
+            };
+            const getEventPriceEUR = (e) => { const p = getEventPriceUSD(e); return p > 0 ? p / eurRate : 0; };
             const totalShares = events.reduce((s, e) => s + e.shares, 0);
-            const totalValue = priceEUR > 0 ? totalShares * priceEUR : 0;
+            const totalValue = events.reduce((s, e) => s + e.shares * getEventPriceEUR(e), 0);
+            const totalValueUSD = events.reduce((s, e) => s + e.shares * getEventPriceUSD(e), 0);
             const fmtVal = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
 
             const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const fmtUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
-            const summaryPrice = priceEUR > 0 ? ` — ${fmtVal(totalValue)} at ${ticker} $${sharePriceUSD}` : '';
+            const summaryPrice = totalValue > 0 ? ` — ${fmtVal(totalValue)} at ${ticker} $${sharePriceUSD}` : '';
             let html = `<details id="vestSchedulePreview" style="border: 1px solid #ddd; border-radius: 6px; overflow: hidden;">
                 <summary style="cursor: pointer; padding: 8px 10px; background: #f8f9fa; font-size: 12px; font-weight: 600;">
                     Vest Schedule Preview <span style="font-weight: normal; color: var(--text-muted);">(${events.length} events, ${totalShares.toFixed(0)} shares${summaryPrice})</span>
@@ -4977,8 +4986,10 @@
                 for (const e of group) {
                     const d = e.date;
                     const dateStr = `${months[d.getMonth() + 1]} ${d.getDate()}, '${String(d.getFullYear()).slice(2)}`;
-                    const val = e.shares * priceEUR;
-                    const valUSD = e.shares * sharePriceUSD;
+                    const eventPriceEUR = getEventPriceEUR(e);
+                    const eventPriceUSD = getEventPriceUSD(e);
+                    const val = e.shares * eventPriceEUR;
+                    const valUSD = e.shares * eventPriceUSD;
                     const usVal = val * e.usPct;
                     const esVal = val * e.spainPct;
                     const usValUSD = valUSD * e.usPct;
@@ -4995,12 +5006,12 @@
                 }
                 if (multiGrant) {
                     const dtShares = group.reduce((s, e) => s + e.shares, 0);
-                    const dtVal = dtShares * priceEUR;
-                    const dtValUSD = dtShares * sharePriceUSD;
-                    const dtUsVal = group.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0);
-                    const dtEsVal = group.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0);
-                    const dtUsValUSD = group.reduce((s, e) => s + e.shares * sharePriceUSD * e.usPct, 0);
-                    const dtEsValUSD = group.reduce((s, e) => s + e.shares * sharePriceUSD * e.spainPct, 0);
+                    const dtVal = group.reduce((s, e) => s + e.shares * getEventPriceEUR(e), 0);
+                    const dtValUSD = group.reduce((s, e) => s + e.shares * getEventPriceUSD(e), 0);
+                    const dtUsVal = group.reduce((s, e) => s + e.shares * getEventPriceEUR(e) * e.usPct, 0);
+                    const dtEsVal = group.reduce((s, e) => s + e.shares * getEventPriceEUR(e) * e.spainPct, 0);
+                    const dtUsValUSD = group.reduce((s, e) => s + e.shares * getEventPriceUSD(e) * e.usPct, 0);
+                    const dtEsValUSD = group.reduce((s, e) => s + e.shares * getEventPriceUSD(e) * e.spainPct, 0);
                     const dtUsPct = dtShares > 0 ? group.reduce((s, e) => s + e.shares * e.usPct, 0) / dtShares : 0;
                     const dtEsPct = dtShares > 0 ? group.reduce((s, e) => s + e.shares * e.spainPct, 0) / dtShares : 0;
                     html += `<tr style="font-weight: 600; border-top: 1px solid #bbb; border-bottom: 2px solid #bbb; background: #f0f0f0;">
@@ -5017,9 +5028,9 @@
             html += `<tr style="font-weight: 600; border-top: 2px solid #333;">
                 <td colspan="2" style="padding: 3px 3px;">Total</td>
                 <td style="padding: 3px 3px; text-align:right;">${totalShares.toFixed(0)}</td>
-                ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right;">${fmtVal(totalValue)}</td><td style="padding: 3px 3px; text-align:right;">${fmtUSD(totalShares * sharePriceUSD)}</td>` : ''}
+                ${totalValue > 0 ? `<td style="padding: 3px 3px; text-align:right;">${fmtVal(totalValue)}</td><td style="padding: 3px 3px; text-align:right;">${fmtUSD(totalValueUSD)}</td>` : ''}
                 <td colspan="2"></td>
-                ${priceEUR > 0 ? `<td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.usPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtUSD(events.reduce((s, e) => s + e.shares * sharePriceUSD * e.usPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtVal(events.reduce((s, e) => s + e.shares * priceEUR * e.spainPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtUSD(events.reduce((s, e) => s + e.shares * sharePriceUSD * e.spainPct, 0))}</td>` : ''}
+                ${totalValue > 0 ? `<td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtVal(events.reduce((s, e) => s + e.shares * getEventPriceEUR(e) * e.usPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #1565c0;">${fmtUSD(events.reduce((s, e) => s + e.shares * getEventPriceUSD(e) * e.usPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtVal(events.reduce((s, e) => s + e.shares * getEventPriceEUR(e) * e.spainPct, 0))}</td><td style="padding: 3px 3px; text-align:right; color: #2e7d32;">${fmtUSD(events.reduce((s, e) => s + e.shares * getEventPriceUSD(e) * e.spainPct, 0))}</td>` : ''}
             </tr>`;
             html += '</tbody></table></div></details>';
 
@@ -5039,17 +5050,24 @@
                     </summary>
                     <div style="padding: 8px; max-height: 200px; overflow-y: auto;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-                            <thead><tr style="background: #f8f9fa;"><th style="padding: 2px 5px; text-align:left;">Vest Date</th><th style="padding: 2px 5px; text-align:right;">Price (USD)</th><th style="padding: 2px 5px; text-align:left;">Source</th></tr></thead>
+                            <thead><tr style="background: #f8f9fa;"><th style="padding: 2px 5px; text-align:left;">Vest Date</th><th style="padding: 2px 5px; text-align:right;">Price (USD)</th><th style="padding: 2px 5px; text-align:center;">Verified</th></tr></thead>
                             <tbody>${allDates.map(k => {
                                 const hasVal = hist[k] != null;
-                                const source = hasVal ? '<span style="color:#28a745;">cached</span>' : '<span style="color:#dc3545;">missing</span>';
+                                const isVerified = (config.rsuHistoricalPriceVerified || {})[k] === true;
                                 return `<tr style="border-bottom:1px solid #f0f0f0;">
                                     <td style="padding: 2px 5px;">${k}</td>
                                     <td style="padding: 2px 5px; text-align:right;">
-                                        <input type="number" value="${hasVal ? hist[k].toFixed(2) : ''}" placeholder="e.g. 64" step="0.01" style="width:70px; padding:2px 4px; border:1px solid ${hasVal ? '#ddd' : '#ffc107'}; border-radius:3px; font-size:11px; text-align:right;"
+                                        <input type="number" value="${hasVal ? hist[k].toFixed(2) : ''}" placeholder="e.g. 64" step="0.01"
+                                            style="width:70px; padding:2px 4px; border:1px solid ${isVerified ? '#28a745' : hasVal ? '#ddd' : '#ffc107'}; border-radius:3px; font-size:11px; text-align:right; background:${isVerified ? '#f6fff8' : 'white'};"
+                                            ${isVerified ? 'readonly' : ''}
                                             onblur="updateHistoricalPrice('${k}', this.value)">
                                     </td>
-                                    <td style="padding: 2px 5px; font-size: 10px;">${source}</td>
+                                    <td style="padding: 2px 5px; text-align:center;">
+                                        <label title="Price verified from Schwab statement" style="cursor:pointer; display:flex; align-items:center; justify-content:center; gap:3px; font-size:10px; color:${isVerified ? '#28a745' : '#888'};">
+                                            <input type="checkbox" ${isVerified ? 'checked' : ''} onchange="updateHistoricalPriceVerified('${k}', this.checked)" style="cursor:pointer;">
+                                            <span>Schwab</span>
+                                        </label>
+                                    </td>
                                 </tr>`;
                             }).join('')}</tbody>
                         </table>
@@ -5392,10 +5410,22 @@
                 config.rsuHistoricalPrices[dateKey] = price;
             } else {
                 delete config.rsuHistoricalPrices[dateKey];
+                if (config.rsuHistoricalPriceVerified) delete config.rsuHistoricalPriceVerified[dateKey];
             }
             autoSaveConfig();
             renderVestPreview();
             if (parsedPayslips.length > 0) displayResults();
+        }
+
+        function updateHistoricalPriceVerified(dateKey, checked) {
+            if (!config.rsuHistoricalPriceVerified) config.rsuHistoricalPriceVerified = {};
+            if (checked) {
+                config.rsuHistoricalPriceVerified[dateKey] = true;
+            } else {
+                delete config.rsuHistoricalPriceVerified[dateKey];
+            }
+            autoSaveConfig();
+            renderVestPreview();
         }
 
         // ===== Income Summary Letter Generator =====
@@ -6500,6 +6530,7 @@
                 rsuEurRate: parseFloat(document.getElementById('rsuEurRate')?.value) || 0,
                 rsuGrants: config.rsuGrants || [],
                 rsuHistoricalPrices: config.rsuHistoricalPrices || {},
+                rsuHistoricalPriceVerified: config.rsuHistoricalPriceVerified || {},
                 usVestConfirmed: config.usVestConfirmed || {},
                 usW2Total: config.usW2Total || 0,
                 sharesSoldForTax: config.sharesSoldForTax || {},
