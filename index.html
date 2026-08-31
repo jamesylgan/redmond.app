@@ -3516,9 +3516,30 @@
                     const precioStr = e.precio ? formatCurrency(e.precio) : '—';
                     let calcStatus = '—';
 
+                    // Check for on-call validation against the tracker (1-month lag) --
+                    // NOT the trivial cuantia x precio check below, which is always true
+                    // for on-call since that's literally how the payslip line is computed.
+                    const isOncall = e.nameEn === 'On-Call Compensation';
+                    const expectedOncall = isOncall ? getExpectedOncall(ps) : null;
+
                     // Check for wallet validation
                     const isWallet = e.nameEn.toLowerCase().includes('wallet') || e.nameEs.toLowerCase().includes('wallet');
-                    if (isWallet && config.expectedWallet > 0) {
+                    if (isOncall && expectedOncall) {
+                        const tolerance = config.tolerance || 2;
+                        const diff = e.amount - expectedOncall.total;
+                        const percentDiff = expectedOncall.total > 0 ? Math.abs(diff / expectedOncall.total * 100) : (Math.abs(diff) < 0.01 ? 0 : 100);
+                        const isExact = Math.abs(diff) < 0.01;
+                        const isOk = percentDiff <= tolerance;
+                        const monthNamesEn = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        const tooltip = `${monthNamesEn[expectedOncall.lagMonth]} ${expectedOncall.lagYear} on-call (tracker): stipend ${formatCurrency(expectedOncall.stipend)} + response pay ${formatCurrency(expectedOncall.responsePay)} = ${formatCurrency(expectedOncall.total)}. See On-Call Comparison panel below.`;
+                        if (isExact) {
+                            calcStatus = `<span style="color:var(--success)" title="${tooltip}">✓</span>`;
+                        } else if (isOk) {
+                            calcStatus = `<span style="color:var(--warning)" title="${tooltip}">⚠ ${diff >= 0 ? '+' : ''}${formatCurrency(diff)}</span>`;
+                        } else {
+                            calcStatus = `<span style="color:var(--danger)" title="${tooltip}">⚠ ${diff >= 0 ? '+' : ''}${formatCurrency(diff)}</span>`;
+                        }
+                    } else if (isWallet && config.expectedWallet > 0) {
                         const tolerance = config.tolerance || 2;
                         const diff = e.amount - config.expectedWallet;
                         const percentDiff = Math.abs(diff / config.expectedWallet * 100);
@@ -4491,6 +4512,20 @@
             return html;
         }
 
+        // On-call pay runs a confirmed 1-month lag: a payslip for month M pays for
+        // month M-1's on-call activity (verified against real Mar/Apr, May/Jun, Jun/Jul,
+        // Jul/Aug payslip pairs -- comparing same-month numbers was the original bug).
+        // Shared by the inline "Calc" column check and the On-Call Comparison panel below
+        // so the two can never disagree.
+        function getExpectedOncall(ps) {
+            if (typeof OC === 'undefined') return null;
+            OC.ensureInit();
+            let lagMonth = ps.month - 1, lagYear = ps.year;
+            if (lagMonth < 1) { lagMonth = 12; lagYear -= 1; }
+            const comp = OC.getMonthlyCompensation(lagMonth, lagYear);
+            return { ...comp, lagMonth, lagYear };
+        }
+
         // ===== On-Call Comparison Panel (per payslip) =====
         function buildOncallComparisonPanel(ps) {
             if (typeof OC === 'undefined') return '';
@@ -4499,13 +4534,9 @@
             const oncallEarning = ps.earnings.find(e => e.nameEn === 'On-Call Compensation');
             const payslipAmount = oncallEarning ? oncallEarning.amount : 0;
 
-            // On-call pay runs a confirmed 1-month lag: a payslip for month M pays for
-            // month M-1's on-call activity (verified against real Mar/Apr, May/Jun, Jun/Jul,
-            // Jul/Aug payslip pairs -- comparing same-month numbers here was the original bug).
-            OC.ensureInit();
-            let lagMonth = ps.month - 1, lagYear = ps.year;
-            if (lagMonth < 1) { lagMonth = 12; lagYear -= 1; }
-            const trackerComp = OC.getMonthlyCompensation(lagMonth, lagYear);
+            const expected = getExpectedOncall(ps);
+            const lagMonth = expected.lagMonth, lagYear = expected.lagYear;
+            const trackerComp = expected;
             const trackerTotal = trackerComp.total;
 
             // Nothing to show if neither source has on-call
@@ -7171,8 +7202,15 @@
         loadSaveSlots();
         applyTranslations();
 
-        // Restore results if payslips were loaded from localStorage
+        // Restore results if payslips were loaded from localStorage.
+        // Deferred via setTimeout: the On-Call Tracker's `OC` object is defined in the
+        // NEXT <script> block below, so calling displayResults() (which builds the
+        // On-Call Comparison panel via buildOncallComparisonPanel -> OC.getMonthlyCompensation)
+        // synchronously here would run before OC exists, silently rendering every on-call
+        // panel empty (buildOncallComparisonPanel guards with `typeof OC === 'undefined'`).
+        // setTimeout(...,0) pushes this to run after all script blocks on the page have executed.
         if (parsedPayslips.length > 0) {
+            setTimeout(() => {
             displayResults();
             updateCurrentSessionInfo();
             // Only auto-switch to results if the user has no stored tab preference (first load or upload tab)
@@ -7180,6 +7218,7 @@
             if (!_storedTab || _storedTab === 'upload') {
                 document.querySelector('[data-tab="results"]').click();
             }
+            }, 0);
         }
 
         // Auto-save config on input changes
