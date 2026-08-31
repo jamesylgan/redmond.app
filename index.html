@@ -4499,9 +4499,13 @@
             const oncallEarning = ps.earnings.find(e => e.nameEn === 'On-Call Compensation');
             const payslipAmount = oncallEarning ? oncallEarning.amount : 0;
 
-            // Get tracker data for this month
+            // On-call pay runs a confirmed 1-month lag: a payslip for month M pays for
+            // month M-1's on-call activity (verified against real Mar/Apr, May/Jun, Jun/Jul,
+            // Jul/Aug payslip pairs -- comparing same-month numbers here was the original bug).
             OC.ensureInit();
-            const trackerComp = OC.getMonthlyCompensation(ps.month, ps.year);
+            let lagMonth = ps.month - 1, lagYear = ps.year;
+            if (lagMonth < 1) { lagMonth = 12; lagYear -= 1; }
+            const trackerComp = OC.getMonthlyCompensation(lagMonth, lagYear);
             const trackerTotal = trackerComp.total;
 
             // Nothing to show if neither source has on-call
@@ -4529,9 +4533,12 @@
             let html = `
             <details style="margin-top: 12px; border: 2px solid #6f42c1; border-radius: 8px; overflow: hidden;"${payslipAmount > 0 && trackerTotal > 0 ? ' open' : ''}>
                 <summary style="cursor: pointer; padding: 10px 12px; background: #f3e8ff; font-weight: 600; font-size: 13px;">
-                    ${es ? 'Comparación On-Call' : 'On-Call Comparison'} (${months[ps.month]} ${ps.year})
+                    ${es ? 'Comparación On-Call' : 'On-Call Comparison'} (${months[lagMonth]} ${lagYear} ${es ? 'actividad' : 'activity'})
                     <span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; margin-left:8px; background:${statusBg}; color:${statusColor};">${statusIcon} ${statusText}</span>
                 </summary>
+                <div style="padding: 6px 12px 0; font-size: 11px; color: var(--text-muted);">
+                    ${es ? `Nómina de ${months[ps.month]} ${ps.year} paga la actividad on-call de ${months[lagMonth]} ${lagYear} (desfase de 1 mes).` : `The ${months[ps.month]} ${ps.year} payslip pays for ${months[lagMonth]} ${lagYear}'s on-call activity (1-month payroll lag).`}
+                </div>
                 <div style="padding: 12px; font-size: 12px;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead><tr style="background: #f3e8ff;">
