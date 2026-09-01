@@ -12,6 +12,20 @@
     <meta name="anthropic-index" content="disallow">
     <meta name="cohere-index" content="disallow">
     <title>Payroll Checker / Verificador de Nómina</title>
+    <script>
+    // TEMPORARY debug instrumentation for tracking down the on-call panel
+    // intermittently missing on page load. Captures every uncaught error/rejection
+    // from the earliest possible point, plus every displayResults() call (added
+    // below near its definition). Inspect via window.__debugLog in console.
+    // Safe to remove once the on-call render race is confirmed fixed.
+    window.__debugLog = { pageErrors: [], renders: [], startTime: performance.now() };
+    window.addEventListener('error', (e) => {
+        window.__debugLog.pageErrors.push({ t: performance.now(), message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, stack: e.error && e.error.stack });
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        window.__debugLog.pageErrors.push({ t: performance.now(), message: 'unhandledrejection: ' + (e.reason && e.reason.message || e.reason), stack: e.reason && e.reason.stack });
+    });
+    </script>
     <script src="../lib/pdf.min.js"></script>
     <style>
         :root {
@@ -2502,6 +2516,16 @@
 
         // Display results
         function displayResults() {
+            // TEMPORARY debug instrumentation -- see window.__debugLog in console.
+            try {
+                window.__debugLog.renders.push({
+                    t: performance.now(),
+                    ocDefined: typeof OC !== 'undefined',
+                    payslipCount: parsedPayslips.length,
+                    stack: (new Error()).stack.split('\n').slice(1, 4).join(' | ')
+                });
+            } catch (e) {}
+
             const container = document.getElementById('resultsContent');
 
             if (parsedPayslips.length === 0) {
@@ -7203,22 +7227,30 @@
         applyTranslations();
 
         // Restore results if payslips were loaded from localStorage.
-        // Deferred via setTimeout: the On-Call Tracker's `OC` object is defined in the
-        // NEXT <script> block below, so calling displayResults() (which builds the
-        // On-Call Comparison panel via buildOncallComparisonPanel -> OC.getMonthlyCompensation)
-        // synchronously here would run before OC exists, silently rendering every on-call
-        // panel empty (buildOncallComparisonPanel guards with `typeof OC === 'undefined'`).
-        // setTimeout(...,0) pushes this to run after all script blocks on the page have executed.
+        // The On-Call Tracker's `OC` object is defined in the NEXT <script> block below, so
+        // calling displayResults() (which builds the On-Call Comparison panel via
+        // buildOncallComparisonPanel -> OC.getMonthlyCompensation) before OC exists silently
+        // renders every on-call panel empty (buildOncallComparisonPanel guards with
+        // `typeof OC === 'undefined'`). A plain setTimeout(...,0) is NOT reliable here: on a
+        // file this large, Chrome can yield back to the event loop between the two <script>
+        // blocks during parsing, so a zero-delay timer registered in this block can fire
+        // before the OC <script> block below has executed (confirmed via instrumentation --
+        // intermittent, worse under real-world load with more saved payslips). Poll instead:
+        // this guarantees correctness regardless of inter-script-block scheduling.
         if (parsedPayslips.length > 0) {
-            setTimeout(() => {
-            displayResults();
-            updateCurrentSessionInfo();
-            // Only auto-switch to results if the user has no stored tab preference (first load or upload tab)
-            const _storedTab = (() => { try { return localStorage.getItem('payroll_activeTab'); } catch(e) { return null; } })();
-            if (!_storedTab || _storedTab === 'upload') {
-                document.querySelector('[data-tab="results"]').click();
-            }
-            }, 0);
+            (function waitForOCThenRestore() {
+                if (typeof OC === 'undefined') {
+                    setTimeout(waitForOCThenRestore, 10);
+                    return;
+                }
+                displayResults();
+                updateCurrentSessionInfo();
+                // Only auto-switch to results if the user has no stored tab preference (first load or upload tab)
+                const _storedTab = (() => { try { return localStorage.getItem('payroll_activeTab'); } catch(e) { return null; } })();
+                if (!_storedTab || _storedTab === 'upload') {
+                    document.querySelector('[data-tab="results"]').click();
+                }
+            })();
         }
 
         // Auto-save config on input changes
