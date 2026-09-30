@@ -2720,6 +2720,23 @@
             html += `<div class="summary-item"><div class="value">${formatCurrency(totalNet)}</div><div class="label">${t('totalNet')}</div></div>`;
             html += '</div>';
 
+            // Missing RSU vest check: flag any past vest (from the grant schedule) with no
+            // matching RSU line item on that month's payslip, regardless of aggregate tolerance.
+            const missingRSUVests = findMissingRSUVests(parsedPayslips, expectedRSUByMonth);
+            if (missingRSUVests.length > 0) {
+                const monthNamesMiss = currentLang === 'es' ?
+                    ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] :
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                html += `<div class="alert alert-danger" style="margin-top: 15px;">
+                    <strong>⚠ ${currentLang === 'es' ? 'Vesting de RSU esperado pero ausente en nómina' : 'Expected RSU Vest Missing From Payslip'}</strong>
+                    <ul style="margin: 6px 0 0 20px; padding: 0;">
+                        ${missingRSUVests.map(mv => `<li>${monthNamesMiss[mv.month]} ${mv.year}: ${currentLang === 'es'
+                            ? `se esperaban ~${mv.expectedShares.toFixed(2)} acciones (~${formatCurrency(mv.expectedValue)} parte ES) pero no aparece ninguna línea de RSU en esa nómina.`
+                            : `expected ~${mv.expectedShares.toFixed(2)} shares (~${formatCurrency(mv.expectedValue)} ES portion) but no RSU line item appears on that payslip.`}</li>`).join('')}
+                    </ul>
+                </div>`;
+            }
+
             // Annual gross validation against config (prorated)
             if (config.annualGross > 0) {
                 // Compare against base salary + expected additional compensation
@@ -4900,6 +4917,30 @@
 
         function getVestEventsForMonth(events, month, year) {
             return events.filter(e => (e.date.getMonth() + 1) === month && e.date.getFullYear() === year);
+        }
+
+        // Cross-check expected Spain-sourced RSU vests (from the grant schedule) against what
+        // actually showed up on each parsed payslip. Catches cases where a vest was expected
+        // (past date, spainValue > 0) but the payslip for that month has no RSU line item at all —
+        // the aggregate/tolerance-based RSU comparison can mask this if other months' vests dwarf it.
+        function findMissingRSUVests(parsedPayslips, expectedRSUByMonth) {
+            const missing = [];
+            const now = new Date();
+            for (const [key, exp] of Object.entries(expectedRSUByMonth)) {
+                if (!exp || exp.spainValue <= 0) continue;
+                const [m, y] = key.split('/').map(Number);
+                if (new Date(y, m - 1, 1) > now) continue; // vest hasn't happened yet
+                const ps = parsedPayslips.find(p => p.month === m && p.year === y);
+                if (!ps) continue; // no payslip parsed for this month — nothing to compare against
+                const rsuAmount = ps.earnings
+                    .filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs))
+                    .reduce((s, e) => s + e.amount, 0);
+                if (rsuAmount <= 0) {
+                    missing.push({ month: m, year: y, expectedValue: exp.spainValue, expectedShares: exp.shares });
+                }
+            }
+            missing.sort((a, b) => a.year - b.year || a.month - b.month);
+            return missing;
         }
 
         function addRSUGrant() {
