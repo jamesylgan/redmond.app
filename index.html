@@ -1894,6 +1894,7 @@
             'RSU In-Kind Income': 'rsu',
             'RSU Tax Reported': 'rsu',
             'On-Call Compensation': 'oncall',
+            'Profit Sharing': 'bonus',
         };
 
         // Explanations for payslip items (used in info tooltips)
@@ -1903,6 +1904,7 @@
             'Collective Agreement Bonus': 'Additional payment established by the collective bargaining agreement (convenio colectivo) applicable to your sector.',
             'Absorbable Improvement': 'A salary supplement that can be absorbed by future legally-mandated salary increases.',
             'Non-Compete Agreement': 'Compensation for agreeing not to work for competitors during or after your employment. This is taxable income.',
+            'Profit Sharing': 'Variable bonus payment tied to company/individual performance. Taxable income, categorized under "Bonuses" for compensation validation.',
             'Wallet Benefits': 'Flexible benefits allowance (like Forma/Cobee) that you can use for various expenses. May include portions that are tax-exempt.',
             'Awardco': 'Employee recognition/rewards platform benefit. Typically taxable income.',
             'Extra Pay Prorate': 'Monthly proration of the 2 extra "pagas" (14 payments/year in Spain), included in your regular paycheck.',
@@ -2184,6 +2186,7 @@
                 { pattern: /Plus\s*Convenio/i, type: 'earning', nameEn: 'Collective Agreement Bonus', nameEs: 'Plus Convenio' },
                 { pattern: /Mejora\s*Absorbible/i, type: 'earning', nameEn: 'Absorbable Improvement', nameEs: 'Mejora Absorbible' },
                 { pattern: /Pacto\s*No\s*Competencia/i, type: 'earning', nameEn: 'Non-Compete Agreement', nameEs: 'Pacto No Competencia' },
+                { pattern: /Profit\s*Sharing/i, type: 'earning', nameEn: 'Profit Sharing', nameEs: 'Profit Sharing' },
                 { pattern: /\bWallet\b/i, type: 'earning', nameEn: 'Wallet Benefits', nameEs: 'Wallet' },
                 { pattern: /\bAwardco\b/i, type: 'earning', nameEn: 'Awardco', nameEs: 'Awardco' },
                 { pattern: /Prorrata\s*Pagas/i, type: 'earning', nameEn: 'Extra Pay Prorate', nameEs: 'Prorrata Pagas' },
@@ -2306,7 +2309,7 @@
                 const hasTDevengadoPos = numbers.some(item => item.x >= 420 && item.x < 500);
                 const hasTDeducirPos = numbers.some(item => item.x >= 500 && item.x < 560);
                 const hasMultipleNumbers = numbers.length >= 4;
-                const noConceptText = !rowText.match(/Salario|Mejora|Cotizaci|Tributaci|Wallet|Seguros|Rsus?|Especies|Repercutidos|Pacto|Convenio|Prorrata|Awardco|Descuento/i);
+                const noConceptText = !rowText.match(/Salario|Mejora|Cotizaci|Tributaci|Wallet|Seguros|Rsus?|Especies|Repercutidos|Pacto|Convenio|Prorrata|Awardco|Descuento|Profit/i);
 
                 if (hasTDevengadoPos && hasTDeducirPos && hasMultipleNumbers && noConceptText) {
                     const tDevengadoItem = numbers.find(item => item.x >= 420 && item.x < 500);
