@@ -2720,20 +2720,60 @@
             html += `<div class="summary-item"><div class="value">${formatCurrency(totalNet)}</div><div class="label">${t('totalNet')}</div></div>`;
             html += '</div>';
 
-            // Missing RSU vest check: flag any past vest (from the grant schedule) with no
-            // matching RSU line item on that month's payslip, regardless of aggregate tolerance.
-            const missingRSUVests = findMissingRSUVests(parsedPayslips, expectedRSUByMonth);
-            if (missingRSUVests.length > 0) {
-                const monthNamesMiss = currentLang === 'es' ?
+            // Payroll Discrepancies: unified rollup of anything significant that needs attention
+            // (missing RSU vests, calc/bank net mismatches), regardless of RSU validation mode.
+            // Anything already acknowledged via its existing mechanism is excluded.
+            const significantDiscrepancies = findSignificantDiscrepancies(parsedPayslips, config);
+            if (significantDiscrepancies.length > 0) {
+                const monthNamesDisc = currentLang === 'es' ?
                     ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] :
                     ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const discItemHtml = significantDiscrepancies.map(d => {
+                    const period = `${monthNamesDisc[d.month]} ${d.year}`;
+                    if (d.type === 'rsu') {
+                        const msg = currentLang === 'es'
+                            ? `se esperaban ~${d.expectedShares.toFixed(2)} acciones (~${formatCurrency(d.expectedValue)} parte ES) pero no aparece ninguna línea de RSU en esa nómina.`
+                            : `expected ~${d.expectedShares.toFixed(2)} shares (~${formatCurrency(d.expectedValue)} ES portion) but no RSU line item appears on that payslip.`;
+                        return `<li style="margin-bottom: 6px;">
+                            <div><strong>${period}</strong> — ${currentLang === 'es' ? 'RSU esperado ausente:' : 'Expected RSU missing:'} ${msg}</div>
+                            <div style="margin-top: 4px; padding-left: 12px; font-size: 11px;">
+                                <label style="margin-right: 12px; cursor: pointer;">
+                                    <input type="radio" name="status_${d.overrideKey}" value="mismatch" ${d.status === 'mismatch' ? 'checked' : ''}
+                                        onchange="updateValidationStatus('${d.overrideKey}', 'mismatch')">
+                                    ${currentLang === 'es' ? 'Sin resolver' : 'Unresolved'}
+                                </label>
+                                <label style="margin-right: 12px; cursor: pointer;">
+                                    <input type="radio" name="status_${d.overrideKey}" value="acknowledged" ${d.status === 'acknowledged' ? 'checked' : ''}
+                                        onchange="updateValidationStatus('${d.overrideKey}', 'acknowledged')">
+                                    <span style="color: #f0ad4e;">✓</span> ${currentLang === 'es' ? 'Revisado' : 'Acknowledged'}
+                                </label>
+                                <label style="cursor: pointer;">
+                                    <input type="radio" name="status_${d.overrideKey}" value="needs_correction" ${d.status === 'needs_correction' ? 'checked' : ''}
+                                        onchange="updateValidationStatus('${d.overrideKey}', 'needs_correction')">
+                                    <span style="color: var(--danger);">⚠</span> ${currentLang === 'es' ? 'Necesita corrección' : 'Needs Correction'}
+                                </label>
+                                <input type="text" placeholder="${currentLang === 'es' ? 'Notas...' : 'Notes...'}"
+                                    value="${(d.notes || '').replace(/"/g, '&quot;')}"
+                                    style="width: 100%; margin-top: 4px; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px;"
+                                    onchange="updateValidationNotes('${d.overrideKey}', this.value)">
+                            </div>
+                        </li>`;
+                    }
+                    const diffSign = d.netDiff > 0 ? '+' : '';
+                    if (d.type === 'calc') {
+                        const msg = currentLang === 'es'
+                            ? `neto calculado difiere del neto en nómina por ${diffSign}${formatCurrency(d.netDiff)}.`
+                            : `calculated net differs from payslip net by ${diffSign}${formatCurrency(d.netDiff)}.`;
+                        return `<li><strong>${period}</strong> — ${msg} <span style="color: var(--text-muted); font-size: 11px;">(${currentLang === 'es' ? 'ver Desglose Mensual abajo' : 'see Monthly Breakdown below'})</span></li>`;
+                    }
+                    const msg = currentLang === 'es'
+                        ? `neto en nómina difiere del depósito bancario por ${diffSign}${formatCurrency(d.netDiff)}.`
+                        : `payslip net differs from bank deposit by ${diffSign}${formatCurrency(d.netDiff)}.`;
+                    return `<li><strong>${period}</strong> — ${msg} <span style="color: var(--text-muted); font-size: 11px;">(${currentLang === 'es' ? 'ver Desglose Mensual abajo' : 'see Monthly Breakdown below'})</span></li>`;
+                }).join('');
                 html += `<div class="alert alert-danger" style="margin-top: 15px;">
-                    <strong>⚠ ${currentLang === 'es' ? 'Vesting de RSU esperado pero ausente en nómina' : 'Expected RSU Vest Missing From Payslip'}</strong>
-                    <ul style="margin: 6px 0 0 20px; padding: 0;">
-                        ${missingRSUVests.map(mv => `<li>${monthNamesMiss[mv.month]} ${mv.year}: ${currentLang === 'es'
-                            ? `se esperaban ~${mv.expectedShares.toFixed(2)} acciones (~${formatCurrency(mv.expectedValue)} parte ES) pero no aparece ninguna línea de RSU en esa nómina.`
-                            : `expected ~${mv.expectedShares.toFixed(2)} shares (~${formatCurrency(mv.expectedValue)} ES portion) but no RSU line item appears on that payslip.`}</li>`).join('')}
-                    </ul>
+                    <strong>⚠ ${currentLang === 'es' ? 'Discrepancias de Nómina' : 'Payroll Discrepancies'}</strong>
+                    <ul style="margin: 6px 0 0 20px; padding: 0;">${discItemHtml}</ul>
                 </div>`;
             }
 
@@ -4858,8 +4898,10 @@
 
         function computeVestEvents(grants, transferDate) {
             const events = [];
-            if (!transferDate) return events;
-            const transfer = new Date(transferDate);
+            // No transfer date means there's no US/Spain split to compute (e.g. 'normal' or
+            // 'exclude' RSU validation mode) — treat every vest as 100% Spain-sourced by using
+            // a transfer date far in the past, so the "US portion" workday count is always zero.
+            const transfer = transferDate ? new Date(transferDate) : new Date(0);
 
             for (const grant of grants) {
                 if (!grant.grantDate || !grant.totalShares) continue;
@@ -4919,15 +4961,46 @@
             return events.filter(e => (e.date.getMonth() + 1) === month && e.date.getFullYear() === year);
         }
 
+        // Expected Spain-sourced RSU shares/value per month, straight from the grant schedule.
+        // Deliberately independent of rsuValidationMode: it always runs whenever grants are
+        // configured. If mode is 'us-es-transfer' with a transfer date set, the real US/Spain
+        // workday split is used (so a still-100%-US vest correctly isn't expected on the nómina
+        // yet); otherwise every vest is treated as 100% Spain-sourced.
+        function computeExpectedSpainRSUByMonth(config) {
+            const grants = config.rsuGrants || [];
+            if (!grants.length) return {};
+            const rsuPriceUSD = config.rsuSharePrice || 0;
+            const rsuEurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
+            const rsuPriceEUR = rsuPriceUSD > 0 ? rsuPriceUSD / rsuEurRate : 0;
+            const histPrices = config.rsuHistoricalPrices || {};
+            const useTransferSplit = config.rsuValidationMode === 'us-es-transfer' && !!config.rsuTransferDate;
+            const events = computeVestEvents(grants, useTransferSplit ? config.rsuTransferDate : null);
+
+            const byMonth = {};
+            for (const evt of events) {
+                const key = `${evt.date.getMonth() + 1}/${evt.date.getFullYear()}`;
+                if (!byMonth[key]) byMonth[key] = { spainShares: 0, spainValue: 0 };
+                const dStr = `${evt.date.getFullYear()}-${String(evt.date.getMonth()+1).padStart(2,'0')}-${String(evt.date.getDate()).padStart(2,'0')}`;
+                const vestPriceEUR = rsuPriceEUR > 0 ? (histPrices[dStr] || rsuPriceUSD) / rsuEurRate : 0;
+                byMonth[key].spainShares += evt.shares * evt.spainPct;
+                byMonth[key].spainValue += evt.shares * evt.spainPct * vestPriceEUR;
+            }
+            return byMonth;
+        }
+
         // Cross-check expected Spain-sourced RSU vests (from the grant schedule) against what
         // actually showed up on each parsed payslip. Catches cases where a vest was expected
-        // (past date, spainValue > 0) but the payslip for that month has no RSU line item at all —
-        // the aggregate/tolerance-based RSU comparison can mask this if other months' vests dwarf it.
-        function findMissingRSUVests(parsedPayslips, expectedRSUByMonth) {
+        // (past date, spainShares > 0) but the payslip for that month has no RSU line item at
+        // all — the aggregate/tolerance-based RSU comparison elsewhere can mask this if other
+        // months' vests dwarf it. Already-acknowledged months (via the same validationOverrides
+        // mechanism the Monthly Breakdown section uses) are excluded.
+        function findMissingRSUVests(parsedPayslips, config) {
+            const expectedByMonth = computeExpectedSpainRSUByMonth(config);
+            const overrides = config.validationOverrides || {};
             const missing = [];
             const now = new Date();
-            for (const [key, exp] of Object.entries(expectedRSUByMonth)) {
-                if (!exp || exp.spainValue <= 0) continue;
+            for (const [key, exp] of Object.entries(expectedByMonth)) {
+                if (!exp || exp.spainShares <= 0) continue;
                 const [m, y] = key.split('/').map(Number);
                 if (new Date(y, m - 1, 1) > now) continue; // vest hasn't happened yet
                 const ps = parsedPayslips.find(p => p.month === m && p.year === y);
@@ -4935,12 +5008,61 @@
                 const rsuAmount = ps.earnings
                     .filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs))
                     .reduce((s, e) => s + e.amount, 0);
-                if (rsuAmount <= 0) {
-                    missing.push({ month: m, year: y, expectedValue: exp.spainValue, expectedShares: exp.shares });
-                }
+                if (rsuAmount > 0) continue;
+                const overrideKey = `rsu_${m}/${y}`;
+                if (overrides[overrideKey]?.status === 'acknowledged') continue;
+                missing.push({ month: m, year: y, expectedValue: exp.spainValue, expectedShares: exp.spainShares, overrideKey, notes: overrides[overrideKey]?.notes || '', status: overrides[overrideKey]?.status || 'mismatch' });
             }
             missing.sort((a, b) => a.year - b.year || a.month - b.month);
             return missing;
+        }
+
+        // Unified "Payroll Discrepancies" list: pulls together anything significant that needs
+        // attention across checks, regardless of RSU validation mode. Anything already resolved
+        // via an existing acknowledge mechanism (validationOverrides status 'acknowledged') is
+        // excluded, so acknowledging in one place (here, or in the Monthly Breakdown section for
+        // calc/bank mismatches) removes it everywhere.
+        function findSignificantDiscrepancies(parsedPayslips, config) {
+            const overrides = config.validationOverrides || {};
+            const items = [];
+
+            for (const mv of findMissingRSUVests(parsedPayslips, config)) {
+                items.push({ type: 'rsu', ...mv });
+            }
+
+            const tolerance = config.tolerance || 2;
+            const expectedNetPay = config.expectedNetPay || {};
+            for (const ps of parsedPayslips) {
+                const periodKey = `${ps.month}/${ps.year}`;
+
+                // Calculated net (earnings - deductions) vs. payslip's own stated net
+                const calcOverrideKey = `calc_${periodKey}`;
+                const calcOverride = overrides[calcOverrideKey] || {};
+                if (calcOverride.status !== 'acknowledged') {
+                    const parsedEarnings = ps.earnings.reduce((s, e) => s + e.amount, 0);
+                    const parsedDeductions = ps.deductions.reduce((s, d) => s + d.amount, 0);
+                    const netDiff = (parsedEarnings - parsedDeductions) - ps.totals.netPay;
+                    if (Math.abs(netDiff) >= 1 || calcOverride.status === 'needs_correction') {
+                        items.push({ type: 'calc', month: ps.month, year: ps.year, overrideKey: calcOverrideKey, netDiff, status: calcOverride.status || 'mismatch' });
+                    }
+                }
+
+                // Payslip net vs. actual bank deposit (if entered)
+                const bankNet = expectedNetPay[periodKey];
+                if (bankNet > 0) {
+                    const bankOverrideKey = `bank_${periodKey}`;
+                    const bankOverride = overrides[bankOverrideKey] || {};
+                    if (bankOverride.status !== 'acknowledged') {
+                        const percentDiff = Math.abs(ps.totals.netPay - bankNet) / bankNet * 100;
+                        if (percentDiff > tolerance || bankOverride.status === 'needs_correction') {
+                            items.push({ type: 'bank', month: ps.month, year: ps.year, overrideKey: bankOverrideKey, netDiff: ps.totals.netPay - bankNet, status: bankOverride.status || 'mismatch' });
+                        }
+                    }
+                }
+            }
+
+            items.sort((a, b) => a.year - b.year || a.month - b.month);
+            return items;
         }
 
         function addRSUGrant() {
