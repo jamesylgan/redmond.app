@@ -2734,30 +2734,7 @@
                         const msg = currentLang === 'es'
                             ? `se esperaban ~${d.expectedShares.toFixed(2)} acciones (~${formatCurrency(d.expectedValue)} parte ES) pero no aparece ninguna línea de RSU en esa nómina.`
                             : `expected ~${d.expectedShares.toFixed(2)} shares (~${formatCurrency(d.expectedValue)} ES portion) but no RSU line item appears on that payslip.`;
-                        return `<li style="margin-bottom: 6px;">
-                            <div><strong>${period}</strong> — ${currentLang === 'es' ? 'RSU esperado ausente:' : 'Expected RSU missing:'} ${msg}</div>
-                            <div style="margin-top: 4px; padding-left: 12px; font-size: 11px;">
-                                <label style="margin-right: 12px; cursor: pointer;">
-                                    <input type="radio" name="status_${d.overrideKey}" value="mismatch" ${d.status === 'mismatch' ? 'checked' : ''}
-                                        onchange="updateValidationStatus('${d.overrideKey}', 'mismatch')">
-                                    ${currentLang === 'es' ? 'Sin resolver' : 'Unresolved'}
-                                </label>
-                                <label style="margin-right: 12px; cursor: pointer;">
-                                    <input type="radio" name="status_${d.overrideKey}" value="acknowledged" ${d.status === 'acknowledged' ? 'checked' : ''}
-                                        onchange="updateValidationStatus('${d.overrideKey}', 'acknowledged')">
-                                    <span style="color: #f0ad4e;">✓</span> ${currentLang === 'es' ? 'Revisado' : 'Acknowledged'}
-                                </label>
-                                <label style="cursor: pointer;">
-                                    <input type="radio" name="status_${d.overrideKey}" value="needs_correction" ${d.status === 'needs_correction' ? 'checked' : ''}
-                                        onchange="updateValidationStatus('${d.overrideKey}', 'needs_correction')">
-                                    <span style="color: var(--danger);">⚠</span> ${currentLang === 'es' ? 'Necesita corrección' : 'Needs Correction'}
-                                </label>
-                                <input type="text" placeholder="${currentLang === 'es' ? 'Notas...' : 'Notes...'}"
-                                    value="${(d.notes || '').replace(/"/g, '&quot;')}"
-                                    style="width: 100%; margin-top: 4px; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px;"
-                                    onchange="updateValidationNotes('${d.overrideKey}', this.value)">
-                            </div>
-                        </li>`;
+                        return `<li><strong>${period}</strong> — ${msg} <span style="color: var(--text-muted); font-size: 11px;">(${currentLang === 'es' ? 'ver validación de RSU abajo' : 'see RSU vest validation below'})</span></li>`;
                     }
                     const diffSign = d.netDiff > 0 ? '+' : '';
                     if (d.type === 'calc') {
@@ -3522,6 +3499,65 @@
                 </div>`;
             }).join('') : `<div style="padding: 4px 0; color: var(--text-muted);">${currentLang === 'es' ? 'No hay datos de banco ingresados' : 'No bank data entered'}</div>`;
 
+            // Build expandable RSU vest validation section with controls. Always renders every
+            // relevant past vest month (found or not), so acknowledging/un-acknowledging one
+            // never removes its own controls — unlike a summary that only lists problems.
+            const rsuVestDetails = computeRSUVestDetails(parsedPayslips, config);
+            const rsuDetailsHtml = rsuVestDetails.map(d => {
+                const period = `${monthNames[d.month]} ${d.year}`;
+                const statusIcon = getStatusIcon(d.status);
+                const isOverridable = d.status === 'mismatch' || d.status === 'acknowledged' || d.status === 'needs_correction';
+                const ackChecked = d.status === 'acknowledged' ? 'checked' : '';
+                const needsCorChecked = d.status === 'needs_correction' ? 'checked' : '';
+                const message = d.found
+                    ? (currentLang === 'es'
+                        ? `RSU en nómina: ${formatCurrency(d.actualAmount)} (esperado ~${formatCurrency(d.expectedValue)})`
+                        : `RSU on payslip: ${formatCurrency(d.actualAmount)} (expected ~${formatCurrency(d.expectedValue)})`)
+                    : (currentLang === 'es'
+                        ? `esperadas ~${d.expectedShares.toFixed(2)} acciones (~${formatCurrency(d.expectedValue)}) pero no aparece ninguna línea de RSU.`
+                        : `expected ~${d.expectedShares.toFixed(2)} shares (~${formatCurrency(d.expectedValue)}) but no RSU line item found.`);
+
+                return `<div style="padding: 8px 0; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong>${period}:</strong>
+                        <span>${message}</span>
+                        ${statusIcon}
+                    </div>
+                    ${isOverridable || d.notes ? `
+                    <div style="margin-top: 6px; padding-left: 12px; font-size: 11px;">
+                        <label style="margin-right: 12px; cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="mismatch"
+                                ${d.status === 'mismatch' ? 'checked' : ''}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'mismatch')">
+                            ${currentLang === 'es' ? 'Sin resolver' : 'Unresolved'}
+                        </label>
+                        <label style="margin-right: 12px; cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="acknowledged"
+                                ${ackChecked}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'acknowledged')">
+                            <span style="color: #f0ad4e;">✓</span> ${currentLang === 'es' ? 'Revisado' : 'Acknowledged'}
+                        </label>
+                        <label style="cursor: pointer;">
+                            <input type="radio" name="status_${d.overrideKey}" value="needs_correction"
+                                ${needsCorChecked}
+                                onchange="updateValidationStatus('${d.overrideKey}', 'needs_correction')">
+                            <span style="color: var(--danger);">⚠</span> ${currentLang === 'es' ? 'Necesita corrección' : 'Needs Correction'}
+                        </label>
+                    </div>
+                    ` : ''}
+                    <div style="margin-top: 6px; padding-left: 12px;">
+                        <input type="text" placeholder="${currentLang === 'es' ? 'Notas...' : 'Notes...'}"
+                            value="${(d.notes || '').replace(/"/g, '&quot;')}"
+                            style="width: 100%; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px;"
+                            onchange="updateValidationNotes('${d.overrideKey}', this.value)">
+                    </div>
+                </div>`;
+            }).join('');
+            const rsuOkCount = rsuVestDetails.filter(d => d.status === 'ok').length;
+            const rsuAckCount = rsuVestDetails.filter(d => d.status === 'acknowledged').length;
+            const rsuMismatchCount = rsuVestDetails.filter(d => d.status === 'mismatch').length;
+            const rsuNeedsCorrectionCount = rsuVestDetails.filter(d => d.status === 'needs_correction').length;
+
             // Calculate effective counts for summary
             const calcEffectiveCorrect = calcMatchCount + calcAcknowledgedCount;
             const calcEffectiveMismatch = calcMismatchCount + calcNeedsCorrectionCount;
@@ -3556,6 +3592,21 @@
                         ${bankDetailsHtml}
                     </div>
                 </details>
+                ${rsuVestDetails.length > 0 ? `
+                <details class="expandable-row" style="margin-top: 8px;">
+                    <summary style="cursor: pointer; list-style: none;">
+                        <strong>${currentLang === 'es' ? 'Validación de RSU:' : 'RSU vest validation:'}</strong>
+                        ${rsuOkCount > 0 ? `<span class="badge badge-success" style="margin-left: 10px;">✓ ${rsuOkCount}</span>` : ''}
+                        ${rsuAckCount > 0 ? `<span class="badge" style="margin-left: 5px; background: #f0ad4e; color: #000;">✓ ${rsuAckCount} ${currentLang === 'es' ? 'revisados' : 'ack'}</span>` : ''}
+                        ${rsuMismatchCount > 0 ? `<span class="badge badge-danger" style="margin-left: 5px;">⚠ ${rsuMismatchCount}</span>` : ''}
+                        ${rsuNeedsCorrectionCount > 0 ? `<span class="badge badge-danger" style="margin-left: 5px;">⚠ ${rsuNeedsCorrectionCount} ${currentLang === 'es' ? 'corregir' : 'fix'}</span>` : ''}
+                        <span style="color: var(--text-muted); font-size: 11px; margin-left: 8px;">${currentLang === 'es' ? '(clic para detalles)' : '(click for details)'}</span>
+                    </summary>
+                    <div style="margin-top: 8px; padding: 8px; background: var(--card-bg); border-radius: 4px; font-size: 12px;">
+                        ${rsuDetailsHtml}
+                    </div>
+                </details>
+                ` : ''}
             </div>`;
 
             html += '</div>';
@@ -4989,16 +5040,16 @@
         }
 
         // Cross-check expected Spain-sourced RSU vests (from the grant schedule) against what
-        // actually showed up on each parsed payslip. Catches cases where a vest was expected
-        // (past date, spainShares > 0) but the payslip for that month has no RSU line item at
-        // all — the aggregate/tolerance-based RSU comparison elsewhere can mask this if other
-        // months' vests dwarf it. Already-acknowledged months (via the same validationOverrides
-        // mechanism the Monthly Breakdown section uses) are excluded.
-        function findMissingRSUVests(parsedPayslips, config) {
+        // actually showed up on each parsed payslip, for every past vest month — not just the
+        // missing ones. Mirrors the shape of calcDetails/bankDetails below (status: 'ok' |
+        // 'mismatch' | 'acknowledged' | 'needs_correction') so it can back a persistent,
+        // always-rendered detail panel with the same acknowledge/needs-correction controls,
+        // rather than a control that disappears along with the item once acknowledged.
+        function computeRSUVestDetails(parsedPayslips, config) {
             const expectedByMonth = computeExpectedSpainRSUByMonth(config);
             const overrides = config.validationOverrides || {};
-            const missing = [];
             const now = new Date();
+            const details = [];
             for (const [key, exp] of Object.entries(expectedByMonth)) {
                 if (!exp || exp.spainShares <= 0) continue;
                 const [m, y] = key.split('/').map(Number);
@@ -5008,13 +5059,26 @@
                 const rsuAmount = ps.earnings
                     .filter(e => /rsu|especies.*dep/i.test(e.nameEn + ' ' + e.nameEs))
                     .reduce((s, e) => s + e.amount, 0);
-                if (rsuAmount > 0) continue;
+                const found = rsuAmount > 0;
                 const overrideKey = `rsu_${m}/${y}`;
-                if (overrides[overrideKey]?.status === 'acknowledged') continue;
-                missing.push({ month: m, year: y, expectedValue: exp.spainValue, expectedShares: exp.spainShares, overrideKey, notes: overrides[overrideKey]?.notes || '', status: overrides[overrideKey]?.status || 'mismatch' });
+                const override = overrides[overrideKey] || {};
+                let status = found ? 'ok' : 'mismatch';
+                if (override.status === 'acknowledged') status = 'acknowledged';
+                else if (override.status === 'needs_correction') status = 'needs_correction';
+                details.push({
+                    month: m, year: y, overrideKey, status, notes: override.notes || '',
+                    expectedShares: exp.spainShares, expectedValue: exp.spainValue, actualAmount: rsuAmount, found
+                });
             }
-            missing.sort((a, b) => a.year - b.year || a.month - b.month);
-            return missing;
+            details.sort((a, b) => a.year - b.year || a.month - b.month);
+            return details;
+        }
+
+        // Unresolved-or-flagged RSU vest months only (for the top-level rollup) — excludes
+        // months that are naturally fine ('ok') or already 'acknowledged'.
+        function findMissingRSUVests(parsedPayslips, config) {
+            return computeRSUVestDetails(parsedPayslips, config)
+                .filter(d => d.status === 'mismatch' || d.status === 'needs_correction');
         }
 
         // Unified "Payroll Discrepancies" list: pulls together anything significant that needs
