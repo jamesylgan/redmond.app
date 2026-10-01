@@ -2106,13 +2106,14 @@
             document.querySelectorAll('#payrollPage .tab-content').forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
             document.getElementById(tabId).classList.add('active');
+            // A tab's prefill must never break navigation or startup, so guard it.
             if (tabId === 'us-tax-estimate' && !usTaxTabVisited) {
                 usTaxTabVisited = true;
-                prefillUSTaxFromConfig();
+                try { prefillUSTaxFromConfig(); } catch (e) { console.error('US tax tab prefill failed:', e); }
             }
             if (tabId === 'es-tax-estimate' && !esTaxTabVisited) {
                 esTaxTabVisited = true;
-                prefillESTaxFromConfig();
+                try { prefillESTaxFromConfig(); } catch (e) { console.error('Spain tax tab prefill failed:', e); }
             }
             try { localStorage.setItem('payroll_activeTab', tabId); } catch(e) {}
             history.replaceState(null, '', '#' + tabId);
@@ -2120,15 +2121,18 @@
         document.querySelectorAll('#payrollPage .tab').forEach(tab => {
             tab.addEventListener('click', () => activatePayrollTab(tab.dataset.tab));
         });
-        // Restore tab from URL hash or localStorage on load
-        (function restorePayrollTab() {
+        // Restore tab from URL hash or localStorage on load. Called from the INITIALIZATION section,
+        // after the config is loaded and every const/let in this script exists. Running it here, at
+        // parse time, hit variables that are declared further down (a "before initialization" error
+        // that aborted the rest of startup when the page was refreshed on a tax tab).
+        function restorePayrollTab() {
             const hashTab = window.location.hash.replace('#', '');
             const storedTab = (() => { try { return localStorage.getItem('payroll_activeTab'); } catch(e) { return null; } })();
             const target = hashTab || storedTab;
             if (target && target !== 'upload' && document.querySelector(`#payrollPage .tab[data-tab="${target}"]`)) {
                 activatePayrollTab(target);
             }
-        })();
+        }
 
         // Drop zone events
         const dropZone = document.getElementById('dropZone');
@@ -7951,6 +7955,7 @@
         loadConfig();
         loadSaveSlots();
         applyTranslations();
+        restorePayrollTab();
 
         // Restore results if payslips were loaded from localStorage.
         // The On-Call Tracker's `OC` object is defined in the NEXT <script> block below, so
