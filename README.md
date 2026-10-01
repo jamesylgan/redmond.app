@@ -86,6 +86,15 @@ A web-based Spanish payslip (nómina) verification tool. Inspired by [friscoMad/
   - Social Security contributions (CC, MEI, FP, Desempleo)
   - IRPF withholding
   - In-kind deductions
+  - Profit Sharing, Awardco, On-Call, Passed-on Income Tax (Repercutidos), ESPP, Ajuste Líquido
+  - Payslip totals (T. DEVENGADO, T. A DEDUCIR)
+
+### Spain Tax Estimate (US/ES transfer mode)
+- Full-year IRPF estimate alongside the US Tax Estimate tab
+- Compares Beckham Law (24% flat on Spain-sourced income, 47% above €600k) with regular-resident progressive tax on worldwide income
+- Regular regime: Social Security and expense deductions, personal minimum, optional 30% RSU reduction, Madrid or default scale, and Spanish credit for US tax on US-sourced RSUs
+- Defaults come from payslips and RSU grants; button sends the result to the US tab as Spanish taxes paid
+- Rough estimate only: employment income, no savings income or wealth tax
 
 ### Display & Currency Options
 - **Currency Conversion** - View amounts in EUR or USD
