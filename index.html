@@ -26,7 +26,7 @@
         window.__debugLog.pageErrors.push({ t: performance.now(), message: 'unhandledrejection: ' + (e.reason && e.reason.message || e.reason), stack: e.reason && e.reason.stack });
     });
     </script>
-    <script src="../lib/pdf.min.js"></script>
+    <script src="lib/pdf.min.js"></script>
     <style>
         :root {
             --primary: #007bff;
@@ -734,7 +734,6 @@
         }
     </script>
 
-    <a href="../" class="back-link">&larr; <span data-i18n="back">Back to Tools</span></a>
 
     <div class="page-switcher">
         <button class="page-switcher-btn active" onclick="switchPage('payroll')">Payroll Checker</button>
@@ -1804,10 +1803,10 @@
         <div class="oc-toast" id="ocToast"></div>
     </div><!-- end oncallPage -->
 
-    <script src="../lib/storage-version-manager.js"></script>
+    <script src="lib/storage-version-manager.js"></script>
     <script>
         // Initialize PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '../lib/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
 
         // Storage schema with version control
         const payrollSaveSlotsSchema = StorageVersionManager.defineSchema('payrollCheckerSaveSlots', {

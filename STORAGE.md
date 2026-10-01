@@ -107,5 +107,5 @@ migrations: {
 ## Files
 
 - Schema definition: `index.html` (search for `payrollSaveSlotsSchema`)
-- Version manager library: `../lib/storage-version-manager.js`
+- Version manager library: `lib/storage-version-manager.js`
 - Existing README: `README.md` (general usage documentation)
