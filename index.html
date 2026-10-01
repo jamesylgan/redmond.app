@@ -1690,10 +1690,10 @@
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Only affects the regular-resident regime.</div>
                 </div>
                 <div class="form-group">
-                    <label><strong>30% irregular-income reduction on RSUs</strong></label>
+                    <label><strong>30% irregular-income reduction</strong></label>
                     <select id="esTaxReduce30" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                         <option value="0">Not applied</option>
-                        <option value="1">Apply (cap €300k RSU)</option>
+                        <option value="1">Apply to vests &gt;2 yrs from grant (cap €300k)</option>
                     </select>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Regular regime only; not available under Beckham. Eligibility for RSUs is contested.</div>
                 </div>
@@ -1703,16 +1703,16 @@
                     <label>Salary (EUR, annual gross)</label>
                     <input type="number" id="esTaxSalary" placeholder="auto from config" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                 </div>
-                <div class="form-group">
+                <div class="form-group esTaxRSUManual">
                     <label>RSU Income (USD, all vests this year)</label>
-                    <input type="number" id="esTaxRSU" placeholder="auto from grants" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" id="esTaxRSU" placeholder="no grants configured" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                 </div>
-                <div class="form-group">
+                <div class="form-group esTaxRSUManual">
                     <label>Spain-sourced share of RSUs (%)</label>
                     <input type="number" id="esTaxRSUSpainPct" placeholder="100" step="0.1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
-                    <div style="font-size: 10px; color: var(--text-muted);">Workdays in Spain over the vest period (from grant data)</div>
                 </div>
             </div>
+            <div id="esTaxRSUAuto" style="display:none; margin-top:10px; padding:8px 10px; background:#e8f4fd; border-radius:6px; font-size:12px;"></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-top: 10px;">
                 <div class="form-group">
                     <label>Social Security paid (EUR)</label>
@@ -5137,6 +5137,7 @@
                     events.push({
                         grantId: grant.id,
                         grantName: grant.name || `Grant`,
+                        grantDate,
                         date: vest.date,
                         shares: Math.round(vest.shares * 100) / 100,
                         totalWorkdays: totalWd,
@@ -6053,16 +6054,13 @@
             const stdDeduction = US_STANDARD_DEDUCTION_2026[filing];
             const feieLimit = US_FEIE_LIMIT_2026;
 
-            // Compute RSU sourcing from grant data
+            // Compute RSU sourcing from the per-vest rows (value-weighted, same as the Vest Schedule Preview)
             let rsuUSPct = 0.85, rsuESPct = 0.15; // defaults
-            if (config.rsuGrants?.length > 0 && config.rsuTransferDate) {
-                const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate);
-                const yearEvents = events.filter(e => e.date.getFullYear() === new Date().getFullYear());
-                const totalShares = yearEvents.reduce((s, e) => s + e.shares, 0);
-                if (totalShares > 0) {
-                    rsuUSPct = yearEvents.reduce((s, e) => s + e.shares * e.usPct, 0) / totalShares;
-                    rsuESPct = 1 - rsuUSPct;
-                }
+            const yearVests = getRSUYearVests(new Date().getFullYear());
+            const yearValue = yearVests.reduce((s, v) => s + v.valueUSD, 0);
+            if (yearValue > 0) {
+                rsuUSPct = yearVests.reduce((s, v) => s + v.valueUSD * v.usPct, 0) / yearValue;
+                rsuESPct = 1 - rsuUSPct;
             }
 
             const rsuUS = rsuTotal * rsuUSPct;
@@ -6308,10 +6306,35 @@
             return apply(ES_STATE_SCALE) + apply(ES_REGION_SCALES[region] || ES_REGION_SCALES.general);
         }
 
-        // Pure calculation: both regimes from the same inputs (all EUR except where noted)
+        // Per-vest rows for a year, straight from the RSU grant table (same events + prices as the
+        // Vest Schedule Preview). Empty when grants / share price / transfer date aren't configured.
+        function getRSUYearVests(year) {
+            if (!(config.rsuSharePrice > 0) || !config.rsuGrants?.length || !config.rsuTransferDate) return [];
+            const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
+            const hist = config.rsuHistoricalPrices || {};
+            const now = new Date();
+            return computeVestEvents(config.rsuGrants, config.rsuTransferDate)
+                .filter(e => e.date.getFullYear() === year)
+                .map(e => {
+                    const dk = `${e.date.getFullYear()}-${String(e.date.getMonth()+1).padStart(2,'0')}-${String(e.date.getDate()).padStart(2,'0')}`;
+                    const priceUSD = hist[dk] || config.rsuSharePrice;
+                    const valueUSD = e.shares * priceUSD;
+                    const valueEUR = valueUSD / eurRate;
+                    const accrualYears = e.grantDate ? (e.date - e.grantDate) / (365.25 * 86400000) : 0;
+                    return {
+                        grantName: e.grantName, date: e.date, shares: e.shares, priceUSD, valueUSD, valueEUR,
+                        spainPct: e.spainPct, usPct: e.usPct,
+                        esEUR: valueEUR * e.spainPct, usEUR: valueEUR * e.usPct,
+                        projected: e.date > now, accrualYears, eligible30: accrualYears > 2
+                    };
+                });
+        }
+
+        // Pure calculation: both regimes from the same inputs (all EUR).
+        // rsu = { totalEUR, spainEUR, reducibleEUR } — summed from per-vest rows (or manual fallback).
         function esTaxCalc(p) {
-            const rsuES = p.rsuEUR * p.esPct;
-            const rsuUS = p.rsuEUR - rsuES;
+            const rsuES = p.rsu.spainEUR;
+            const rsuUS = p.rsu.totalEUR - rsuES;
 
             // Beckham: non-resident-style tax on Spain-sourced employment income only, no deductions
             const bIncome = p.salary + rsuES;
@@ -6319,8 +6342,8 @@
                 + ES_BECKHAM_HIGH_RATE * Math.max(0, bIncome - ES_BECKHAM_CAP);
 
             // Regular resident: worldwide employment income, progressive scale
-            const gross = p.salary + p.rsuEUR;
-            const reduction = p.reduce30 ? ES_IRREGULAR_REDUCTION * Math.min(p.rsuEUR, ES_IRREGULAR_CAP) : 0;
+            const gross = p.salary + p.rsu.totalEUR;
+            const reduction = p.reduce30 ? ES_IRREGULAR_REDUCTION * Math.min(p.rsu.reducibleEUR, ES_IRREGULAR_CAP) : 0;
             const netIncome = Math.max(0, gross - p.ss - ES_WORK_EXPENSES - reduction);
             const minimums = ES_PERSONAL_MINIMUM + p.extraMin;
             const scaleTax = esScaleTax(netIncome, p.region);
@@ -6345,11 +6368,7 @@
                 if (el && (force || !el.value)) el.value = val;
             };
             const eurRate = config.rsuEurRate || config.eurToUsdRate || 1.1706;
-            const priceUSD = config.rsuSharePrice || 0;
-            const now = new Date();
-            const year = now.getFullYear();
-            const hist = config.rsuHistoricalPrices || {};
-            const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            const year = new Date().getFullYear();
 
             const regimeEl = document.getElementById('esTaxRegime');
             if (regimeEl && (force || !esTaxRegimeInit)) {
@@ -6359,20 +6378,6 @@
 
             const salaryEUR = Math.round(config.annualGross || 0);
             setField('esTaxSalary', salaryEUR || '');
-
-            // RSUs: all vests this year, with the Spain-sourced share weighted by value
-            let totalUSD = 0, spainUSD = 0, futureSpainEUR = 0;
-            if (priceUSD > 0 && config.rsuGrants?.length > 0 && config.rsuTransferDate) {
-                const events = computeVestEvents(config.rsuGrants, config.rsuTransferDate).filter(e => e.date.getFullYear() === year);
-                for (const e of events) {
-                    const val = e.shares * (hist[dateKey(e.date)] || priceUSD);
-                    totalUSD += val;
-                    spainUSD += val * e.spainPct;
-                    if (e.date > now) futureSpainEUR += val * e.spainPct / eurRate;
-                }
-                setField('esTaxRSU', Math.round(totalUSD) || '');
-                if (totalUSD > 0) setField('esTaxRSUSpainPct', (spainUSD / totalUSD * 100).toFixed(1));
-            }
 
             // Payslip-derived: SS and withholding (YTD actual + rest of year at the last salary rate)
             const psYear = parsedPayslips.filter(ps => ps.year === year);
@@ -6393,10 +6398,10 @@
                 const irpf = last.deductions.find(d => /tributaci.*irpf|irpf/i.test(d.nameEn + ' ' + d.nameEs));
                 if (irpf?.percent) salaryRate = parseFloat(irpf.percent) / 100;
             }
+            const futureSpainEUR = getRSUYearVests(year).filter(v => v.projected).reduce((s, v) => s + v.esEUR, 0);
             const withheldYTD = sumDeds(/irpf|tributaci|repercutidos/i);
             const withheldRest = remainingMonths * (salaryEUR / 12) * salaryRate + futureSpainEUR * salaryRate;
-            const withheldTotal = withheldYTD + withheldRest;
-            setField('esTaxWithheld', Math.round(withheldTotal) || '');
+            setField('esTaxWithheld', Math.round(withheldYTD + withheldRest) || '');
 
             // US tax on US-sourced RSUs: default to the US withholding from the US tab
             if (!usTaxTabVisited) { usTaxTabVisited = true; prefillUSTaxFromConfig(); }
@@ -6413,23 +6418,44 @@
             const regime = document.getElementById('esTaxRegime')?.value || 'beckham';
             const region = document.getElementById('esTaxRegion')?.value || 'general';
             const salary = num('esTaxSalary');
-            const rsuUSD = num('esTaxRSU');
-            const pctRaw = document.getElementById('esTaxRSUSpainPct')?.value;
-            const esPct = Math.min(1, Math.max(0, (pctRaw === '' || pctRaw == null ? 100 : parseFloat(pctRaw) || 0) / 100));
             const withheld = num('esTaxWithheld');
 
-            if (salary === 0 && rsuUSD === 0) { container.style.display = 'none'; return; }
+            // RSUs: per-vest rows from the grant table; manual fields only when no grants are configured
+            const vests = getRSUYearVests(new Date().getFullYear());
+            const useVests = vests.length > 0;
+            document.querySelectorAll('.esTaxRSUManual').forEach(el => el.style.display = useVests ? 'none' : '');
+            let rsu;
+            if (useVests) {
+                rsu = {
+                    totalEUR: vests.reduce((s, v) => s + v.valueEUR, 0),
+                    spainEUR: vests.reduce((s, v) => s + v.esEUR, 0),
+                    reducibleEUR: vests.filter(v => v.eligible30).reduce((s, v) => s + v.valueEUR, 0)
+                };
+            } else {
+                const pctRaw = document.getElementById('esTaxRSUSpainPct')?.value;
+                const esPct = Math.min(1, Math.max(0, (pctRaw === '' || pctRaw == null ? 100 : parseFloat(pctRaw) || 0) / 100));
+                const totalEUR = num('esTaxRSU') / eurRate;
+                rsu = { totalEUR, spainEUR: totalEUR * esPct, reducibleEUR: totalEUR };
+            }
+            const autoBox = document.getElementById('esTaxRSUAuto');
+            if (autoBox) {
+                autoBox.style.display = useVests ? 'block' : 'none';
+                if (useVests) autoBox.innerHTML = `RSUs: using <strong>${vests.length} vests</strong> from your RSU grant table (Configuration), with each vest's own Spain/US workday split and price. Per-vest breakdown below.`;
+            }
+
+            if (salary === 0 && rsu.totalEUR === 0) { container.style.display = 'none'; return; }
             container.style.display = 'block';
 
             const r = esTaxCalc({
-                salary, rsuEUR: rsuUSD / eurRate, esPct, ss: num('esTaxSS'), region,
+                salary, rsu, ss: num('esTaxSS'), region,
                 extraMin: num('esTaxExtraMin'), reduce30: document.getElementById('esTaxReduce30')?.value === '1',
                 usTaxEUR: num('esTaxUSTaxPaid') / eurRate
             });
             const P = r.progressive;
             const chosen = regime === 'beckham' ? r.beckham.tax : P.tax;
             const balance = chosen - withheld;
-            const worldwide = salary + rsuUSD / eurRate;
+            const worldwide = salary + rsu.totalEUR;
+            const esPctAll = rsu.totalEUR > 0 ? rsu.spainEUR / rsu.totalEUR : 0;
 
             const fmt = (v) => '€' + Math.round(v).toLocaleString('en-US');
             const fmtUSD = (v) => '$' + Math.round(v).toLocaleString('en-US');
@@ -6444,9 +6470,29 @@
             html += `<table style="width:100%; font-size:13px; border-collapse:collapse;">
                 <tr style="background:#f8f9fa;"><th style="text-align:left; padding:6px;">Item</th><th style="text-align:right; padding:6px;">Amount</th><th style="text-align:right; padding:6px;">Notes</th></tr>
                 <tr><td ${td}>Salary</td><td ${tr}>${fmt(salary)}</td><td ${note}>Spain-sourced</td></tr>
-                <tr><td ${td}>RSU — Spain-sourced (${pct(esPct)})</td><td ${tr}>${fmt(r.rsuES)}</td><td ${note}>Taxed in both regimes</td></tr>
-                <tr><td ${td}>RSU — US-sourced (${pct(1 - esPct)})</td><td ${tr}>${fmt(r.rsuUS)}</td><td ${note}>${regime === 'beckham' ? 'Not taxed in Spain under Beckham' : 'Taxed in Spain; US tax credited'}</td></tr>
+                <tr><td ${td}>RSU — Spain-sourced (${pct(esPctAll)} of value)</td><td ${tr}>${fmt(r.rsuES)}</td><td ${note}>Taxed in both regimes</td></tr>
+                <tr><td ${td}>RSU — US-sourced (${pct(1 - esPctAll)} of value)</td><td ${tr}>${fmt(r.rsuUS)}</td><td ${note}>${regime === 'beckham' ? 'Not taxed in Spain under Beckham' : 'Taxed in Spain; US tax credited'}</td></tr>
             </table>`;
+
+            if (useVests) {
+                const row = (v) => `<tr style="${v.projected ? 'color:var(--text-muted);' : ''}">
+                    <td style="padding:3px 6px; white-space:nowrap;">${v.date.toISOString().slice(0, 10)}${v.projected ? ' (proj.)' : ''}</td>
+                    <td style="padding:3px 6px;">${v.grantName}</td>
+                    <td style="text-align:right; padding:3px 6px;">${v.shares.toFixed(0)}</td>
+                    <td style="text-align:right; padding:3px 6px;">$${v.priceUSD.toFixed(2)}</td>
+                    <td style="text-align:right; padding:3px 6px;">${fmt(v.valueEUR)}</td>
+                    <td style="text-align:right; padding:3px 6px;">${pct(v.spainPct)}</td>
+                    <td style="text-align:right; padding:3px 6px; color:#2e7d32;">${fmt(v.esEUR)}</td>
+                    <td style="text-align:right; padding:3px 6px; color:#1565c0;">${fmt(v.usEUR)}</td>
+                    <td style="text-align:right; padding:3px 6px;">${v.eligible30 ? '✓' : '—'}</td></tr>`;
+                html += `<details style="margin-top:12px; border:1px solid #ddd; border-radius:6px; overflow:hidden;">
+                    <summary style="padding:8px 12px; background:#f8f9fa; cursor:pointer; font-size:13px; font-weight:600;">RSU vests used (${vests.length}) — Spain vs US split per vest</summary>
+                    <div style="padding:8px; max-height:360px; overflow-y:auto;"><table style="width:100%; border-collapse:collapse; font-size:11px;">
+                        <thead><tr style="background:#f8f9fa;"><th style="text-align:left; padding:3px 6px;">Date</th><th style="text-align:left; padding:3px 6px;">Grant</th><th style="text-align:right; padding:3px 6px;">Shares</th><th style="text-align:right; padding:3px 6px;">Price</th><th style="text-align:right; padding:3px 6px;">Value €</th><th style="text-align:right; padding:3px 6px;">ES%</th><th style="text-align:right; padding:3px 6px; color:#2e7d32;">Spain €</th><th style="text-align:right; padding:3px 6px; color:#1565c0;">US €</th><th style="text-align:right; padding:3px 6px;" title="Grant to vest > 2 years">30%?</th></tr></thead>
+                        <tbody>${vests.map(row).join('')}</tbody>
+                    </table></div>
+                </details>`;
+            }
 
             if (regime === 'beckham') {
                 const over = r.beckham.income > ES_BECKHAM_CAP;
@@ -6465,7 +6511,7 @@
                         <tr><td style="padding:3px 6px;">Worldwide employment income</td><td style="text-align:right; padding:3px 6px;">${fmt(P.gross)}</td></tr>
                         <tr><td style="padding:3px 6px;">Social Security</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(num('esTaxSS'))}</td></tr>
                         <tr><td style="padding:3px 6px;">Other deductible expenses</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(ES_WORK_EXPENSES)}</td></tr>
-                        ${P.reduction > 0 ? `<tr><td style="padding:3px 6px;">30% irregular-income reduction</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(P.reduction)}</td></tr>` : ''}
+                        ${P.reduction > 0 ? `<tr><td style="padding:3px 6px;">30% irregular-income reduction (on ${fmt(rsu.reducibleEUR)} eligible RSUs)</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(P.reduction)}</td></tr>` : ''}
                         <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:3px 6px;">Net income (base liquidable)</td><td style="text-align:right; padding:3px 6px;">${fmt(P.netIncome)}</td></tr>
                         <tr><td style="padding:3px 6px;">Tax on base (state + ${region === 'madrid' ? 'Madrid' : 'default'} scale)</td><td style="text-align:right; padding:3px 6px;">${fmt(P.scaleTax)}</td></tr>
                         <tr><td style="padding:3px 6px;">Less tax on personal/family minimum (${fmt(P.minimums)})</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(P.minimumsTax)}</td></tr>
