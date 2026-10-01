@@ -1450,9 +1450,9 @@
                     <div class="definition" data-i18n="explainESSourcing">
                         <strong>Taxable in Spain.</strong> This portion is subject to Spanish IRPF.
                         <br><br>
-                        <strong>Under Beckham Law:</strong> Flat 24% rate on employment income up to €600,000 (47% above that). This applies to the Spain-sourced RSU income classified as <em>retribución en especie</em>.
+                        <strong>Under Beckham Law:</strong> Flat 24% rate on employment income up to €600,000 (47% above that). This applies to all Spain-sourced employment income, including the Spain-sourced share of RSUs (shown as <em>retribución en especie</em> on the payslip).
                         <br><br>
-                        <strong>Without Beckham Law:</strong> Progressive rates (19%–47%) plus autonomous community rates. However, you can apply the 30% irregular income reduction for RSUs accruing over 2+ years (capped at €300k) — this reduction is <strong>not</strong> available under Beckham Law.
+                        <strong>Without Beckham Law:</strong> Progressive state plus autonomous community rates (19%–47% combined on the default scale; some regions such as Madrid are lower). You may be able to apply the 30% irregular income reduction to RSUs accruing over 2+ years (capped at €300k), though it is contested for recurring plan vests — this reduction is <strong>not</strong> available under Beckham Law.
                     </div>
                 </div>
             </div>
@@ -1695,7 +1695,7 @@
                         <option value="0">Not applied</option>
                         <option value="1">Apply to vests &gt;2 yrs from grant (cap €300k)</option>
                     </select>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Regular regime only; not available under Beckham. Eligibility for RSUs is contested.</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Regular regime only; not available under Beckham. Contested for RSUs: recurring plan vests are often treated as ordinary income, so this is opt-in.</div>
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 15px;">
@@ -1727,7 +1727,12 @@
                 <div class="form-group">
                     <label>Spanish tax withheld (EUR, full year)</label>
                     <input type="number" id="esTaxWithheld" placeholder="auto from payslips" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
-                    <div style="font-size: 10px; color: var(--text-muted);">Payslips YTD + projected rest of year</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Payslips so far + months without a payslip at the rate to the right</div>
+                </div>
+                <div class="form-group">
+                    <label>Projected withholding rate, months without a payslip (%)</label>
+                    <input type="number" id="esTaxProjRate" placeholder="24" step="0.1" onchange="refreshESWithheld()" style="width: 100%; padding: 8px;">
+                    <div style="font-size: 10px; color: var(--text-muted);">Beckham: 24% once the Modelo 149 is applied. Regular: your latest payslip rate. Changing this re-estimates the withheld total.</div>
                 </div>
                 <div class="form-group esTaxRegularOnly">
                     <label>US tax on US-sourced RSUs (USD)</label>
@@ -5825,27 +5830,27 @@
         // ===== US Tax Estimation =====
         const US_TAX_BRACKETS_2026 = {
             mfs: [
-                { min: 0, max: 11925, rate: 0.10 },
-                { min: 11925, max: 48475, rate: 0.12 },
-                { min: 48475, max: 103350, rate: 0.22 },
-                { min: 103350, max: 197300, rate: 0.24 },
-                { min: 197300, max: 250525, rate: 0.32 },
-                { min: 250525, max: 626350, rate: 0.35 },
-                { min: 626350, max: Infinity, rate: 0.37 }
+                { min: 0, max: 12400, rate: 0.10 },
+                { min: 12400, max: 50400, rate: 0.12 },
+                { min: 50400, max: 105700, rate: 0.22 },
+                { min: 105700, max: 201775, rate: 0.24 },
+                { min: 201775, max: 256225, rate: 0.32 },
+                { min: 256225, max: 384350, rate: 0.35 },
+                { min: 384350, max: Infinity, rate: 0.37 }
             ],
             mfj: [
-                { min: 0, max: 23850, rate: 0.10 },
-                { min: 23850, max: 96950, rate: 0.12 },
-                { min: 96950, max: 206700, rate: 0.22 },
-                { min: 206700, max: 394600, rate: 0.24 },
-                { min: 394600, max: 501050, rate: 0.32 },
-                { min: 501050, max: 751600, rate: 0.35 },
-                { min: 751600, max: Infinity, rate: 0.37 }
+                { min: 0, max: 24800, rate: 0.10 },
+                { min: 24800, max: 100800, rate: 0.12 },
+                { min: 100800, max: 211400, rate: 0.22 },
+                { min: 211400, max: 403550, rate: 0.24 },
+                { min: 403550, max: 512450, rate: 0.32 },
+                { min: 512450, max: 768700, rate: 0.35 },
+                { min: 768700, max: Infinity, rate: 0.37 }
             ]
         };
-        const US_STANDARD_DEDUCTION_2026 = { mfs: 15700, mfj: 31400 };
-        const US_FEIE_LIMIT_2026 = 130000;
-        const US_SS_CAP_2026 = 176100;
+        const US_STANDARD_DEDUCTION_2026 = { mfs: 16100, mfj: 32200 };
+        const US_FEIE_LIMIT_2026 = 132900;
+        const US_SS_CAP_2026 = 184500;
 
         function computeUSFederalTax(taxableIncome, brackets) {
             let tax = 0;
@@ -6005,10 +6010,6 @@
             if (salary === 0 && rsuTotal === 0) { container.style.display = 'none'; return; }
             container.style.display = 'block';
 
-            const brackets = US_TAX_BRACKETS_2026[filing];
-            const stdDeduction = US_STANDARD_DEDUCTION_2026[filing];
-            const feieLimit = US_FEIE_LIMIT_2026;
-
             // Compute RSU sourcing from the per-vest rows (value-weighted, same as the Vest Schedule Preview)
             let rsuUSPct = 0.85, rsuESPct = 0.15; // defaults
             const yearVests = getRSUYearVests(new Date().getFullYear());
@@ -6020,39 +6021,43 @@
 
             const rsuUS = rsuTotal * rsuUSPct;
             const rsuES = rsuTotal * rsuESPct;
-            const worldwideIncome = salary + rsuTotal + otherIncome + spouseIncome;
 
-            // FEIE
-            let feieExclusion = 0;
-            if (strategy === 'feie-ftc') {
+            // One scenario = one (filing status, strategy) pair. The headline numbers and the
+            // 4-way strategy comparison below both use this, so they cannot disagree.
+            const usScenario = (f, s) => {
+                const br = US_TAX_BRACKETS_2026[f];
+                const sd = US_STANDARD_DEDUCTION_2026[f];
+                const spouse = f === 'mfj' ? spouseIncome : 0; // MFS excludes the spouse's income
+                const worldwide = salary + rsuTotal + otherIncome + spouse;
                 // FEIE: exclude salary + Spain-sourced RSU (foreign earned), up to limit
-                const foreignEarned = salary + rsuES;
-                feieExclusion = Math.min(foreignEarned, feieLimit);
-            }
+                const fsiGross = salary + rsuES;
+                const feie = s === 'feie-ftc' ? Math.min(fsiGross, US_FEIE_LIMIT_2026) : 0;
+                const agi = worldwide - feie;
+                const taxable = Math.max(0, agi - sd);
+                // Tax with stacking rule: compute tax on full income, subtract tax on excluded
+                const tax = feie > 0
+                    ? computeUSFederalTax(Math.max(0, worldwide - sd), br) - computeUSFederalTax(feie, br)
+                    : computeUSFederalTax(taxable, br);
+                // Form 1116 limit: tax x foreign-source taxable income / worldwide taxable income.
+                // The standard deduction is apportioned by gross income, so the ratio reduces to FSI / AGI.
+                const fsi = Math.max(0, fsiGross - feie);
+                const ftcLimit = agi > 0 ? tax * Math.min(1, fsi / agi) : 0;
+                // Spanish tax allocable to FEIE-excluded income cannot be credited
+                const creditableSpanish = fsiGross > 0 ? spanishTaxPaid * (fsi / fsiGross) : 0;
+                const ftc = Math.min(creditableSpanish, ftcLimit);
+                const net = Math.max(0, tax - ftc);
+                return {
+                    worldwide, feie, agi, taxable, tax, sd, fsi, ftcLimit, creditableSpanish, ftc,
+                    ftcCarryforward: Math.max(0, creditableSpanish - ftcLimit), net, bal: net - usWithheld
+                };
+            };
 
-            const agi = worldwideIncome - feieExclusion;
-            const taxableIncome = Math.max(0, agi - stdDeduction);
-
-            // Tax with stacking rule: compute tax on full income, subtract tax on excluded
-            let federalTax;
-            if (feieExclusion > 0) {
-                const taxOnFull = computeUSFederalTax(worldwideIncome - stdDeduction, brackets);
-                const taxOnExcluded = computeUSFederalTax(feieExclusion, brackets);
-                federalTax = taxOnFull - taxOnExcluded;
-            } else {
-                federalTax = computeUSFederalTax(taxableIncome, brackets);
-            }
-
-            // FTC: credit for Spanish taxes, limited by formula
-            const foreignSourceIncome = strategy === 'feie-ftc'
-                ? Math.max(0, (salary + rsuES) - feieExclusion) // only non-excluded foreign source
-                : salary + rsuES; // all foreign source
-            const ftcLimit = taxableIncome > 0 ? federalTax * (foreignSourceIncome / (taxableIncome || 1)) : 0;
-            const ftcUsable = Math.min(spanishTaxPaid, ftcLimit);
-            const ftcCarryforward = spanishTaxPaid > ftcLimit ? spanishTaxPaid - ftcLimit : 0;
-
-            const netFederalTax = Math.max(0, federalTax - ftcUsable);
-            const balanceOwed = netFederalTax - usWithheld;
+            const cur = usScenario(filing, strategy);
+            const stdDeduction = cur.sd, worldwideIncome = cur.worldwide, feieExclusion = cur.feie, agi = cur.agi;
+            const taxableIncome = cur.taxable, federalTax = cur.tax, foreignSourceIncome = cur.fsi;
+            const ftcLimit = cur.ftcLimit, ftcUsable = cur.ftc, ftcCarryforward = cur.ftcCarryforward;
+            const netFederalTax = cur.net, balanceOwed = cur.bal;
+            const feieLimit = US_FEIE_LIMIT_2026;
 
             // Format
             const fmt = (v) => '$' + Math.round(v).toLocaleString('en-US');
@@ -6086,9 +6091,10 @@
                 <table style="width:100%; font-size:12px; margin-top:8px; border-collapse:collapse;">
                     <tr><td style="padding:3px 6px;">Spanish taxes paid (projected annual)</td><td style="text-align:right; padding:3px 6px;">${fmt(spanishTaxPaid)}</td></tr>
                     <tr><td style="padding:3px 6px;">Foreign source income (non-excluded)</td><td style="text-align:right; padding:3px 6px;">${fmt(foreignSourceIncome)}</td></tr>
-                    <tr><td style="padding:3px 6px;">FTC limitation formula</td><td style="text-align:right; padding:3px 6px;">${fmt(federalTax)} × ${fmt(foreignSourceIncome)} / ${fmt(taxableIncome)} = ${fmt(ftcLimit)}</td></tr>
+                    ${cur.creditableSpanish < spanishTaxPaid - 0.5 ? `<tr><td style="padding:3px 6px;">Creditable Spanish tax (excludes the share allocable to FEIE-excluded income)</td><td style="text-align:right; padding:3px 6px;">${fmt(cur.creditableSpanish)}</td></tr>` : ''}
+                    <tr><td style="padding:3px 6px;">FTC limitation (tax × foreign-source income / AGI)</td><td style="text-align:right; padding:3px 6px;">${fmt(federalTax)} × ${fmt(foreignSourceIncome)} / ${fmt(agi)} = ${fmt(ftcLimit)}</td></tr>
                     <tr style="font-weight:600;"><td style="padding:3px 6px;">Usable FTC</td><td style="text-align:right; padding:3px 6px; color:#2e7d32;">-${fmt(ftcUsable)}</td></tr>
-                    ${ftcCarryforward > 0 ? `<tr><td style="padding:3px 6px; color:var(--text-muted);">Excess FTC (carries forward 10 years)</td><td style="text-align:right; padding:3px 6px; color:var(--text-muted);">${fmt(ftcCarryforward)}</td></tr>` : ''}
+                    ${ftcCarryforward > 0 ? `<tr><td style="padding:3px 6px; color:var(--text-muted);">Excess FTC (carries back 1 year or forward 10)</td><td style="text-align:right; padding:3px 6px; color:var(--text-muted);">${fmt(ftcCarryforward)}</td></tr>` : ''}
                 </table>
             </div>`;
 
@@ -6167,25 +6173,9 @@
             // Strategy recommendation: compute all 4 combos
             const combos = [];
             for (const f of ['mfj', 'mfs']) {
-                for (const s of ['ftc-only', 'feie-ftc']) {
-                    const b = US_TAX_BRACKETS_2026[f];
-                    const sd = US_STANDARD_DEDUCTION_2026[f];
-                    const ti = Math.max(0, worldwideIncome - sd);
-                    let feie = 0;
-                    if (s === 'feie-ftc') feie = Math.min(salary + rsuES, US_FEIE_LIMIT_2026);
-                    let tax;
-                    if (feie > 0) {
-                        tax = computeUSFederalTax(Math.max(0, worldwideIncome - sd), b) - computeUSFederalTax(feie, b);
-                    } else {
-                        tax = computeUSFederalTax(ti, b);
-                    }
-                    const fsi = s === 'feie-ftc' ? Math.max(0, (salary + rsuES) - feie) : salary + rsuES;
-                    const taxableForFTC = feie > 0 ? Math.max(0, ti - feie + sd) : ti; // approximate
-                    const ftcLim = taxableForFTC > 0 ? tax * (fsi / taxableForFTC) : 0;
-                    const ftc = Math.min(spanishTaxPaid, ftcLim);
-                    const net = Math.max(0, tax - ftc);
-                    const bal = net - usWithheld;
-                    combos.push({ filing: f.toUpperCase(), strategy: s === 'ftc-only' ? 'FTC Only' : 'FEIE+FTC', net, bal, tax, ftc });
+                for (const st of ['ftc-only', 'feie-ftc']) {
+                    const sc = usScenario(f, st);
+                    combos.push({ filing: f.toUpperCase(), strategy: st === 'ftc-only' ? 'FTC Only' : 'FEIE+FTC', net: sc.net, bal: sc.bal, tax: sc.tax, ftc: sc.ftc });
                 }
             }
             combos.sort((a, b) => a.net - b.net);
@@ -6216,7 +6206,8 @@
                         ${strategy === 'feie-ftc' ? '<tr><td style="padding:3px 6px; font-weight:600;">Form 2555</td><td style="padding:3px 6px;">Foreign Earned Income Exclusion</td></tr>' : ''}
                         <tr><td style="padding:3px 6px; font-weight:600;">Form 1116</td><td style="padding:3px 6px;">Foreign Tax Credit</td></tr>
                         <tr><td style="padding:3px 6px; font-weight:600;">Schedule D / 8949</td><td style="padding:3px 6px;">Shares sold at vest (even if $0 gain)</td></tr>
-                        <tr><td style="padding:3px 6px; font-weight:600;">Form 8938</td><td style="padding:3px 6px;">FATCA — foreign financial assets</td></tr>
+                        <tr><td style="padding:3px 6px; font-weight:600;">Form 8938</td><td style="padding:3px 6px;">FATCA — foreign financial assets (living abroad: $200k single / $400k joint at year-end)</td></tr>
+                        <tr><td style="padding:3px 6px; font-weight:600;">Form 8833</td><td style="padding:3px 6px;">Treaty-based position, if you rely on treaty resourcing of the US-sourced RSU share</td></tr>
                         <tr><td style="padding:3px 6px; font-weight:600;">FBAR (FinCEN 114)</td><td style="padding:3px 6px;">Foreign bank accounts >$10k aggregate</td></tr>
                     </table>
                     <div style="margin-top:8px; padding:6px; background:#fff3cd; border-radius:4px; font-size:11px;">
@@ -6238,15 +6229,15 @@
         const ES_REGION_SCALES = {
             general: ES_STATE_SCALE, // default autonomic scale mirrors the state scale (19%–47% combined)
             madrid: [
-                { upTo: 13362.22, rate: 0.085 }, { upTo: 18004.63, rate: 0.11 }, { upTo: 35425.68, rate: 0.133 },
-                { upTo: 57320.40, rate: 0.179 }, { upTo: Infinity, rate: 0.21 }
+                { upTo: 13362.22, rate: 0.085 }, { upTo: 19004.63, rate: 0.107 }, { upTo: 35425.68, rate: 0.128 },
+                { upTo: 57320.40, rate: 0.174 }, { upTo: Infinity, rate: 0.205 }
             ]
         };
         const ES_PERSONAL_MINIMUM = 5550;
         const ES_WORK_EXPENSES = 2000;
         const ES_IRREGULAR_REDUCTION = 0.30, ES_IRREGULAR_CAP = 300000;
         const ES_BECKHAM_CAP = 600000, ES_BECKHAM_HIGH_RATE = 0.47;
-        const ES_SS_MAX_BASE_2026 = 61214.40; // estimate (5,101.20/month)
+        const ES_SS_MAX_BASE_2026 = 61214.40; // 5,101.20/month (Orden PJC/297/2026)
 
         function esScaleTax(amount, region) {
             const apply = (scale) => {
@@ -6265,6 +6256,7 @@
         // Shared by the Results tab refund card and the Spain Tax Estimate tab.
         function computeBeckhamOverWithholding() {
             let totalOverWithholding = 0;
+            let netOverWithholding = 0; // includes under-withheld months (negative)
             let monthsOverWithheld = 0;
             let monthsCorrect = 0;
             let monthsNotApplicable = 0;
@@ -6298,6 +6290,7 @@
                 const beckhamTotal = BECKHAM_LAW_RATE * (cashTotal + especieTotal);
                 const monthOver = actualTotal - beckhamTotal;
 
+                netOverWithholding += monthOver;
                 if (monthOver > 0) {
                     totalOverWithholding += monthOver;
                     monthsOverWithheld++;
@@ -6310,7 +6303,7 @@
                     });
                 }
             }
-            return { totalOverWithholding, monthsOverWithheld, monthsCorrect, monthsNotApplicable, beckhamMonthDetails };
+            return { totalOverWithholding, netOverWithholding, monthsOverWithheld, monthsCorrect, monthsNotApplicable, beckhamMonthDetails };
         }
 
         // Per-vest rows for a year, straight from the RSU grant table (same events + prices as the
@@ -6369,6 +6362,28 @@
             };
         }
 
+        // Spanish tax withheld for the year: payslips so far, plus every month WITHOUT a payslip at projRate
+        // (salary share + the Spain-sourced share of any vest in that month, past or future).
+        function esEstimateWithheld(projRate) {
+            const year = new Date().getFullYear();
+            const psYear = parsedPayslips.filter(ps => ps.year === year);
+            const psMonths = new Set(psYear.map(ps => ps.month));
+            const ytd = psYear.reduce((t, ps) => t + ps.deductions.reduce((s, d) =>
+                /irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs) ? s + Math.abs(d.amount) : s, 0), 0);
+            const salaryEUR = parseFloat(document.getElementById('esTaxSalary')?.value) || config.annualGross || 0;
+            const vestEUR = getRSUYearVests(year)
+                .filter(v => !psMonths.has(v.date.getMonth() + 1))
+                .reduce((s, v) => s + v.esEUR, 0);
+            return ytd + (12 - psMonths.size) * (salaryEUR / 12) * projRate + vestEUR * projRate;
+        }
+
+        function refreshESWithheld() {
+            const rate = (parseFloat(document.getElementById('esTaxProjRate')?.value) || 0) / 100;
+            const el = document.getElementById('esTaxWithheld');
+            if (el) el.value = Math.round(esEstimateWithheld(rate)) || '';
+            computeESTaxEstimate();
+        }
+
         function prefillESTaxFromConfig(force) {
             const setField = (id, val) => {
                 const el = document.getElementById(id);
@@ -6390,25 +6405,27 @@
             const psYear = parsedPayslips.filter(ps => ps.year === year);
             const sumDeds = (re) => psYear.reduce((t, ps) => t + ps.deductions.reduce((s, d) =>
                 re.test(d.nameEn + ' ' + d.nameEs) ? s + Math.abs(d.amount) : s, 0), 0);
-            const remainingMonths = Math.max(0, 12 - psYear.length);
+            const psMonths = new Set(psYear.map(ps => ps.month));
 
             const ssRates = SS_RATES[year] || SS_RATES[2026];
             const ssRate = ssRates.cc + ssRates.equity + ssRates.fp + ssRates.unemployment;
-            const ssEstimate = psYear.length > 0
-                ? sumDeds(/contingencias|equidad|solidaridad|formaci|desempleo/i) * (12 / psYear.length)
+            const ssEstimate = psMonths.size > 0
+                ? sumDeds(/contingencias|equidad|solidaridad|formaci|desempleo/i) * (12 / psMonths.size)
                 : Math.min(salaryEUR, ES_SS_MAX_BASE_2026) * ssRate;
             setField('esTaxSS', Math.round(ssEstimate) || '');
 
-            let salaryRate = config.beckhamLawQualifies ? BECKHAM_LAW_RATE : 0.30;
+            // Rate for months without a payslip: Beckham assumes 24% from here on, regular uses the latest payslip rate
+            let observedRate = null;
             if (psYear.length > 0) {
                 const last = [...psYear].sort((a, b) => a.month - b.month).pop();
                 const irpf = last.deductions.find(d => /tributaci.*irpf|irpf/i.test(d.nameEn + ' ' + d.nameEs));
-                if (irpf?.percent) salaryRate = parseFloat(irpf.percent) / 100;
+                const r = parseFloat(String(irpf?.percent ?? '').replace(',', '.'));
+                if (isFinite(r) && r > 0) observedRate = r / 100;
             }
-            const futureSpainEUR = getRSUYearVests(year).filter(v => v.projected).reduce((s, v) => s + v.esEUR, 0);
-            const withheldYTD = sumDeds(/irpf|tributaci|repercutidos/i);
-            const withheldRest = remainingMonths * (salaryEUR / 12) * salaryRate + futureSpainEUR * salaryRate;
-            setField('esTaxWithheld', Math.round(withheldYTD + withheldRest) || '');
+            const isBeckham = (document.getElementById('esTaxRegime')?.value || 'beckham') === 'beckham';
+            setField('esTaxProjRate', ((isBeckham ? BECKHAM_LAW_RATE : (observedRate ?? 0.30)) * 100).toFixed(1));
+            const projRate = (parseFloat(document.getElementById('esTaxProjRate')?.value) || 0) / 100;
+            setField('esTaxWithheld', Math.round(esEstimateWithheld(projRate)) || '');
 
             // US tax on US-sourced RSUs: default to the US withholding from the US tab
             if (!usTaxTabVisited) { usTaxTabVisited = true; prefillUSTaxFromConfig(); }
@@ -6485,8 +6502,8 @@
 
             if (useVests) {
                 const row = (v) => `<tr style="${v.projected ? 'color:var(--text-muted);' : ''}">
-                    <td style="padding:3px 6px; white-space:nowrap;">${v.date.toISOString().slice(0, 10)}${v.projected ? ' (proj.)' : ''}</td>
-                    <td style="padding:3px 6px;">${v.grantName}</td>
+                    <td style="padding:3px 6px; white-space:nowrap;">${v.date.getFullYear()}-${String(v.date.getMonth() + 1).padStart(2, '0')}-${String(v.date.getDate()).padStart(2, '0')}${v.projected ? ' (proj.)' : ''}</td>
+                    <td style="padding:3px 6px;">${escapeHtml(v.grantName)}</td>
                     <td style="text-align:right; padding:3px 6px;">${v.shares.toFixed(0)}</td>
                     <td style="text-align:right; padding:3px 6px;">$${v.priceUSD.toFixed(2)}</td>
                     <td style="text-align:right; padding:3px 6px;">${fmt(v.valueEUR)}</td>
@@ -6532,16 +6549,18 @@
 
             if (beckham) {
                 const ow = computeBeckhamOverWithholding();
-                const projectedOver = Math.max(0, withheld - r.beckham.tax);
-                const furtherOver = Math.max(0, projectedOver - ow.totalOverWithholding);
+                const projectedOver = withheld - r.beckham.tax; // + refund, - owed
+                const furtherOver = projectedOver - ow.totalOverWithholding;
+                const signed = (v) => v >= 0 ? fmt(v) : '(' + fmt(Math.abs(v)) + ')';
                 const lastOver = ow.beckhamMonthDetails.length > 0 ? ow.beckhamMonthDetails[ow.beckhamMonthDetails.length - 1] : null;
                 if (ow.totalOverWithholding > 0 || projectedOver > 0) {
                     html += `<div style="margin-top:15px; padding:12px; background:#f0f8e8; border:2px solid #8bc34a; border-radius:6px;">
                         <strong style="color:#558b2f;">Beckham over-withholding</strong>
                         <table style="width:100%; font-size:12px; margin-top:8px; border-collapse:collapse;">
                             <tr><td style="padding:3px 6px;">Over-withheld on payslips so far (${ow.monthsOverWithheld} month${ow.monthsOverWithheld === 1 ? '' : 's'} above 24%)</td><td style="text-align:right; padding:3px 6px; font-weight:600;">${fmt(ow.totalOverWithholding)}</td></tr>
-                            <tr><td style="padding:3px 6px;">Further over-withholding by year end if the rate is unchanged</td><td style="text-align:right; padding:3px 6px;">${fmt(furtherOver)}</td></tr>
-                            <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:3px 6px;">Full-year refund via Modelo 151 (withheld − Beckham tax)</td><td style="text-align:right; padding:3px 6px; color:#558b2f;">${fmt(projectedOver)}</td></tr>
+                            ${Math.abs(ow.netOverWithholding - ow.totalOverWithholding) > 0.5 ? `<tr><td style="padding:3px 6px;">Net of months withheld below 24%</td><td style="text-align:right; padding:3px 6px;">${signed(ow.netOverWithholding)}</td></tr>` : ''}
+                            <tr><td style="padding:3px 6px;">Rest of year at the projected rate (brackets = under-withheld)</td><td style="text-align:right; padding:3px 6px;">${signed(furtherOver)}</td></tr>
+                            <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:3px 6px;">${projectedOver >= 0 ? 'Full-year refund via Modelo 151' : 'Full-year balance owed'} (withheld − Beckham tax)</td><td style="text-align:right; padding:3px 6px; color:${projectedOver >= 0 ? '#558b2f' : '#dc3545'};">${fmt(Math.abs(projectedOver))}</td></tr>
                         </table>
                         ${lastOver ? `<div style="font-size:11px; margin-top:6px;">Latest over-withheld month (${lastOver.period}): employer withheld at ${pct(lastOver.actualRate)}, about ${fmt(lastOver.over)} more than 24%. Giving payroll your Modelo 149 acknowledgment should stop this going forward.</div>` : ''}
                         ${ow.beckhamMonthDetails.length > 0 ? `<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12px;">Month by month</summary>
@@ -6586,14 +6605,14 @@
                         ? '<li>Under Beckham the US-sourced RSU share is outside the Spanish base, so there is no Spanish credit for US tax. The US taxes it with no FTC.</li>'
                         : '<li>Under the regular regime Spain taxes everything and credits US tax on US-sourced income. This tab does not model the US-side re-sourcing that follows, so combine both tabs with care.</li>'}
                 </ul>
-                <button onclick="sendESTaxToUSTab(${Math.round(chosen * eurRate)})" style="margin-top:8px; font-size:12px;" class="secondary">Send ${fmtUSD(chosen * eurRate)} to US tab as Spanish taxes paid</button>
+                <button onclick="sendESTaxToUSTab(${Math.round(chosen * eurRate)})" style="margin-top:8px; font-size:12px;" class="secondary">Send ${fmtUSD(chosen * eurRate)} to US tab as Spanish taxes paid${beckham ? '' : ' (approximate, see note)'}</button>
             </div>`;
 
             html += `<details style="margin-top:15px; border:1px solid #ddd; border-radius:6px; overflow:hidden;">
                 <summary style="padding:8px 12px; background:#f8f9fa; cursor:pointer; font-size:13px; font-weight:600;">Assumptions and what is not modelled</summary>
                 <ul style="padding:8px 12px 8px 30px; font-size:12px; margin:0;">
                     <li>Employment income only (salary + RSUs). No savings income, capital gains, rental, or wealth tax.</li>
-                    <li>Beckham: 24% to ${fmt(ES_BECKHAM_CAP)}, 47% above, on Spain-sourced income. Requires the Modelo 149 election; filed on Modelo 151.</li>
+                    <li>Beckham: 24% to ${fmt(ES_BECKHAM_CAP)}, 47% above, on Spain-sourced income. Requires the Modelo 149 election (reportedly within six months of starting work or Social Security registration; if it was late the regime may not apply, so confirm that first). Filed on Modelo 151.</li>
                     ${beckham ? '' : `<li>Regular: €2,000 other expenses, €5,550 personal minimum plus your extra minimums. The reduction for low work income and regional deductions are not modelled.</li>
                     <li>The Madrid scale is a 2026 estimate; other regions use the default 19%–47% scale. Basque Country and Navarra have their own regimes and are not covered.</li>`}
                     <li>Projected withholding uses your latest payslip IRPF rate for the remaining months and future vests. Edit the field if you know better.</li>
