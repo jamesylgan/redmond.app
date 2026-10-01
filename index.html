@@ -1679,9 +1679,9 @@
                         <option value="beckham">Beckham Law (24% flat, Spain-sourced only)</option>
                         <option value="progressive">Regular resident (progressive, worldwide)</option>
                     </select>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Both regimes are always compared below.</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Switch to Regular resident to see the comparison and its extra inputs.</div>
                 </div>
-                <div class="form-group">
+                <div class="form-group esTaxRegularOnly">
                     <label><strong>Autonomous community scale</strong></label>
                     <select id="esTaxRegion" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                         <option value="general">Default (19%–47% combined)</option>
@@ -1689,7 +1689,7 @@
                     </select>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Only affects the regular-resident regime.</div>
                 </div>
-                <div class="form-group">
+                <div class="form-group esTaxRegularOnly">
                     <label><strong>30% irregular-income reduction</strong></label>
                     <select id="esTaxReduce30" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                         <option value="0">Not applied</option>
@@ -1714,12 +1714,12 @@
             </div>
             <div id="esTaxRSUAuto" style="display:none; margin-top:10px; padding:8px 10px; background:#e8f4fd; border-radius:6px; font-size:12px;"></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-top: 10px;">
-                <div class="form-group">
+                <div class="form-group esTaxRegularOnly">
                     <label>Social Security paid (EUR)</label>
                     <input type="number" id="esTaxSS" placeholder="auto" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">Deductible in regular regime only</div>
                 </div>
-                <div class="form-group">
+                <div class="form-group esTaxRegularOnly">
                     <label>Extra family minimums (EUR)</label>
                     <input type="number" id="esTaxExtraMin" placeholder="0" step="1" value="0" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">On top of the €5,550 personal minimum</div>
@@ -1729,7 +1729,7 @@
                     <input type="number" id="esTaxWithheld" placeholder="auto from payslips" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">Payslips YTD + projected rest of year</div>
                 </div>
-                <div class="form-group">
+                <div class="form-group esTaxRegularOnly">
                     <label>US tax on US-sourced RSUs (USD)</label>
                     <input type="number" id="esTaxUSTaxPaid" placeholder="auto from US tab" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">For the Spanish foreign tax credit (regular regime)</div>
@@ -3173,52 +3173,7 @@
 
             // ===== Beckham Law Accumulated Refund Estimate =====
             if (config.beckhamLawQualifies) {
-                let totalOverWithholding = 0;
-                let monthsOverWithheld = 0;
-                let monthsCorrect = 0;
-                let monthsNotApplicable = 0;
-                const beckhamMonthDetails = [];
-
-                for (const ps of parsedPayslips) {
-                    const periodKey = `${ps.month}/${ps.year}`;
-                    const perPayslip = config.beckhamPerPayslip?.[periodKey] || {};
-                    const shouldApply = perPayslip.shouldApply !== undefined ? perPayslip.shouldApply : true;
-
-                    if (!shouldApply) { monthsNotApplicable++; continue; }
-
-                    // Find effective rate
-                    const irpfDed = ps.deductions.find(d => /tributaci.*irpf|irpf.*tributaci|^income tax.*irpf/i.test(d.nameEn + ' ' + d.nameEs));
-                    const effRate = irpfDed && irpfDed.percent ? parseFloat(irpfDed.percent) / 100 : 0;
-                    const wasApplied = effRate <= (BECKHAM_LAW_RATE + 0.005);
-
-                    if (wasApplied) { monthsCorrect++; continue; }
-
-                    // Calculate over-withholding
-                    const irpfAmt = irpfDed ? Math.abs(irpfDed.amount) : 0;
-                    const repDed = ps.deductions.find(d => /repercutidos|passed-on/i.test(d.nameEn + ' ' + d.nameEs));
-                    const repAmt = repDed ? Math.abs(repDed.amount) : 0;
-                    const actualTotal = irpfAmt + repAmt;
-
-                    // What it should have been at Beckham rate
-                    const cashEarnings = ps.earnings.filter(e => !/seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs));
-                    const especieEarnings = ps.earnings.filter(e => /seguros.*sujetos|taxable.*insurance|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs));
-                    const cashTotal = cashEarnings.reduce((s, e) => s + e.amount, 0);
-                    const especieTotal = especieEarnings.reduce((s, e) => s + e.amount, 0);
-                    const beckhamTotal = BECKHAM_LAW_RATE * (cashTotal + especieTotal);
-                    const monthOver = actualTotal - beckhamTotal;
-
-                    if (monthOver > 0) {
-                        totalOverWithholding += monthOver;
-                        monthsOverWithheld++;
-                        beckhamMonthDetails.push({
-                            period: periodKey,
-                            actualRate: effRate,
-                            actual: actualTotal,
-                            beckham: beckhamTotal,
-                            over: monthOver
-                        });
-                    }
-                }
+                const { totalOverWithholding, monthsOverWithheld, monthsCorrect, monthsNotApplicable, beckhamMonthDetails } = computeBeckhamOverWithholding();
 
                 if (totalOverWithholding > 0 || monthsCorrect > 0) {
                     const monthNames = currentLang === 'es' ?
@@ -6306,6 +6261,58 @@
             return apply(ES_STATE_SCALE) + apply(ES_REGION_SCALES[region] || ES_REGION_SCALES.general);
         }
 
+        // Per-payslip Beckham over-withholding (IRPF + Repercutidos actually withheld vs 24% of cash + in-kind pay).
+        // Shared by the Results tab refund card and the Spain Tax Estimate tab.
+        function computeBeckhamOverWithholding() {
+            let totalOverWithholding = 0;
+            let monthsOverWithheld = 0;
+            let monthsCorrect = 0;
+            let monthsNotApplicable = 0;
+            const beckhamMonthDetails = [];
+
+            for (const ps of parsedPayslips) {
+                const periodKey = `${ps.month}/${ps.year}`;
+                const perPayslip = config.beckhamPerPayslip?.[periodKey] || {};
+                const shouldApply = perPayslip.shouldApply !== undefined ? perPayslip.shouldApply : true;
+
+                if (!shouldApply) { monthsNotApplicable++; continue; }
+
+                // Find effective rate
+                const irpfDed = ps.deductions.find(d => /tributaci.*irpf|irpf.*tributaci|^income tax.*irpf/i.test(d.nameEn + ' ' + d.nameEs));
+                const effRate = irpfDed && irpfDed.percent ? parseFloat(irpfDed.percent) / 100 : 0;
+                const wasApplied = effRate <= (BECKHAM_LAW_RATE + 0.005);
+
+                if (wasApplied) { monthsCorrect++; continue; }
+
+                // Calculate over-withholding
+                const irpfAmt = irpfDed ? Math.abs(irpfDed.amount) : 0;
+                const repDed = ps.deductions.find(d => /repercutidos|passed-on/i.test(d.nameEn + ' ' + d.nameEs));
+                const repAmt = repDed ? Math.abs(repDed.amount) : 0;
+                const actualTotal = irpfAmt + repAmt;
+
+                // What it should have been at Beckham rate
+                const cashEarnings = ps.earnings.filter(e => !/seguros|insurance|restaurante|transporte|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs));
+                const especieEarnings = ps.earnings.filter(e => /seguros.*sujetos|taxable.*insurance|especies.*rsu|rsu.*in-kind|taxable.*gain.*espp/i.test(e.nameEn + ' ' + e.nameEs));
+                const cashTotal = cashEarnings.reduce((s, e) => s + e.amount, 0);
+                const especieTotal = especieEarnings.reduce((s, e) => s + e.amount, 0);
+                const beckhamTotal = BECKHAM_LAW_RATE * (cashTotal + especieTotal);
+                const monthOver = actualTotal - beckhamTotal;
+
+                if (monthOver > 0) {
+                    totalOverWithholding += monthOver;
+                    monthsOverWithheld++;
+                    beckhamMonthDetails.push({
+                        period: periodKey,
+                        actualRate: effRate,
+                        actual: actualTotal,
+                        beckham: beckhamTotal,
+                        over: monthOver
+                    });
+                }
+            }
+            return { totalOverWithholding, monthsOverWithheld, monthsCorrect, monthsNotApplicable, beckhamMonthDetails };
+        }
+
         // Per-vest rows for a year, straight from the RSU grant table (same events + prices as the
         // Vest Schedule Preview). Empty when grants / share price / transfer date aren't configured.
         function getRSUYearVests(year) {
@@ -6419,6 +6426,8 @@
             const region = document.getElementById('esTaxRegion')?.value || 'general';
             const salary = num('esTaxSalary');
             const withheld = num('esTaxWithheld');
+            const beckham = regime === 'beckham';
+            document.querySelectorAll('.esTaxRegularOnly').forEach(el => el.style.display = beckham ? 'none' : '');
 
             // RSUs: per-vest rows from the grant table; manual fields only when no grants are configured
             const vests = getRSUYearVests(new Date().getFullYear());
@@ -6484,11 +6493,11 @@
                     <td style="text-align:right; padding:3px 6px;">${pct(v.spainPct)}</td>
                     <td style="text-align:right; padding:3px 6px; color:#2e7d32;">${fmt(v.esEUR)}</td>
                     <td style="text-align:right; padding:3px 6px; color:#1565c0;">${fmt(v.usEUR)}</td>
-                    <td style="text-align:right; padding:3px 6px;">${v.eligible30 ? '✓' : '—'}</td></tr>`;
+                    ${beckham ? '' : `<td style="text-align:right; padding:3px 6px;">${v.eligible30 ? '✓' : '—'}</td>`}</tr>`;
                 html += `<details style="margin-top:12px; border:1px solid #ddd; border-radius:6px; overflow:hidden;">
                     <summary style="padding:8px 12px; background:#f8f9fa; cursor:pointer; font-size:13px; font-weight:600;">RSU vests used (${vests.length}) — Spain vs US split per vest</summary>
                     <div style="padding:8px; max-height:360px; overflow-y:auto;"><table style="width:100%; border-collapse:collapse; font-size:11px;">
-                        <thead><tr style="background:#f8f9fa;"><th style="text-align:left; padding:3px 6px;">Date</th><th style="text-align:left; padding:3px 6px;">Grant</th><th style="text-align:right; padding:3px 6px;">Shares</th><th style="text-align:right; padding:3px 6px;">Price</th><th style="text-align:right; padding:3px 6px;">Value €</th><th style="text-align:right; padding:3px 6px;">ES%</th><th style="text-align:right; padding:3px 6px; color:#2e7d32;">Spain €</th><th style="text-align:right; padding:3px 6px; color:#1565c0;">US €</th><th style="text-align:right; padding:3px 6px;" title="Grant to vest > 2 years">30%?</th></tr></thead>
+                        <thead><tr style="background:#f8f9fa;"><th style="text-align:left; padding:3px 6px;">Date</th><th style="text-align:left; padding:3px 6px;">Grant</th><th style="text-align:right; padding:3px 6px;">Shares</th><th style="text-align:right; padding:3px 6px;">Price</th><th style="text-align:right; padding:3px 6px;">Value €</th><th style="text-align:right; padding:3px 6px;">ES%</th><th style="text-align:right; padding:3px 6px; color:#2e7d32;">Spain €</th><th style="text-align:right; padding:3px 6px; color:#1565c0;">US €</th>${beckham ? '' : '<th style="text-align:right; padding:3px 6px;" title="Grant to vest > 2 years">30%?</th>'}</tr></thead>
                         <tbody>${vests.map(row).join('')}</tbody>
                     </table></div>
                 </details>`;
@@ -6521,6 +6530,30 @@
                 </div>`;
             }
 
+            if (beckham) {
+                const ow = computeBeckhamOverWithholding();
+                const projectedOver = Math.max(0, withheld - r.beckham.tax);
+                const furtherOver = Math.max(0, projectedOver - ow.totalOverWithholding);
+                const lastOver = ow.beckhamMonthDetails.length > 0 ? ow.beckhamMonthDetails[ow.beckhamMonthDetails.length - 1] : null;
+                if (ow.totalOverWithholding > 0 || projectedOver > 0) {
+                    html += `<div style="margin-top:15px; padding:12px; background:#f0f8e8; border:2px solid #8bc34a; border-radius:6px;">
+                        <strong style="color:#558b2f;">Beckham over-withholding</strong>
+                        <table style="width:100%; font-size:12px; margin-top:8px; border-collapse:collapse;">
+                            <tr><td style="padding:3px 6px;">Over-withheld on payslips so far (${ow.monthsOverWithheld} month${ow.monthsOverWithheld === 1 ? '' : 's'} above 24%)</td><td style="text-align:right; padding:3px 6px; font-weight:600;">${fmt(ow.totalOverWithholding)}</td></tr>
+                            <tr><td style="padding:3px 6px;">Further over-withholding by year end if the rate is unchanged</td><td style="text-align:right; padding:3px 6px;">${fmt(furtherOver)}</td></tr>
+                            <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:3px 6px;">Full-year refund via Modelo 151 (withheld − Beckham tax)</td><td style="text-align:right; padding:3px 6px; color:#558b2f;">${fmt(projectedOver)}</td></tr>
+                        </table>
+                        ${lastOver ? `<div style="font-size:11px; margin-top:6px;">Latest over-withheld month (${lastOver.period}): employer withheld at ${pct(lastOver.actualRate)}, about ${fmt(lastOver.over)} more than 24%. Giving payroll your Modelo 149 acknowledgment should stop this going forward.</div>` : ''}
+                        ${ow.beckhamMonthDetails.length > 0 ? `<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12px;">Month by month</summary>
+                            <table style="width:100%; font-size:11px; border-collapse:collapse; margin-top:4px;">
+                                <thead><tr style="background:#e5f1d8;"><th style="text-align:left; padding:3px 6px;">Month</th><th style="text-align:right; padding:3px 6px;">Rate</th><th style="text-align:right; padding:3px 6px;">Withheld</th><th style="text-align:right; padding:3px 6px;">At 24%</th><th style="text-align:right; padding:3px 6px;">Over</th></tr></thead>
+                                <tbody>${ow.beckhamMonthDetails.map(d => `<tr><td style="padding:3px 6px;">${d.period}</td><td style="text-align:right; padding:3px 6px;">${pct(d.actualRate)}</td><td style="text-align:right; padding:3px 6px;">${fmt(d.actual)}</td><td style="text-align:right; padding:3px 6px;">${fmt(d.beckham)}</td><td style="text-align:right; padding:3px 6px; color:#558b2f;">${fmt(d.over)}</td></tr>`).join('')}</tbody>
+                            </table></details>` : ''}
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">Payslip figures use each payslip's Beckham Law "should apply" setting on the Results tab. The full-year figure uses the Spanish tax withheld field above.</div>
+                    </div>`;
+                }
+            }
+
             html += `<div style="margin-top:15px; padding:15px; background:${balance > 1000 ? '#f8d7da' : '#d4edda'}; border-radius:8px;">
                 <table style="width:100%; font-size:14px; border-collapse:collapse;">
                     <tr><td ${td}>Spanish tax (${regime === 'beckham' ? 'Beckham' : 'regular'})</td><td ${tr}>${fmt(chosen)}</td></tr>
@@ -6531,6 +6564,7 @@
                 </table>
             </div>`;
 
+            if (!beckham) {
             html += `<div style="margin-top:15px; padding:12px; background:#f0f7ff; border:2px solid var(--primary); border-radius:8px;">
                 <strong>Regime comparison</strong>
                 <table style="width:100%; font-size:12px; margin-top:8px; border-collapse:collapse;">
@@ -6542,13 +6576,15 @@
                 </table>
                 <div style="font-size:12px; margin-top:6px;">${saving >= 0 ? `Beckham is cheaper by <strong>${fmt(saving)}</strong>.` : `Regular regime is cheaper by <strong>${fmt(-saving)}</strong>.`}</div>
             </div>`;
+            }
 
             html += `<div style="margin-top:15px; padding:12px; background:#fff8e1; border-radius:6px; font-size:12px;">
                 <strong>US + Spain interplay</strong>
                 <ul style="margin:6px 0 0 18px; padding:0;">
                     <li>Spanish tax paid on Spain-sourced income is what the US Foreign Tax Credit (Form 1116) can offset. Use the button to send it to the US tab.</li>
-                    <li>Under Beckham the US-sourced RSU share is outside the Spanish base, so there is no Spanish credit for US tax. The US taxes it with no FTC.</li>
-                    <li>Under the regular regime Spain taxes everything and credits US tax on US-sourced income. This tab does not model the US-side re-sourcing that follows, so combine both tabs with care.</li>
+                    ${beckham
+                        ? '<li>Under Beckham the US-sourced RSU share is outside the Spanish base, so there is no Spanish credit for US tax. The US taxes it with no FTC.</li>'
+                        : '<li>Under the regular regime Spain taxes everything and credits US tax on US-sourced income. This tab does not model the US-side re-sourcing that follows, so combine both tabs with care.</li>'}
                 </ul>
                 <button onclick="sendESTaxToUSTab(${Math.round(chosen * eurRate)})" style="margin-top:8px; font-size:12px;" class="secondary">Send ${fmtUSD(chosen * eurRate)} to US tab as Spanish taxes paid</button>
             </div>`;
@@ -6558,8 +6594,8 @@
                 <ul style="padding:8px 12px 8px 30px; font-size:12px; margin:0;">
                     <li>Employment income only (salary + RSUs). No savings income, capital gains, rental, or wealth tax.</li>
                     <li>Beckham: 24% to ${fmt(ES_BECKHAM_CAP)}, 47% above, on Spain-sourced income. Requires the Modelo 149 election; filed on Modelo 151.</li>
-                    <li>Regular: €2,000 other expenses, €5,550 personal minimum plus your extra minimums. The reduction for low work income and regional deductions are not modelled.</li>
-                    <li>The Madrid scale is a 2026 estimate; other regions use the default 19%–47% scale. Basque Country and Navarra have their own regimes and are not covered.</li>
+                    ${beckham ? '' : `<li>Regular: €2,000 other expenses, €5,550 personal minimum plus your extra minimums. The reduction for low work income and regional deductions are not modelled.</li>
+                    <li>The Madrid scale is a 2026 estimate; other regions use the default 19%–47% scale. Basque Country and Navarra have their own regimes and are not covered.</li>`}
                     <li>Projected withholding uses your latest payslip IRPF rate for the remaining months and future vests. Edit the field if you know better.</li>
                     <li>USD/EUR conversion uses the rate from your RSU configuration.</li>
                 </ul>
