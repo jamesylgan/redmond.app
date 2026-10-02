@@ -1726,7 +1726,7 @@
                 <div class="form-group">
                     <label>Spanish tax withheld (EUR, full year)</label>
                     <input type="number" id="esTaxWithheld" placeholder="auto from payslips" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
-                    <div style="font-size: 10px; color: var(--text-muted);">Payslips so far + months without a payslip at the rate to the right</div>
+                    <div id="esTaxWithheldBreakdown" style="font-size: 10px; color: var(--text-muted);">Payslips so far + months without a payslip at the rate to the right</div>
                 </div>
                 <div class="form-group">
                     <label>Projected withholding rate, months without a payslip (%)</label>
@@ -6374,16 +6374,22 @@
             const ytd = psYear.reduce((t, ps) => t + ps.deductions.reduce((s, d) =>
                 /irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs) ? s + Math.abs(d.amount) : s, 0), 0);
             const salaryEUR = parseFloat(document.getElementById('esTaxSalary')?.value) || config.annualGross || 0;
-            const vestEUR = getRSUYearVests(year)
-                .filter(v => !psMonths.has(v.date.getMonth() + 1))
-                .reduce((s, v) => s + v.esEUR, 0);
-            return ytd + (12 - psMonths.size) * (salaryEUR / 12) * projRate + vestEUR * projRate;
+            const missingMonths = [];
+            for (let m = 1; m <= 12; m++) if (!psMonths.has(m)) missingMonths.push(m);
+            const vests = getRSUYearVests(year).filter(v => !psMonths.has(v.date.getMonth() + 1));
+            const salaryPart = missingMonths.length * (salaryEUR / 12) * projRate;
+            const vestBase = vests.reduce((s, v) => s + v.esEUR, 0);
+            const vestPart = vestBase * projRate;
+            return {
+                total: ytd + salaryPart + vestPart, ytd, salaryPart, vestBase, vestPart,
+                vestCount: vests.length, missingMonths, payslipMonths: [...psMonths].sort((a, b) => a - b)
+            };
         }
 
         function refreshESWithheld() {
             const rate = (parseFloat(document.getElementById('esTaxProjRate')?.value) || 0) / 100;
             const el = document.getElementById('esTaxWithheld');
-            if (el) el.value = Math.round(esEstimateWithheld(rate)) || '';
+            if (el) el.value = Math.round(esEstimateWithheld(rate).total) || '';
             computeESTaxEstimate();
         }
 
@@ -6428,7 +6434,7 @@
             const isBeckham = (document.getElementById('esTaxRegime')?.value || 'beckham') === 'beckham';
             setField('esTaxProjRate', ((isBeckham ? BECKHAM_LAW_RATE : (observedRate ?? 0.30)) * 100).toFixed(1));
             const projRate = (parseFloat(document.getElementById('esTaxProjRate')?.value) || 0) / 100;
-            setField('esTaxWithheld', Math.round(esEstimateWithheld(projRate)) || '');
+            setField('esTaxWithheld', Math.round(esEstimateWithheld(projRate).total) || '');
 
             // US tax on US-sourced RSUs: default to the US withholding from the US tab
             if (!usTaxTabVisited) { usTaxTabVisited = true; prefillUSTaxFromConfig(); }
@@ -6447,6 +6453,19 @@
             const salary = num('esTaxSalary');
             const withheld = num('esTaxWithheld');
             const beckham = regime === 'beckham';
+            // Show how the withheld total is built, so estimated months are visible as estimates
+            const bd = document.getElementById('esTaxWithheldBreakdown');
+            if (bd) {
+                const est = esEstimateWithheld((parseFloat(document.getElementById('esTaxProjRate')?.value) || 0) / 100);
+                const mn = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const fe = (v) => '€' + Math.round(v).toLocaleString('en-US');
+                const list = (arr) => arr.length ? arr.map(m => mn[m]).join(', ') : 'none';
+                bd.innerHTML = `<strong>Actual:</strong> ${est.payslipMonths.length} payslip${est.payslipMonths.length === 1 ? '' : 's'} (${list(est.payslipMonths)}) = ${fe(est.ytd)}.<br>`
+                    + `<strong>Estimated:</strong> ${est.missingMonths.length} month${est.missingMonths.length === 1 ? '' : 's'} with no payslip (${list(est.missingMonths)}): salary ${fe(est.salaryPart)} + ${est.vestCount} vest${est.vestCount === 1 ? '' : 's'} with Spain-sourced ${fe(est.vestBase)} = ${fe(est.vestPart)}.<br>`
+                    + `Estimate total ${fe(est.total)}.`
+                    + (Math.abs(est.total - withheld) > 1 ? ` <span style="color:#dc3545;">The field above has ${fe(withheld)} (edited or out of date). Click Auto-fill to reset.</span>` : '')
+                    + (est.missingMonths.length > 0 ? ' Upload the missing payslips to replace estimates with actuals.' : '');
+            }
             document.querySelectorAll('.esTaxRegularOnly').forEach(el => el.style.display = beckham ? 'none' : '');
 
             // RSUs: per-vest rows from the grant table; manual fields only when no grants are configured
