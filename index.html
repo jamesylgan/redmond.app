@@ -1699,43 +1699,44 @@
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 15px;">
                 <div class="form-group">
-                    <label>Salary (EUR, annual gross)</label>
-                    <input type="number" id="esTaxSalary" placeholder="auto from config" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <label>Spain-taxed pay excluding RSUs (EUR, full year)</label>
+                    <input type="number" autocomplete="off" id="esTaxSalary" placeholder="auto from payslips" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <div id="esTaxSalaryNote" style="font-size: 10px; color: var(--text-muted);">Salary, bonuses, on-call and other taxable pay</div>
                 </div>
                 <div class="form-group esTaxRSUManual">
                     <label>RSU Income (USD, all vests this year)</label>
-                    <input type="number" id="esTaxRSU" placeholder="no grants configured" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxRSU" placeholder="no grants configured" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                 </div>
                 <div class="form-group esTaxRSUManual">
                     <label>Spain-sourced share of RSUs (%)</label>
-                    <input type="number" id="esTaxRSUSpainPct" placeholder="100" step="0.1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxRSUSpainPct" placeholder="100" step="0.1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                 </div>
             </div>
             <div id="esTaxRSUAuto" style="display:none; margin-top:10px; padding:8px 10px; background:#e8f4fd; border-radius:6px; font-size:12px;"></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-top: 10px;">
                 <div class="form-group esTaxRegularOnly">
                     <label>Social Security paid (EUR)</label>
-                    <input type="number" id="esTaxSS" placeholder="auto" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxSS" placeholder="auto" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">Deductible in regular regime only</div>
                 </div>
                 <div class="form-group esTaxRegularOnly">
                     <label>Extra family minimums (EUR)</label>
-                    <input type="number" id="esTaxExtraMin" placeholder="0" step="1" value="0" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxExtraMin" placeholder="0" step="1" value="0" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">On top of the €5,550 personal minimum</div>
                 </div>
                 <div class="form-group">
                     <label>Spanish tax withheld (EUR, full year)</label>
-                    <input type="number" id="esTaxWithheld" placeholder="auto from payslips" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxWithheld" placeholder="auto from payslips" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div id="esTaxWithheldBreakdown" style="font-size: 10px; color: var(--text-muted);">Payslips so far + months without a payslip at the rate to the right</div>
                 </div>
                 <div class="form-group">
                     <label>Projected withholding rate, months without a payslip (%)</label>
-                    <input type="number" id="esTaxProjRate" placeholder="24" step="0.1" onchange="refreshESWithheld()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxProjRate" placeholder="24" step="0.1" onchange="refreshESWithheld()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">Beckham: 24% once the Modelo 149 is applied. Regular: your latest payslip rate. Changing this re-estimates the withheld total.</div>
                 </div>
                 <div class="form-group esTaxRegularOnly">
                     <label>US tax on US-sourced RSUs (USD)</label>
-                    <input type="number" id="esTaxUSTaxPaid" placeholder="auto from US tab" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
+                    <input type="number" autocomplete="off" id="esTaxUSTaxPaid" placeholder="auto from US tab" step="1" onchange="computeESTaxEstimate()" style="width: 100%; padding: 8px;">
                     <div style="font-size: 10px; color: var(--text-muted);">For the Spanish foreign tax credit (regular regime)</div>
                 </div>
             </div>
@@ -6367,22 +6368,53 @@
 
         // Spanish tax withheld for the year: payslips so far, plus every month WITHOUT a payslip at projRate
         // (salary share + the Spain-sourced share of any vest in that month, past or future).
+        // Spain-taxable pay per payslip excluding RSU lines (the RSU side comes from the per-vest model).
+        // Uses payroll's own IRPF base so bonuses, on-call and wallet are counted the way payroll taxes them.
+        const ES_RSU_LINE = /rsu|especies.*rsu/i;
+        function esPayslipPay(year) {
+            const rows = parsedPayslips.filter(ps => ps.year === year).map(ps => {
+                const rsuLines = ps.earnings.filter(e => ES_RSU_LINE.test(e.nameEn + ' ' + e.nameEs));
+                const base = ps.totals?.baseIRPF || ps.totals?.grossTotal || 0;
+                return {
+                    month: ps.month,
+                    pay: Math.max(0, base - rsuLines.reduce((t, e) => t + e.amount, 0)),
+                    hasRSU: rsuLines.length > 0
+                };
+            });
+            const sorted = rows.map(r => r.pay).sort((x, y) => x - y);
+            const mid = Math.floor(sorted.length / 2);
+            const median = sorted.length === 0 ? 0 : (sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
+            return { rows, actual: rows.reduce((t, r) => t + r.pay, 0), median };
+        }
+
         function esEstimateWithheld(projRate) {
             const year = new Date().getFullYear();
             const psYear = parsedPayslips.filter(ps => ps.year === year);
             const psMonths = new Set(psYear.map(ps => ps.month));
+            const pay = esPayslipPay(year);
+            const hasRSUByMonth = {};
+            pay.rows.forEach(r => { hasRSUByMonth[r.month] = r.hasRSU; });
             const ytd = psYear.reduce((t, ps) => t + ps.deductions.reduce((s, d) =>
                 /irpf|tributaci|repercutidos/i.test(d.nameEn + ' ' + d.nameEs) ? s + Math.abs(d.amount) : s, 0), 0);
             const salaryEUR = parseFloat(document.getElementById('esTaxSalary')?.value) || config.annualGross || 0;
+            const monthlyPay = pay.rows.length > 0 ? pay.median : salaryEUR / 12;
             const missingMonths = [];
             for (let m = 1; m <= 12; m++) if (!psMonths.has(m)) missingMonths.push(m);
-            const vests = getRSUYearVests(year).filter(v => !psMonths.has(v.date.getMonth() + 1));
-            const salaryPart = missingMonths.length * (salaryEUR / 12) * projRate;
+            const allVests = getRSUYearVests(year);
+            // Vests in months with no payslip are estimated. Vests in months WITH a payslip that has no RSU line
+            // are pending: payroll left them out, so assume a catch-up at the same rate.
+            const vests = allVests.filter(v => !psMonths.has(v.date.getMonth() + 1));
+            const pendingVests = allVests.filter(v => v.date <= new Date() && psMonths.has(v.date.getMonth() + 1) && !hasRSUByMonth[v.date.getMonth() + 1]);
+            const salaryPart = missingMonths.length * monthlyPay * projRate;
             const vestBase = vests.reduce((s, v) => s + v.esEUR, 0);
             const vestPart = vestBase * projRate;
+            const pendingBase = pendingVests.reduce((s, v) => s + v.esEUR, 0);
+            const pendingPart = pendingBase * projRate;
             return {
-                total: ytd + salaryPart + vestPart, ytd, salaryPart, vestBase, vestPart,
-                vestCount: vests.length, missingMonths, payslipMonths: [...psMonths].sort((a, b) => a - b)
+                total: ytd + salaryPart + vestPart + pendingPart, ytd, salaryPart, vestBase, vestPart, pendingBase, pendingPart,
+                vestCount: vests.length, pendingMonths: [...new Set(pendingVests.map(v => v.date.getMonth() + 1))],
+                missingMonths, payslipMonths: [...psMonths].sort((a, b) => a - b), monthlyPay,
+                payActual: pay.actual
             };
         }
 
@@ -6407,7 +6439,12 @@
                 esTaxRegimeInit = true;
             }
 
-            const salaryEUR = Math.round(config.annualGross || 0);
+            // Spain-taxed pay: actual payslips (excluding RSU lines) + remaining months at the median month
+            const payInfo = esPayslipPay(year);
+            const monthsLeft = 12 - new Set(parsedPayslips.filter(ps => ps.year === year).map(ps => ps.month)).size;
+            const salaryEUR = Math.round(payInfo.rows.length > 0
+                ? payInfo.actual + monthsLeft * payInfo.median
+                : (config.annualGross || 0));
             setField('esTaxSalary', salaryEUR || '');
 
             // Payslip-derived: SS and withholding (YTD actual + rest of year at the last salary rate)
@@ -6460,8 +6497,13 @@
                 const mn = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                 const fe = (v) => '€' + Math.round(v).toLocaleString('en-US');
                 const list = (arr) => arr.length ? arr.map(m => mn[m]).join(', ') : 'none';
+                const sn = document.getElementById('esTaxSalaryNote');
+                if (sn) sn.textContent = est.payslipMonths.length > 0
+                    ? `${est.payslipMonths.length} payslips (excluding RSU lines) = ${fe(est.payActual)} + ${est.missingMonths.length} months at the median month of ${fe(est.monthlyPay)}. One-off items like bonuses count only in the month they were paid.`
+                    : 'Salary, bonuses, on-call and other taxable pay (no payslips loaded, using the configured annual gross)';
                 bd.innerHTML = `<strong>Actual:</strong> ${est.payslipMonths.length} payslip${est.payslipMonths.length === 1 ? '' : 's'} (${list(est.payslipMonths)}) = ${fe(est.ytd)}.<br>`
                     + `<strong>Estimated:</strong> ${est.missingMonths.length} month${est.missingMonths.length === 1 ? '' : 's'} with no payslip (${list(est.missingMonths)}): salary ${fe(est.salaryPart)} + ${est.vestCount} vest${est.vestCount === 1 ? '' : 's'} with Spain-sourced ${fe(est.vestBase)} = ${fe(est.vestPart)}.<br>`
+                    + (est.pendingMonths.length > 0 ? `<strong style="color:#dc3545;">Pending:</strong> expected RSU vest${est.pendingMonths.length === 1 ? '' : 's'} not on the ${list(est.pendingMonths)} payslip${est.pendingMonths.length === 1 ? '' : 's'} (payroll left ${est.pendingMonths.length === 1 ? 'it' : 'them'} out): Spain-sourced ${fe(est.pendingBase)} = ${fe(est.pendingPart)} of withholding expected as a catch-up.<br>` : '')
                     + `Estimate total ${fe(est.total)}.`
                     + (Math.abs(est.total - withheld) > 1 ? ` <span style="color:#dc3545;">The field above has ${fe(withheld)} (edited or out of date). Click Auto-fill to reset.</span>` : '')
                     + (est.missingMonths.length > 0 ? ' Upload the missing payslips to replace estimates with actuals.' : '');
@@ -6581,7 +6623,7 @@
                         <table style="width:100%; font-size:12px; margin-top:8px; border-collapse:collapse;">
                             <tr><td style="padding:3px 6px;">Over-withheld on payslips so far (${ow.monthsOverWithheld} month${ow.monthsOverWithheld === 1 ? '' : 's'} above 24%)</td><td style="text-align:right; padding:3px 6px; font-weight:600;">${fmt(ow.totalOverWithholding)}</td></tr>
                             ${Math.abs(ow.netOverWithholding - ow.totalOverWithholding) > 0.5 ? `<tr><td style="padding:3px 6px;">Net of months withheld below 24%</td><td style="text-align:right; padding:3px 6px;">${signed(ow.netOverWithholding)}</td></tr>` : ''}
-                            <tr><td style="padding:3px 6px;">Rest of year at the projected rate (brackets = under-withheld)</td><td style="text-align:right; padding:3px 6px;">${signed(furtherOver)}</td></tr>
+                            <tr><td style="padding:3px 6px;">Everything else: projected months and RSU split differences (brackets = under-withheld)</td><td style="text-align:right; padding:3px 6px;">${signed(furtherOver)}</td></tr>
                             <tr style="font-weight:600; border-top:1px solid #ddd;"><td style="padding:3px 6px;">${projectedOver >= 0 ? 'Full-year refund via Modelo 151' : 'Full-year balance owed'} (withheld − Beckham tax)</td><td style="text-align:right; padding:3px 6px; color:${projectedOver >= 0 ? '#558b2f' : '#dc3545'};">${fmt(Math.abs(projectedOver))}</td></tr>
                         </table>
                         ${lastOver ? `<div style="font-size:11px; margin-top:6px;">Latest over-withheld month (${lastOver.period}): employer withheld at ${pct(lastOver.actualRate)}, about ${fmt(lastOver.over)} more than 24%. Giving payroll your Modelo 149 acknowledgment should stop this going forward.</div>` : ''}
